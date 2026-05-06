@@ -98,6 +98,42 @@ function isSecureRequest(req) {
   );
 }
 
+function isTrustedOrigin(req) {
+  const origin = req.headers.origin;
+
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const configuredOrigins = String(process.env.ADMIN_ALLOWED_ORIGINS ?? '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const originValue = Array.isArray(origin) ? origin[0] : origin;
+
+    if (configuredOrigins.includes(originValue)) {
+      return true;
+    }
+
+    const requestHost = req.headers['x-forwarded-host'] ?? req.headers.host;
+    const originUrl = new URL(originValue);
+    const expectedHost = Array.isArray(requestHost) ? requestHost[0] : requestHost;
+    return originUrl.host === expectedHost;
+  } catch {
+    return false;
+  }
+}
+
+function rejectUntrustedOrigin(req, res) {
+  if (isTrustedOrigin(req)) {
+    return false;
+  }
+
+  sendJson(res, 403, { message: 'Untrusted request origin.' });
+  return true;
+}
+
 function serveStatic(req, res, distDir) {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const pathname = decodeURIComponent(url.pathname);
@@ -138,6 +174,10 @@ export function createAdminServer({
       }
 
       if (url.pathname === '/api/admin/login' && req.method === 'POST') {
+        if (rejectUntrustedOrigin(req, res)) {
+          return;
+        }
+
         const clientKey = getClientKey(req);
 
         if (isLoginLimited(loginAttempts, clientKey)) {
@@ -176,6 +216,10 @@ export function createAdminServer({
       }
 
       if (url.pathname === '/api/admin/logout' && req.method === 'POST') {
+        if (rejectUntrustedOrigin(req, res)) {
+          return;
+        }
+
         auth.logout(req);
         sendJson(
           res,
@@ -193,6 +237,10 @@ export function createAdminServer({
 
       const levelMatch = url.pathname.match(/^\/api\/admin\/campaign-levels\/(\d+)$/);
       if (levelMatch && req.method === 'PUT') {
+        if (rejectUntrustedOrigin(req, res)) {
+          return;
+        }
+
         if (!auth.isRequestAuthenticated(req)) {
           sendJson(res, 401, { message: 'Admin session required.' });
           return;
@@ -205,6 +253,10 @@ export function createAdminServer({
       }
 
       if (levelMatch && req.method === 'DELETE') {
+        if (rejectUntrustedOrigin(req, res)) {
+          return;
+        }
+
         if (!auth.isRequestAuthenticated(req)) {
           sendJson(res, 401, { message: 'Admin session required.' });
           return;

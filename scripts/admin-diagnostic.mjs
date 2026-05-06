@@ -19,7 +19,7 @@ const appPort = Number(process.env.BROWSER_TEST_APP_PORT ?? 5174);
 const apiPort = Number(process.env.BROWSER_TEST_API_PORT ?? 8788);
 const userDataDir = `${root}/.edge-admin-test-profile`;
 const targetUrl = `http://localhost:${appPort}/?menu=1`;
-const adminPassword = 'admin-test';
+const adminPassword = 'admin-test-password';
 const tempDir = await mkdtemp(join(tmpdir(), 'bounce-forge-admin-browser-'));
 const overrideFile = join(tempDir, 'campaign-level-overrides.json');
 

@@ -2,6 +2,8 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 const COOKIE_NAME = 'bounce_forge_admin';
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const MIN_PASSWORD_LENGTH = 12;
+const BLOCKED_PASSWORDS = new Set(['change-me', 'password', 'admin', 'secret', 'admin-test']);
 
 function parseCookies(cookieHeader = '') {
   return Object.fromEntries(
@@ -36,7 +38,11 @@ export class AdminAuth {
   }
 
   isConfigured() {
-    return typeof this.password === 'string' && this.password.length > 0;
+    return (
+      typeof this.password === 'string' &&
+      this.password.length >= MIN_PASSWORD_LENGTH &&
+      !BLOCKED_PASSWORDS.has(this.password.toLowerCase())
+    );
   }
 
   login(password) {
