@@ -1,0 +1,17 @@
+node_modules/
+dist/
+coverage/
+.vite/
+.env
+.env.*
+!.env.example
+*.log
+*.local
+browser-test.png
+wall-seam-test.png
+player-corridor-test.png
+powerup-test.png
+top-corner-test.png
+top-right-gutter-test.png
+.edge*/
+.video-debug*/

@@ -1,0 +1,50 @@
+{
+  "name": "bounce-forge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A responsive Phaser 3 brick breaker game with procedural visuals and testable gameplay systems.",
+  "scripts": {
+    "start": "node scripts/start-dev.mjs",
+    "dev": "node scripts/start-dev.mjs",
+    "dev:vite": "vite --host 0.0.0.0",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "lint": "eslint .",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "test": "vitest run",
+    "test:browser": "node scripts/browser-human-test.mjs",
+    "test:browser:visible": "node scripts/browser-human-test.mjs --visible",
+    "test:browser:editor": "node scripts/browser-human-test.mjs --editor-smoke",
+    "test:browser:editor:visible": "node scripts/browser-human-test.mjs --editor-smoke --visible",
+    "test:browser:corridor": "node scripts/player-corridor-test.mjs",
+    "test:browser:corridor:visible": "node scripts/player-corridor-test.mjs --visible",
+    "test:browser:walls": "node scripts/wall-interaction-diagnostic.mjs",
+    "test:browser:walls:visible": "node scripts/wall-interaction-diagnostic.mjs --visible",
+    "test:browser:ui": "node scripts/ui-visual-smoke.mjs",
+    "test:browser:ui:visible": "node scripts/ui-visual-smoke.mjs --visible",
+    "test:browser:campaign": "node scripts/campaign-diagnostic.mjs",
+    "test:browser:campaign:visible": "node scripts/campaign-diagnostic.mjs --visible",
+    "test:browser:powerups": "node scripts/powerup-test.mjs",
+    "test:browser:powerups:diagnostic": "node scripts/powerup-diagnostic.mjs",
+    "test:browser:powerups:diagnostic:visible": "node scripts/powerup-diagnostic.mjs --visible",
+    "test:browser:powerups:visible": "node scripts/powerup-test.mjs --visible"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.3.0",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.59.1",
+    "vite": "^8.0.10",
+    "vitest": "^4.1.5"
+  }
+}

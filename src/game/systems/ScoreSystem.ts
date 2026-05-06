@@ -1,0 +1,46 @@
+export interface ScoreState {
+  score: number;
+  bestScore: number;
+  bricksBroken: number;
+  comboBonusTotal: number;
+}
+
+export class ScoreSystem {
+  private readonly state: ScoreState;
+
+  public constructor(initialBestScore = 0) {
+    this.state = {
+      score: 0,
+      bestScore: initialBestScore,
+      bricksBroken: 0,
+      comboBonusTotal: 0
+    };
+  }
+
+  public registerBrickBreak(
+    baseScore: number,
+    comboMultiplier: number,
+    difficultyMultiplier: number
+  ): number {
+    const rawBase = baseScore * difficultyMultiplier;
+    const awarded = Math.round(rawBase * comboMultiplier);
+
+    this.state.score += awarded;
+    this.state.bestScore = Math.max(this.state.bestScore, this.state.score);
+    this.state.bricksBroken += 1;
+    this.state.comboBonusTotal += Math.max(0, awarded - Math.round(rawBase));
+
+    return awarded;
+  }
+
+  public addLifeBonus(livesRemaining: number): number {
+    const awarded = Math.max(0, livesRemaining) * 500;
+    this.state.score += awarded;
+    this.state.bestScore = Math.max(this.state.bestScore, this.state.score);
+    return awarded;
+  }
+
+  public snapshot(): ScoreState {
+    return { ...this.state };
+  }
+}

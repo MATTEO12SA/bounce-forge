@@ -1,0 +1,115 @@
+import Phaser from 'phaser';
+import { getTheme, THEMES } from '../config/themeConfig';
+import { LevelSystem } from '../systems/LevelSystem';
+import { SaveSystem } from '../systems/SaveSystem';
+import { Button } from '../ui/Button';
+import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { GAME_TITLE, WORLD_WIDTH } from '../utils/constants';
+import { clamp } from '../utils/math';
+
+export class MainMenuScene extends Phaser.Scene {
+  public constructor() {
+    super('MainMenuScene');
+  }
+
+  public create(): void {
+    const save = new SaveSystem();
+    const saveData = save.snapshot();
+    const theme = getTheme(saveData.preferences.themeId);
+    const levelSystem = new LevelSystem();
+    const nextLevel = Math.floor(clamp(saveData.unlockedLevel, 0, levelSystem.count - 1));
+
+    drawScreenBackground(this, theme, { panel: false, sideRails: true });
+    drawPanel(this, WORLD_WIDTH / 2, 540, 746, 940, theme, { alpha: 0.76 });
+
+    this.add
+      .text(WORLD_WIDTH / 2, 132, GAME_TITLE, {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '90px',
+        fontStyle: '900',
+        color: theme.text
+      })
+      .setOrigin(0.5)
+      .setShadow(0, 4, '#000814', 8, false, true);
+
+    this.add
+      .text(WORLD_WIDTH / 2, 220, 'FORGE BREAKOUT SYSTEM', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '24px',
+        fontStyle: '900',
+        color: theme.textMuted
+      })
+      .setOrigin(0.5);
+
+    this.add
+      .text(WORLD_WIDTH / 2, 306, `BEST ${saveData.bestScore}`, {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '42px',
+        fontStyle: '900',
+        color: `#${theme.primary.toString(16).padStart(6, '0')}`
+      })
+      .setOrigin(0.5);
+
+    new Button(this, WORLD_WIDTH / 2, 440, 620, 88, 'START', () => {
+      this.scene.start('GameScene', { levelIndex: nextLevel });
+    });
+
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      558,
+      620,
+      88,
+      'LEVEL SELECT',
+      () => {
+        this.scene.start('LevelSelectScene');
+      },
+      { variant: 'secondary' }
+    );
+
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      676,
+      620,
+      88,
+      'EDITOR',
+      () => {
+        this.scene.start('LevelEditorScene');
+      },
+      { variant: 'secondary' }
+    );
+
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      794,
+      620,
+      88,
+      `THEME ${theme.name.toUpperCase()}`,
+      () => {
+        const currentIndex = THEMES.findIndex((candidate) => candidate.id === theme.id);
+        const nextTheme = THEMES[(currentIndex + 1) % THEMES.length];
+        save.setTheme(nextTheme.id);
+        this.scene.restart();
+      },
+      { variant: 'ghost' }
+    );
+
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      912,
+      620,
+      88,
+      saveData.preferences.soundEnabled ? 'SOUND ON' : 'SOUND OFF',
+      () => {
+        save.setSoundEnabled(!saveData.preferences.soundEnabled);
+        this.scene.restart();
+      },
+      { variant: 'ghost' }
+    );
+
+    addCreatorCredit(this, theme);
+  }
+}
