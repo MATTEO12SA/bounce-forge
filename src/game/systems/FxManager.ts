@@ -12,32 +12,6 @@ export type FxEntityKind =
   | 'brick-shield'
   | 'brick-indestructible';
 
-interface PostFxController {
-  addBloom?: (
-    color?: number,
-    offsetX?: number,
-    offsetY?: number,
-    blurStrength?: number,
-    strength?: number,
-    steps?: number
-  ) => unknown;
-  addGlow?: (
-    color?: number,
-    outerStrength?: number,
-    innerStrength?: number,
-    knockout?: boolean,
-    quality?: number,
-    distance?: number
-  ) => unknown;
-  addShine?: (speed?: number, lineWidth?: number, gradient?: number) => unknown;
-  addBlur?: (
-    quality?: number,
-    x?: number,
-    y?: number,
-    strength?: number,
-    color?: number
-  ) => unknown;
-}
 
 export interface FxQualityProfile {
   postFx: boolean;
@@ -191,30 +165,19 @@ export class FxManager {
     this.scene.cameras.main.fade(duration, r, g, b, false);
   }
 
+  // PostFX on shape primitives (Arc/Rectangle) was expensive when stacked
+  // across 40-96 balls and 50+ bricks (frame budget hit 170ms+). We keep
+  // camera shake/flash/fade for forge feel and rely on procedural particle
+  // bursts for visual punch instead. Method kept as a no-op so call sites
+  // stay valid; future renderer-aware FX can plug in here without churn.
   public applyEntityFx(
     target: Phaser.GameObjects.GameObject,
     kind: FxEntityKind,
     theme: ThemeDefinition
   ): void {
-    if (!this.profile.postFx) {
-      return;
-    }
-    if (kind !== 'ball') {
-      return;
-    }
-    const fxTarget = target as Phaser.GameObjects.GameObject & {
-      postFX?: PostFxController | undefined;
-    };
-    const fx = fxTarget.postFX;
-    if (!fx) {
-      return;
-    }
-
-    try {
-      fx.addBloom?.(theme.primary, 1, 1, 1.2, 0.8);
-    } catch {
-      // postFX availability varies between renderers and Phaser builds; fall back silently.
-    }
+    void target;
+    void kind;
+    void theme;
   }
 
   public tickPerformance(deltaMs: number): void {
