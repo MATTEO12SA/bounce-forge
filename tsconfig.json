@@ -15,7 +15,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "noImplicitOverride": true,
-    "types": ["vitest/globals"]
+    "types": ["vitest/globals", "node"]
   },
   "include": ["src", "tests", "vite.config.ts", "eslint.config.js"]
 }
