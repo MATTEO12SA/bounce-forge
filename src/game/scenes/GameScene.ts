@@ -399,11 +399,6 @@ export class GameScene extends Phaser.Scene {
 
   private detectWallTunneling(ball: Ball): void {
     if (ball.x < PLAYFIELD_LEFT - BALL_RADIUS || ball.x > PLAYFIELD_RIGHT + BALL_RADIUS) {
-      console.error(
-        `[BALL TUNNELED] Ball escaped playfield at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)}) ` +
-          `with vel (${ball.arcadeBody.velocity.x.toFixed(1)}, ${ball.arcadeBody.velocity.y.toFixed(1)}) ` +
-          `— playfield is [${PLAYFIELD_LEFT}, ${PLAYFIELD_RIGHT}]`
-      );
       this.blockBallExpansion('ball tunneled outside playfield');
       return;
     }
@@ -423,17 +418,7 @@ export class GameScene extends Phaser.Scene {
     const frames = (this.ballNearWallFrames.get(ball) ?? 0) + 1;
     this.ballNearWallFrames.set(ball, frames);
 
-    if (frames === 30) {
-      console.warn(
-        `[BALL OSCILLATING] Ball at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)}) ` +
-          `near ${nearLeftWall ? 'LEFT' : 'RIGHT'} wall for ${frames} frames ` +
-          `vel=(${ball.arcadeBody.velocity.x.toFixed(1)}, ${ball.arcadeBody.velocity.y.toFixed(1)})`
-      );
-    } else if (frames === 90) {
-      console.error(
-        `[BALL STUCK ON WALL] Ball trapped near ${nearLeftWall ? 'LEFT' : 'RIGHT'} wall ` +
-          `for ${frames} frames at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)}) — bug not self-resolving`
-      );
+    if (frames >= 90) {
       this.blockBallExpansion('ball trapped near wall');
     }
   }
@@ -896,9 +881,6 @@ export class GameScene extends Phaser.Scene {
       MAX_ACTIVE_BALLS,
       Math.max(this.activeBallLimit + BALL_LIMIT_GROWTH_STEP, requiredLimit)
     );
-    console.info(
-      `[BALL LIMIT] Stable at ${ballCount} balls, raising limit to ${this.activeBallLimit}.`
-    );
 
     return Math.max(0, Math.min(availableHardSlots, this.activeBallLimit - ballCount));
   }
@@ -944,9 +926,6 @@ export class GameScene extends Phaser.Scene {
       MAX_ACTIVE_BALLS,
       this.activeBallLimit + BALL_LIMIT_GROWTH_STEP
     );
-    console.info(
-      `[BALL LIMIT] Stable at ${ballCount} balls, raising limit to ${this.activeBallLimit}.`
-    );
     return ballCount < this.activeBallLimit;
   }
 
@@ -975,14 +954,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private blockBallExpansion(reason: string): void {
+    void reason;
     if (this.ballExpansionBlocked) {
       return;
     }
-
     this.ballExpansionBlocked = true;
-    console.warn(
-      `[BALL EXPANSION BLOCKED] ${reason} — future ball creation is disabled to protect game stability.`
-    );
   }
 
   private setTimedEffect(
