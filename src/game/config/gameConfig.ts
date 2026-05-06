@@ -9,13 +9,14 @@ import { GuideScene } from '../scenes/GuideScene';
 import { LevelEditorScene } from '../scenes/LevelEditorScene';
 import { LevelSelectScene } from '../scenes/LevelSelectScene';
 import { MainMenuScene } from '../scenes/MainMenuScene';
+import { OptionsScene } from '../scenes/OptionsScene';
 import { PauseScene } from '../scenes/PauseScene';
 import { PreloadScene } from '../scenes/PreloadScene';
 import { VictoryScene } from '../scenes/VictoryScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
-    type: Phaser.AUTO,
+    type: Phaser.WEBGL,
     parent,
     width: WORLD_WIDTH,
     height: WORLD_HEIGHT,
@@ -34,9 +35,13 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     render: {
       antialias: true,
       pixelArt: false,
-      roundPixels: true,
+      roundPixels: false,
       powerPreference: 'high-performance'
     },
+    input: {
+      activePointers: 3
+    },
+    disableContextMenu: true,
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -54,6 +59,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       LevelEditorScene,
       GameScene,
       PauseScene,
+      OptionsScene,
       GameOverScene,
       VictoryScene
     ]

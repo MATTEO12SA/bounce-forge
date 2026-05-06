@@ -14,7 +14,10 @@ import { ParticleSystem } from '../systems/ParticleSystem';
 import { getPowerUpDefinition, PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import type { LevelMedal } from '../systems/SaveSystem';
+import { SettingsSystem } from '../systems/SettingsSystem';
+import { FxManager } from '../systems/FxManager';
 import { ScoreSystem } from '../systems/ScoreSystem';
+import { PlayfieldRenderer } from '../managers/PlayfieldRenderer';
 import { Hud } from '../ui/Hud';
 import {
   BALL_MAX_PADDLE_ANGLE_DEGREES,
@@ -25,19 +28,14 @@ import {
   BALL_MIN_SPEED,
   BALL_RADIUS,
   BRICK_GAP,
-  DEPTHS,
   INITIAL_ACTIVE_BALL_LIMIT,
   MAX_ACTIVE_BALLS,
   MAX_LIVES,
   PADDLE_HEIGHT,
   POWER_UP_DROP_SPEED,
-  PLAYFIELD_BOTTOM,
   PLAYFIELD_LEFT,
   PLAYFIELD_RIGHT,
-  PLAYFIELD_TOP,
-  PLAYFIELD_WIDTH,
-  WORLD_HEIGHT,
-  WORLD_WIDTH
+  WORLD_HEIGHT
 } from '../utils/constants';
 import {
   avoidAxisLock,
@@ -77,7 +75,10 @@ export class GameScene extends Phaser.Scene {
   private scoreSystem!: ScoreSystem;
   private comboSystem!: ComboSystem;
   private saveSystem!: SaveSystem;
+  private settingsSystem!: SettingsSystem;
+  private fxManager!: FxManager;
   private audioSystem!: AudioSystem;
+  private readonly ballsWithFx = new WeakSet<Ball>();
   private hud!: Hud;
   private lives = 3;
   private levelIndex = 0;
@@ -105,15 +106,20 @@ export class GameScene extends Phaser.Scene {
     this.levelSource = data.source ?? 'campaign';
     this.editorReturn = data.editorReturn;
     this.saveSystem = new SaveSystem();
+    this.settingsSystem = new SettingsSystem(this.saveSystem);
     this.levelSystem = new LevelSystem(this.saveSystem);
     this.level = this.levelSystem.getLevel(this.levelIndex, this.levelSource);
     this.theme = getTheme(this.saveSystem.snapshot().preferences.themeId);
-    this.audioSystem = new AudioSystem(this.saveSystem.snapshot().preferences.soundEnabled);
+    this.audioSystem = new AudioSystem(
+      this.saveSystem.snapshot().preferences.soundEnabled,
+      this.settingsSystem.getVolumeSfx()
+    );
     this.scoreSystem = new ScoreSystem(this.saveSystem.snapshot().bestScore);
     this.comboSystem = new ComboSystem();
     this.powerUpSystem = new PowerUpSystem();
     this.collisionSystem = new CollisionSystem();
     this.particleSystem = new ParticleSystem(this);
+    this.fxManager = new FxManager(this, this.particleSystem, this.settingsSystem.getFxQuality());
     this.lives = this.level.difficulty.initialLives;
     this.ending = false;
     this.respawning = false;
@@ -125,13 +131,24 @@ export class GameScene extends Phaser.Scene {
     this.explosionsTriggered = 0;
     this.activeTimers.clear();
 
-    this.drawBackground();
+    new PlayfieldRenderer(this, this.theme).render();
 
-    this.balls = this.physics.add.group({ allowGravity: false });
+    this.balls = this.physics.add.group({
+      classType: Ball,
+      maxSize: MAX_ACTIVE_BALLS,
+      allowGravity: false,
+      runChildUpdate: false
+    });
     this.bricks = this.physics.add.group({ allowGravity: false, immovable: true });
-    this.powerUps = this.physics.add.group({ allowGravity: false });
+    this.powerUps = this.physics.add.group({
+      classType: PowerUp,
+      maxSize: 32,
+      allowGravity: false,
+      runChildUpdate: false
+    });
 
     this.paddle = new Paddle(this);
+    this.fxManager.applyEntityFx(this.paddle, 'paddle', this.theme);
     this.inputSystem = new InputSystem(this);
     this.createBricks();
     this.createBall(true);
@@ -152,6 +169,7 @@ export class GameScene extends Phaser.Scene {
     this.updateBalls();
     this.updatePowerUps();
     this.updateAdaptiveBallLimit(delta);
+    this.fxManager.tickPerformance(delta);
     this.flushPendingBallBonusClones();
     this.comboSystem.update(delta);
     this.maxBallsReached = Math.max(this.maxBallsReached, this.getBalls().length);
@@ -159,136 +177,29 @@ export class GameScene extends Phaser.Scene {
     this.hud.update(this.buildHudState());
   }
 
-  private drawBackground(): void {
-    const graphics = this.add.graphics().setDepth(DEPTHS.background);
-
-    graphics.fillGradientStyle(
-      this.theme.backgroundTop,
-      this.theme.backgroundTop,
-      this.theme.backgroundBottom,
-      this.theme.backgroundBottom,
-      1
-    );
-    graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-
-    graphics.lineStyle(1, this.theme.playfieldGrid, 0.1);
-    for (let x = 40; x < WORLD_WIDTH; x += 72) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-    for (let y = 44; y < WORLD_HEIGHT; y += 72) {
-      graphics.lineBetween(0, y, WORLD_WIDTH, y);
-    }
-
-    graphics.fillGradientStyle(
-      this.theme.railOuter,
-      this.theme.railInner,
-      this.theme.railOuter,
-      this.theme.railInner,
-      0.95
-    );
-    graphics.fillRect(0, 0, PLAYFIELD_LEFT - 22, WORLD_HEIGHT);
-    graphics.fillGradientStyle(
-      this.theme.railInner,
-      this.theme.railOuter,
-      this.theme.railInner,
-      this.theme.railOuter,
-      0.95
-    );
-    graphics.fillRect(PLAYFIELD_RIGHT + 22, 0, WORLD_WIDTH - PLAYFIELD_RIGHT - 22, WORLD_HEIGHT);
-
-    graphics.lineStyle(2, this.theme.borderDim, 0.32);
-    for (let x = 18; x < PLAYFIELD_LEFT - 22; x += 38) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-    for (let x = PLAYFIELD_RIGHT + 36; x < WORLD_WIDTH; x += 38) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-    for (let y = 20; y < WORLD_HEIGHT; y += 38) {
-      graphics.lineBetween(0, y, PLAYFIELD_LEFT - 22, y);
-      graphics.lineBetween(PLAYFIELD_RIGHT + 22, y, WORLD_WIDTH, y);
-    }
-
-    graphics.fillGradientStyle(
-      this.theme.railInner,
-      this.theme.wallHighlight,
-      this.theme.railOuter,
-      this.theme.wall,
-      1
-    );
-    graphics.fillRect(PLAYFIELD_LEFT - 22, 0, 22, WORLD_HEIGHT);
-    graphics.fillGradientStyle(
-      this.theme.wallHighlight,
-      this.theme.railInner,
-      this.theme.wall,
-      this.theme.railOuter,
-      1
-    );
-    graphics.fillRect(PLAYFIELD_RIGHT, 0, 22, WORLD_HEIGHT);
-    graphics.fillGradientStyle(
-      this.theme.wallHighlight,
-      this.theme.wallHighlight,
-      this.theme.wall,
-      this.theme.wall,
-      1
-    );
-    graphics.fillRect(PLAYFIELD_LEFT - 22, PLAYFIELD_TOP - 22, PLAYFIELD_WIDTH + 44, 22);
-
-    graphics.fillGradientStyle(
-      this.theme.playfieldTop,
-      this.theme.playfieldTop,
-      this.theme.playfieldBottom,
-      this.theme.playfieldBottom,
-      1
-    );
-    graphics.fillRect(
-      PLAYFIELD_LEFT,
-      PLAYFIELD_TOP,
-      PLAYFIELD_WIDTH,
-      PLAYFIELD_BOTTOM - PLAYFIELD_TOP
-    );
-
-    graphics.lineStyle(1, this.theme.playfieldGrid, 0.13);
-    for (let x = PLAYFIELD_LEFT + 40; x < PLAYFIELD_RIGHT; x += 56) {
-      graphics.lineBetween(x, PLAYFIELD_TOP, x, PLAYFIELD_BOTTOM);
-    }
-    for (let y = PLAYFIELD_TOP + 64; y < PLAYFIELD_BOTTOM; y += 64) {
-      graphics.lineBetween(PLAYFIELD_LEFT, y, PLAYFIELD_RIGHT, y);
-    }
-
-    graphics.lineStyle(2, this.theme.borderDim, 0.95);
-    graphics.strokeRect(
-      PLAYFIELD_LEFT - 0.5,
-      PLAYFIELD_TOP - 0.5,
-      PLAYFIELD_WIDTH + 1,
-      PLAYFIELD_BOTTOM - PLAYFIELD_TOP + 1
-    );
-
-    graphics.lineStyle(4, this.theme.borderDim, 0.48);
-    for (let x = PLAYFIELD_LEFT - 18; x <= PLAYFIELD_LEFT - 4; x += 5) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-    for (let x = PLAYFIELD_RIGHT + 4; x <= PLAYFIELD_RIGHT + 18; x += 5) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-
-    graphics.lineStyle(2, this.theme.railEdge, 0.46);
-    graphics.lineBetween(
-      PLAYFIELD_LEFT - 22,
-      PLAYFIELD_TOP - 22,
-      PLAYFIELD_RIGHT + 22,
-      PLAYFIELD_TOP - 22
-    );
-    graphics.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0.05, 0.02, 0, 0);
-    graphics.fillRect(PLAYFIELD_LEFT, PLAYFIELD_TOP, PLAYFIELD_WIDTH, 460);
-  }
-
   private createBricks(): void {
     this.level.bricks.forEach((spec) => {
       const brick = new Brick(this, spec);
       this.bricks.add(brick);
+      this.applyBrickFx(brick);
     });
 
     this.mergeWallRuns();
+  }
+
+  private applyBrickFx(brick: Brick): void {
+    const kind = brick.spec.kind;
+    if (kind === 'bonus') {
+      this.fxManager.applyEntityFx(brick, 'brick-bonus', this.theme);
+    } else if (kind === 'explosive') {
+      this.fxManager.applyEntityFx(brick, 'brick-explosive', this.theme);
+    } else if (kind === 'shield') {
+      this.fxManager.applyEntityFx(brick, 'brick-shield', this.theme);
+    } else if (kind === 'indestructible') {
+      this.fxManager.applyEntityFx(brick, 'brick-indestructible', this.theme);
+    } else {
+      this.fxManager.applyEntityFx(brick, 'brick-standard', this.theme);
+    }
   }
 
   private mergeWallRuns(): void {
@@ -409,17 +320,32 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private createBall(attached: boolean): Ball {
-    const ball = new Ball(this, this.paddle.x, this.paddle.y - 56);
+  private createBall(attached: boolean): Ball | null {
+    const startX = this.paddle.x;
+    const startY = this.paddle.y - 56;
+    const ball = this.balls.get(startX, startY) as Ball | null;
+    if (!ball) {
+      return null;
+    }
+
+    ball.reset(startX, startY);
+    this.applyBallFxOnce(ball);
 
     if (attached) {
       ball.attachToPaddle(this.paddle);
     }
 
-    this.balls.add(ball);
     this.rememberBallPhysics(ball);
     this.particleSystem.burst(ball.x, ball.y, this.theme.primary, 8);
     return ball;
+  }
+
+  private applyBallFxOnce(ball: Ball): void {
+    if (this.ballsWithFx.has(ball)) {
+      return;
+    }
+    this.fxManager.applyEntityFx(ball, 'ball', this.theme);
+    this.ballsWithFx.add(ball);
   }
 
   private registerCollisions(): void {
@@ -518,7 +444,7 @@ export class GameScene extends Phaser.Scene {
       this.rememberBallPhysics(ball);
 
       if (ball.isOutOfPlay()) {
-        this.balls.remove(ball, true, true);
+        ball.disable();
       }
     });
 
@@ -532,7 +458,7 @@ export class GameScene extends Phaser.Scene {
       powerUp.syncLabel();
 
       if (powerUp.y > WORLD_HEIGHT + 90) {
-        this.powerUps.remove(powerUp, true, true);
+        powerUp.disable();
       }
     });
   }
@@ -701,9 +627,10 @@ export class GameScene extends Phaser.Scene {
 
   private handlePowerUpPaddle(powerUp: PowerUp): void {
     const type = powerUp.powerUpType;
-    this.powerUps.remove(powerUp, true, true);
+    const sourceBall = powerUp.sourceBall;
+    powerUp.disable();
     this.audioSystem.power();
-    this.applyPowerUp(type, powerUp.sourceBall);
+    this.applyPowerUp(type, sourceBall);
   }
 
   private damageBrick(brick: Brick, amount: number, chainDepth: number, sourceBall?: Ball): void {
@@ -738,7 +665,8 @@ export class GameScene extends Phaser.Scene {
 
     if (kind === 'explosive') {
       this.explosionsTriggered += 1;
-      this.particleSystem.shake(0.005, 130);
+      this.fxManager.cameraImpact(0.008, 180);
+      this.fxManager.cameraFlash(this.theme.danger, 90);
       this.damageNearbyBricks(x, y, chainDepth + 1);
     }
 
@@ -800,8 +728,12 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const powerUp = new PowerUp(this, x, y, type, sourceBall);
-    this.powerUps.add(powerUp);
+    const powerUp = this.powerUps.get(x, y) as PowerUp | null;
+    if (!powerUp) {
+      return;
+    }
+
+    powerUp.reset(x, y, type, sourceBall);
     powerUp.arcadeBody.setVelocity(0, POWER_UP_DROP_SPEED);
     powerUp.setScale(0.4);
     this.tweens.add({
@@ -866,7 +798,8 @@ export class GameScene extends Phaser.Scene {
       this.duplicateBallsOrQueue(source, [-0.34, 0.34]);
     }
 
-    this.particleSystem.shake(0.003, 100);
+    this.fxManager.cameraImpact(0.003, 100);
+    this.fxManager.cameraComboZoom();
   }
 
   private applySplitBall(sourceBall?: Ball): void {
@@ -876,7 +809,7 @@ export class GameScene extends Phaser.Scene {
       this.duplicateBallsOrQueue(source, [0.7]);
     }
 
-    this.particleSystem.shake(0.002, 80);
+    this.fxManager.cameraImpact(0.002, 80);
   }
 
   private getPowerUpSourceBall(sourceBall?: Ball): Ball | null {
@@ -884,7 +817,17 @@ export class GameScene extends Phaser.Scene {
       return sourceBall;
     }
 
-    return this.getBalls().find((ball) => !ball.isAttached) ?? null;
+    const launchedBall = this.getBalls().find((ball) => !ball.isAttached);
+
+    if (launchedBall) {
+      return launchedBall;
+    }
+
+    if (sourceBall && sourceBall.active) {
+      return sourceBall;
+    }
+
+    return this.getBalls()[0] ?? null;
   }
 
   private duplicateBall(source: Ball, angleOffsetRadians: number): Ball | null {
@@ -892,8 +835,17 @@ export class GameScene extends Phaser.Scene {
       return null;
     }
 
-    const newBall = source.duplicateWithAngle(angleOffsetRadians);
-    this.balls.add(newBall);
+    const newBall = this.balls.get(source.x, source.y) as Ball | null;
+    if (!newBall) {
+      return null;
+    }
+
+    if (source.isAttached) {
+      newBall.configureAsLaunchedClone(source, angleOffsetRadians, this.level.difficulty.ballSpeed);
+    } else {
+      newBall.configureAsClone(source, angleOffsetRadians);
+    }
+
     this.rememberBallPhysics(newBall);
     this.maxBallsReached = Math.max(this.maxBallsReached, this.getBalls().length);
     return newBall;
@@ -907,7 +859,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
-      if (!this.ballExpansionBlocked) {
+      if (!this.isBallCloneLimitBlocked()) {
         this.pendingBallBonusClones += 1;
       }
     });
@@ -916,15 +868,22 @@ export class GameScene extends Phaser.Scene {
   private reserveBallCloneSlots(requestedSlots: number): number {
     const ballCount = this.getBalls().length;
 
-    if (this.ballExpansionBlocked || requestedSlots <= 0 || ballCount >= MAX_ACTIVE_BALLS) {
+    if (requestedSlots <= 0 || ballCount >= MAX_ACTIVE_BALLS) {
       return 0;
     }
 
     const availableHardSlots = Math.min(requestedSlots, MAX_ACTIVE_BALLS - ballCount);
     const requiredLimit = ballCount + availableHardSlots;
+    const blockedLimit = this.ballExpansionBlocked
+      ? INITIAL_ACTIVE_BALL_LIMIT
+      : this.activeBallLimit;
 
-    if (requiredLimit <= this.activeBallLimit) {
+    if (requiredLimit <= blockedLimit) {
       return availableHardSlots;
+    }
+
+    if (this.ballExpansionBlocked) {
+      return Math.max(0, Math.min(availableHardSlots, INITIAL_ACTIVE_BALL_LIMIT - ballCount));
     }
 
     this.activeBallLimit = Math.min(
@@ -939,7 +898,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private flushPendingBallBonusClones(): void {
-    if (this.pendingBallBonusClones <= 0 || this.ballExpansionBlocked) {
+    if (this.pendingBallBonusClones <= 0 || this.isBallCloneLimitBlocked()) {
       return;
     }
 
@@ -963,7 +922,7 @@ export class GameScene extends Phaser.Scene {
   private canCreateMoreBalls(): boolean {
     const ballCount = this.getBalls().length;
 
-    if (this.ballExpansionBlocked) {
+    if (this.ballExpansionBlocked && ballCount >= INITIAL_ACTIVE_BALL_LIMIT) {
       return false;
     }
 
@@ -983,6 +942,10 @@ export class GameScene extends Phaser.Scene {
       `[BALL LIMIT] Stable at ${ballCount} balls, raising limit to ${this.activeBallLimit}.`
     );
     return ballCount < this.activeBallLimit;
+  }
+
+  private isBallCloneLimitBlocked(): boolean {
+    return this.ballExpansionBlocked && this.getBalls().length >= INITIAL_ACTIVE_BALL_LIMIT;
   }
 
   private updateAdaptiveBallLimit(deltaMs: number): void {
@@ -1036,7 +999,8 @@ export class GameScene extends Phaser.Scene {
     this.lives -= 1;
     this.comboSystem.reset();
     this.audioSystem.danger();
-    this.particleSystem.shake(0.004, 120);
+    this.fxManager.cameraImpact(0.005, 140);
+    this.fxManager.cameraFlash(this.theme.danger, 100);
 
     if (this.lives <= 0) {
       this.respawning = false;
@@ -1072,7 +1036,9 @@ export class GameScene extends Phaser.Scene {
       this.saveSystem.completeLevel(this.levelIndex, medal);
     }
 
-    this.particleSystem.shake(0.004, 180);
+    this.fxManager.cameraImpact(0.005, 200);
+    this.fxManager.cameraFlash(this.theme.primary, 140);
+    this.fxManager.cameraFadeOut(420, 0x000000);
 
     this.time.delayedCall(520, () => {
       if (!this.scene.isActive()) {
@@ -1110,6 +1076,8 @@ export class GameScene extends Phaser.Scene {
     this.ending = true;
     const score = this.scoreSystem.snapshot().score;
     this.saveSystem.updateBestScore(score);
+
+    this.fxManager.cameraFadeOut(460, 0x1a0606);
 
     this.time.delayedCall(460, () => {
       if (!this.scene.isActive()) {

@@ -21,7 +21,7 @@ import type { Paddle } from './Paddle';
 export class Ball extends Phaser.GameObjects.Arc {
   private attached = false;
 
-  public constructor(scene: Phaser.Scene, x: number, y: number) {
+  public constructor(scene: Phaser.Scene, x = 0, y = 0) {
     super(scene, x, y, BALL_RADIUS, 0, 360, false, 0xf8fdff, 1);
 
     scene.add.existing(this);
@@ -43,6 +43,28 @@ export class Ball extends Phaser.GameObjects.Arc {
     return this.attached;
   }
 
+  public reset(x: number, y: number): void {
+    this.attached = false;
+    this.setActive(true);
+    this.setVisible(true);
+    this.setScale(1);
+    this.setAlpha(1);
+    this.setPosition(x, y);
+    const body = this.arcadeBody;
+    body.enable = true;
+    body.reset(x, y);
+    body.setVelocity(0, 0);
+  }
+
+  public disable(): void {
+    this.attached = false;
+    this.setActive(false);
+    this.setVisible(false);
+    const body = this.arcadeBody;
+    body.setVelocity(0, 0);
+    body.enable = false;
+  }
+
   public attachToPaddle(paddle: Paddle): void {
     this.attached = true;
     this.setPosition(paddle.x, paddle.y - 56);
@@ -59,19 +81,43 @@ export class Ball extends Phaser.GameObjects.Arc {
     this.arcadeBody.setVelocity(vector.x, vector.y);
   }
 
-  public duplicateWithAngle(angleOffsetRadians: number): Ball {
-    const clone = new Ball(this.scene, this.x, this.y);
-    const velocity = this.arcadeBody.velocity;
+  public configureAsClone(source: Ball, angleOffsetRadians: number): void {
+    this.attached = false;
+    this.setActive(true);
+    this.setVisible(true);
+    this.setPosition(source.x, source.y);
+
+    const velocity = source.arcadeBody.velocity;
     const speed = Math.max(BALL_MIN_SPEED, velocity.length());
     const angle = Math.atan2(velocity.y, velocity.x) + angleOffsetRadians;
-
-    clone.attached = false;
-    clone.setVelocity({
+    const body = this.arcadeBody;
+    body.enable = true;
+    body.reset(source.x, source.y);
+    this.setVelocity({
       x: Math.cos(angle) * speed,
       y: Math.sin(angle) * speed
     });
+  }
 
-    return clone;
+  public configureAsLaunchedClone(
+    source: Ball,
+    angleOffsetRadians: number,
+    ballSpeed: number
+  ): void {
+    this.attached = false;
+    this.setActive(true);
+    this.setVisible(true);
+    this.setPosition(source.x, source.y);
+
+    const speed = Math.max(BALL_MIN_SPEED, ballSpeed);
+    const angle = -Math.PI / 2 + angleOffsetRadians;
+    const body = this.arcadeBody;
+    body.enable = true;
+    body.reset(source.x, source.y);
+    this.setVelocity({
+      x: Math.cos(angle) * speed,
+      y: Math.sin(angle) * speed
+    });
   }
 
   public maintainSpeed(minSpeed = BALL_MIN_SPEED, maxSpeed = BALL_MAX_SPEED): void {

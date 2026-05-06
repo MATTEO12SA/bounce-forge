@@ -4,15 +4,21 @@ import type { CreativeLevelSlot } from '../levels/levelTypes';
 import { SAVE_STORAGE_KEY } from '../utils/constants';
 import { getBrowserStorage, saveJson, type KeyValueStorage } from '../utils/storage';
 
+export type FxQuality = 'low' | 'med' | 'high';
+
 export interface SavePreferences {
   soundEnabled: boolean;
   themeId: string;
+  volumeSfx: number;
+  volumeMusic: number;
+  fxQuality: FxQuality;
+  fullscreen: boolean;
 }
 
 export type LevelMedal = 'bronze' | 'silver' | 'gold';
 
 export interface SaveData {
-  version: 4;
+  version: 5;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
@@ -21,31 +27,44 @@ export interface SaveData {
   creativeLevelSlots: Record<string, CreativeLevelSlot>;
 }
 
-interface SaveDataV2 {
-  version: 1 | 2 | 3;
+interface LegacySaveData {
+  version: 1 | 2 | 3 | 4;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
-  preferences: SavePreferences;
+  preferences: {
+    soundEnabled: boolean;
+    themeId: string;
+    volumeSfx?: number;
+    volumeMusic?: number;
+    fxQuality?: string;
+    fullscreen?: boolean;
+  };
   levelMedals?: Record<string, LevelMedal>;
   customLevelOverrides?: Record<string, CreativeLevelSlot>;
   creativeLevelSlots?: Record<string, CreativeLevelSlot>;
 }
 
+const DEFAULT_PREFERENCES: SavePreferences = {
+  soundEnabled: true,
+  themeId: 'forge',
+  volumeSfx: 0.7,
+  volumeMusic: 0.5,
+  fxQuality: 'med',
+  fullscreen: false
+};
+
 export const DEFAULT_SAVE_DATA: SaveData = {
-  version: 4,
+  version: 5,
   bestScore: 0,
   unlockedLevel: 0,
   completedLevels: [],
   levelMedals: {},
-  preferences: {
-    soundEnabled: true,
-    themeId: 'forge'
-  },
+  preferences: { ...DEFAULT_PREFERENCES },
   creativeLevelSlots: {}
 };
 
-type PersistedSaveData = SaveData | SaveDataV2;
+type PersistedSaveData = SaveData | LegacySaveData;
 
 function hasBaseSaveFields(value: unknown): value is Partial<PersistedSaveData> {
   if (!value || typeof value !== 'object') {
@@ -67,16 +86,23 @@ function isPersistedSaveData(value: unknown): value is PersistedSaveData {
     return false;
   }
 
-  if (value.version === 1) {
+  if (value.version === 1 || value.version === 2 || value.version === 3) {
     return true;
   }
 
-  if (value.version === 2 || value.version === 3) {
-    return true;
+  if (value.version === 4) {
+    return (
+      Boolean(value.levelMedals) &&
+      typeof value.levelMedals === 'object' &&
+      !Array.isArray(value.levelMedals) &&
+      Boolean(value.creativeLevelSlots) &&
+      typeof value.creativeLevelSlots === 'object' &&
+      !Array.isArray(value.creativeLevelSlots)
+    );
   }
 
   return (
-    value.version === 4 &&
+    value.version === 5 &&
     Boolean(value.levelMedals) &&
     typeof value.levelMedals === 'object' &&
     !Array.isArray(value.levelMedals) &&
@@ -176,6 +202,29 @@ function sanitizeLevelMedals(medals: unknown): Record<string, LevelMedal> {
   return sanitized;
 }
 
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+function normalizeFxQuality(value: unknown): FxQuality {
+  return value === 'low' || value === 'high' ? value : 'med';
+}
+
+function migratePreferences(prefs: LegacySaveData['preferences']): SavePreferences {
+  return {
+    soundEnabled: prefs.soundEnabled,
+    themeId: getTheme(prefs.themeId).id,
+    volumeSfx: typeof prefs.volumeSfx === 'number' ? clamp01(prefs.volumeSfx) : DEFAULT_PREFERENCES.volumeSfx,
+    volumeMusic:
+      typeof prefs.volumeMusic === 'number' ? clamp01(prefs.volumeMusic) : DEFAULT_PREFERENCES.volumeMusic,
+    fxQuality: normalizeFxQuality(prefs.fxQuality),
+    fullscreen: typeof prefs.fullscreen === 'boolean' ? prefs.fullscreen : DEFAULT_PREFERENCES.fullscreen
+  };
+}
+
 function migrateSaveData(value: PersistedSaveData): SaveData {
   const legacyOverrides = 'customLevelOverrides' in value ? value.customLevelOverrides : undefined;
   const persistedCreativeSlots =
@@ -193,7 +242,7 @@ function migrateSaveData(value: PersistedSaveData): SaveData {
   });
 
   return {
-    version: 4,
+    version: 5,
     bestScore: Math.max(0, Math.floor(value.bestScore)),
     unlockedLevel: Math.max(0, Math.floor(value.unlockedLevel)),
     completedLevels: value.completedLevels
@@ -201,10 +250,7 @@ function migrateSaveData(value: PersistedSaveData): SaveData {
       .map((level) => Math.max(0, Math.floor(level)))
       .sort((a, b) => a - b),
     levelMedals,
-    preferences: {
-      soundEnabled: value.preferences.soundEnabled,
-      themeId: getTheme(value.preferences.themeId).id
-    },
+    preferences: migratePreferences(value.preferences),
     creativeLevelSlots
   };
 }
@@ -266,6 +312,30 @@ export class SaveSystem {
 
   public setTheme(themeId: string): SaveData {
     this.data.preferences.themeId = getTheme(themeId).id;
+    this.persist();
+    return this.snapshot();
+  }
+
+  public setVolumeSfx(value: number): SaveData {
+    this.data.preferences.volumeSfx = clamp01(value);
+    this.persist();
+    return this.snapshot();
+  }
+
+  public setVolumeMusic(value: number): SaveData {
+    this.data.preferences.volumeMusic = clamp01(value);
+    this.persist();
+    return this.snapshot();
+  }
+
+  public setFxQuality(quality: FxQuality): SaveData {
+    this.data.preferences.fxQuality = normalizeFxQuality(quality);
+    this.persist();
+    return this.snapshot();
+  }
+
+  public setFullscreen(enabled: boolean): SaveData {
+    this.data.preferences.fullscreen = enabled;
     this.persist();
     return this.snapshot();
   }

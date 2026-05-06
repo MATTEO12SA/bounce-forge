@@ -5,10 +5,11 @@ Bounce Forge separates Phaser runtime code, pure gameplay logic, local save stat
 ## Runtime Layer
 
 - `src/main.ts` starts `GameApp`.
-- `game/config/gameConfig.ts` owns Phaser scale, physics, and scene registration.
+- `game/config/gameConfig.ts` owns Phaser scale, physics, WebGL renderer settings, and scene registration.
 - `game/scenes/*` owns scene lifecycle and routing for boot, preload, menu, level select, gameplay, pause, victory, game over, creative editor, and admin screens.
 - `game/entities/*` wraps Phaser game objects for paddle, ball, bricks, and falling power-ups.
 - `game/ui/*` contains reusable Phaser UI primitives.
+- Phaser runs on the stable Phaser 4.1.0 WebGL renderer. Bounce Forge does not register custom render nodes, pipelines, shaders, or mandatory external assets in the migration baseline.
 
 ## Gameplay Systems
 

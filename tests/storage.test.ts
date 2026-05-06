@@ -21,7 +21,7 @@ class MemoryStorage implements KeyValueStorage {
 }
 
 function isSaveData(value: unknown): value is SaveData {
-  return Boolean(value && typeof value === 'object' && (value as Partial<SaveData>).version === 4);
+  return Boolean(value && typeof value === 'object' && (value as Partial<SaveData>).version === 5);
 }
 
 function makeOneBrickRows(): string[] {
@@ -49,8 +49,10 @@ describe('storage helpers and save system', () => {
     expect(reloaded.bestScore).toBe(2400);
     expect(reloaded.unlockedLevel).toBe(3);
     expect(reloaded.completedLevels).toContain(2);
-    expect(reloaded.version).toBe(4);
+    expect(reloaded.version).toBe(5);
     expect(reloaded.levelMedals['2']).toBe('bronze');
+    expect(reloaded.preferences.fxQuality).toBe('med');
+    expect(reloaded.preferences.volumeSfx).toBeGreaterThan(0);
   });
 
   it('writes json through the storage adapter', () => {
@@ -78,14 +80,65 @@ describe('storage helpers and save system', () => {
 
     const migrated = new SaveSystem(storage).snapshot();
 
-    expect(migrated.version).toBe(4);
+    expect(migrated.version).toBe(5);
     expect(migrated.bestScore).toBe(4200);
     expect(migrated.unlockedLevel).toBe(4);
     expect(migrated.completedLevels).toEqual([0, 1, 3]);
     expect(migrated.levelMedals).toEqual({ '0': 'bronze', '1': 'bronze', '3': 'bronze' });
     expect(migrated.preferences.soundEnabled).toBe(false);
     expect(migrated.preferences.themeId).toBe('neon');
+    expect(migrated.preferences.fxQuality).toBe('med');
+    expect(migrated.preferences.volumeSfx).toBeGreaterThan(0);
+    expect(migrated.preferences.volumeMusic).toBeGreaterThan(0);
+    expect(migrated.preferences.fullscreen).toBe(false);
     expect(migrated.creativeLevelSlots).toEqual({});
+  });
+
+  it('migrates v4 saves to v5 with default preferences', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      SAVE_STORAGE_KEY,
+      JSON.stringify({
+        version: 4,
+        bestScore: 1500,
+        unlockedLevel: 2,
+        completedLevels: [0, 1],
+        levelMedals: { '0': 'gold', '1': 'silver' },
+        preferences: {
+          soundEnabled: true,
+          themeId: 'forge'
+        },
+        creativeLevelSlots: {}
+      })
+    );
+
+    const migrated = new SaveSystem(storage).snapshot();
+
+    expect(migrated.version).toBe(5);
+    expect(migrated.bestScore).toBe(1500);
+    expect(migrated.levelMedals['0']).toBe('gold');
+    expect(migrated.levelMedals['1']).toBe('silver');
+    expect(migrated.preferences.fxQuality).toBe('med');
+    expect(migrated.preferences.volumeSfx).toBe(0.7);
+    expect(migrated.preferences.volumeMusic).toBe(0.5);
+    expect(migrated.preferences.fullscreen).toBe(false);
+  });
+
+  it('persists v5 preferences across reload', () => {
+    const storage = new MemoryStorage();
+    const save = new SaveSystem(storage);
+
+    save.setVolumeSfx(0.3);
+    save.setVolumeMusic(0.1);
+    save.setFxQuality('high');
+    save.setFullscreen(true);
+
+    const reloaded = new SaveSystem(storage).snapshot();
+
+    expect(reloaded.preferences.volumeSfx).toBe(0.3);
+    expect(reloaded.preferences.volumeMusic).toBe(0.1);
+    expect(reloaded.preferences.fxQuality).toBe('high');
+    expect(reloaded.preferences.fullscreen).toBe(true);
   });
 
   it('saves reloads and removes creative level slots', () => {

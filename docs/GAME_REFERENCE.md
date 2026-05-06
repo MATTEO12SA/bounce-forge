@@ -4,7 +4,7 @@ Single-file reference for **Bounce Forge**: rules, controls, campaign structure,
 
 ## Pitch
 
-Bounce Forge is a browser brick breaker built with Phaser 3, TypeScript, and Vite. It uses procedural visuals and sound, a forge-yellow visual direction, campaign levels built for multi-ball escalation, and a local creative editor that is separate from the official campaign.
+Bounce Forge is a browser brick breaker built with Phaser 4.1.0, TypeScript, and Vite. It uses procedural visuals and sound, a forge-yellow visual direction, campaign levels built for multi-ball escalation, and a local creative editor that is separate from the official campaign.
 
 ## Core Gameplay Loop
 
@@ -141,6 +141,8 @@ npm run format:check
 ```
 
 `npm start` runs Vite on `http://localhost:5173` and the admin API on `http://localhost:8787`. Vite proxies `/api` to the admin API.
+
+The Phaser runtime targets the Phaser 4 WebGL renderer directly. The project does not register custom render nodes, custom shaders, or mandatory external art assets; visual effects remain procedural and gameplay readability takes priority over post-processing.
 
 For admin login in dev:
 

@@ -374,6 +374,20 @@ try {
 
       resetScene();
       createNormalBall();
+      scene.ballExpansionBlocked = true;
+      const blockedSafetyMultiCollected = await collect('multiBall');
+      await wait(120);
+      record(
+        'multiBall still triples one launched ball after expansion safety is blocked',
+        blockedSafetyMultiCollected && scene.getBalls().length === 3,
+        {
+          ballExpansionBlocked: scene.ballExpansionBlocked,
+          after: snapshot()
+        }
+      );
+
+      resetScene();
+      createNormalBall();
       const splitCollected = await collect('splitBall');
       await wait(120);
       record('splitBall doubles ball count', splitCollected && scene.getBalls().length === 2, {
@@ -413,6 +427,35 @@ try {
           stickyAttached,
           stickyRelaunched,
           effectActive: scene.activeTimers.has('stickyPaddle'),
+          after: snapshot()
+        }
+      );
+      expire('stickyPaddle');
+
+      resetScene();
+      const attachedSource = createNormalBall();
+      const attachedStickyCollected = await collect('stickyPaddle');
+      await wait(80);
+      attachedSource.setPosition(scene.paddle.x, scene.paddle.y - 44);
+      attachedSource.arcadeBody.updateFromGameObject();
+      attachedSource.arcadeBody.setVelocity(120, 380);
+      scene.handleBallPaddle(attachedSource);
+      const wasAttachedBeforeX3 = attachedSource.isAttached;
+      const attachedX3Collected = await collect('multiBall');
+      await wait(120);
+      const launchedAfterAttachedX3 = scene
+        .getBalls()
+        .filter((ball) => !ball.isAttached && ball.arcadeBody.velocity.y < 0).length;
+      record(
+        'multiBall creates two launched clones even when the source ball is attached',
+        attachedStickyCollected &&
+          wasAttachedBeforeX3 &&
+          attachedX3Collected &&
+          scene.getBalls().length === 3 &&
+          launchedAfterAttachedX3 >= 2,
+        {
+          wasAttachedBeforeX3,
+          launchedAfterAttachedX3,
           after: snapshot()
         }
       );

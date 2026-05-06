@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A responsive Phaser 3 brick breaker game with procedural visuals and testable gameplay systems.",
+  "description": "A responsive Phaser 4 brick breaker game with procedural visuals and testable gameplay systems.",
   "scripts": {
     "start": "node scripts/start-dev.mjs",
     "dev": "node scripts/start-dev.mjs",
@@ -37,7 +37,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "phaser": "^3.90.0"
+    "phaser": "^4.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

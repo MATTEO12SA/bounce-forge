@@ -128,10 +128,9 @@ export class MainMenuScene extends Phaser.Scene {
       1030,
       620,
       88,
-      saveData.preferences.soundEnabled ? 'SOUND ON' : 'SOUND OFF',
+      'OPTIONS',
       () => {
-        save.setSoundEnabled(!saveData.preferences.soundEnabled);
-        this.scene.restart();
+        this.scene.start('OptionsScene', { returnTo: 'MainMenuScene' });
       },
       { variant: 'ghost' }
     );

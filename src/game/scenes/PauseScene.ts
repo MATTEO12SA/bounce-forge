@@ -40,7 +40,7 @@ export class PauseScene extends Phaser.Scene {
       .setDepth(DEPTHS.overlay + 2)
       .setShadow(0, 4, '#000814', 8, false, true);
 
-    new Button(this, WORLD_WIDTH / 2, 660, 620, 104, 'RESUME', () => {
+    new Button(this, WORLD_WIDTH / 2, 640, 620, 104, 'RESUME', () => {
       this.scene.resume('GameScene');
       this.scene.stop();
     }).setDepth(DEPTHS.overlay + 2);
@@ -48,7 +48,7 @@ export class PauseScene extends Phaser.Scene {
     new Button(
       this,
       WORLD_WIDTH / 2,
-      800,
+      770,
       620,
       104,
       'RESTART',
@@ -62,7 +62,21 @@ export class PauseScene extends Phaser.Scene {
     new Button(
       this,
       WORLD_WIDTH / 2,
-      940,
+      900,
+      620,
+      104,
+      'OPTIONS',
+      () => {
+        this.scene.stop('GameScene');
+        this.scene.start('OptionsScene', { returnTo: 'MainMenuScene' });
+      },
+      { variant: 'ghost' }
+    ).setDepth(DEPTHS.overlay + 2);
+
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      1030,
       620,
       104,
       'MENU',

@@ -1,6 +1,6 @@
 # Bounce Forge
 
-Bounce Forge est un brick breaker navigateur cree avec TypeScript, Vite et Phaser 3.
+Bounce Forge est un brick breaker navigateur cree avec TypeScript, Vite et Phaser 4.
 
 Cree par **Matteo_plmr**.
 
@@ -192,4 +192,5 @@ Le schema de sauvegarde migre automatiquement les anciennes sauvegardes.
 
 - Le jeu utilise de la geometrie Phaser et des visuels proceduraux simples.
 - Aucun asset graphique externe n'est requis.
+- Le runtime utilise le renderer WebGL de Phaser 4.1.0 sans render nodes custom ni shaders externes.
 - La direction visuelle actuelle est jaune/forge, parce qu'elle est plus lisible et correspond mieux au jeu que l'ancienne passe sci-fi bleue.
