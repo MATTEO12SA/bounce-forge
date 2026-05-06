@@ -60,6 +60,12 @@ interface BallPhysicsSnapshot {
   vy: number;
 }
 
+interface PauseScenePayload {
+  levelIndex: number;
+  source: 'campaign' | 'creative';
+  editorReturn?: GameSceneData['editorReturn'];
+}
+
 export class GameScene extends Phaser.Scene {
   private levelSystem!: LevelSystem;
   private level!: LevelDefinition;
@@ -330,7 +336,7 @@ export class GameScene extends Phaser.Scene {
   private createBall(attached: boolean): Ball | null {
     const startX = this.paddle.x;
     const startY = this.paddle.y - 56;
-    const ball = this.balls.get(startX, startY) as Ball | null;
+    const ball = this.acquireBall(startX, startY);
     if (!ball) {
       return null;
     }
@@ -343,7 +349,31 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.rememberBallPhysics(ball);
-    this.particleSystem.burst(ball.x, ball.y, this.theme.primary, 8);
+    this.fxManager.playHit(ball.x, ball.y, this.theme.primary, 8);
+    return ball;
+  }
+
+  private acquireBall(x: number, y: number): Ball | null {
+    const reusable = this.balls
+      .getChildren()
+      .find((child): child is Ball => child instanceof Ball && !child.active);
+
+    if (reusable) {
+      return reusable;
+    }
+
+    const pooled = this.balls.get(x, y) as Ball | null;
+
+    if (pooled) {
+      return pooled;
+    }
+
+    if (this.balls.getChildren().length >= MAX_ACTIVE_BALLS) {
+      return null;
+    }
+
+    const ball = new Ball(this, x, y);
+    this.balls.add(ball);
     return ball;
   }
 
@@ -393,7 +423,7 @@ export class GameScene extends Phaser.Scene {
       .filter((ball) => ball.isAttached)
       .forEach((ball) => {
         ball.launch(this.level.difficulty.ballSpeed);
-        this.particleSystem.burst(ball.x, ball.y, this.theme.secondary, 10);
+        this.fxManager.playHit(ball.x, ball.y, this.theme.secondary, 10);
       });
   }
 
@@ -465,7 +495,7 @@ export class GameScene extends Phaser.Scene {
     if (this.activeTimers.has('stickyPaddle')) {
       ball.attachToPaddle(this.paddle);
       this.rememberBallPhysics(ball);
-      this.particleSystem.burst(ball.x, ball.y, this.theme.primary, 8);
+      this.fxManager.playHit(ball.x, ball.y, this.theme.primary, 8);
       this.audioSystem.hit();
       return;
     }
@@ -631,14 +661,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!brick.isBreakable) {
-      this.particleSystem.burst(brick.x, brick.y, brick.spec.color, 4);
+      this.fxManager.playHit(brick.x, brick.y, brick.spec.color, 4);
       return;
     }
 
     const destroyed = brick.damage(amount);
 
     if (!destroyed) {
-      this.particleSystem.burst(brick.x, brick.y, brick.spec.color, 5);
+      this.fxManager.playHit(brick.x, brick.y, brick.spec.color, 5);
       this.tweens.add({
         targets: brick,
         scaleX: 0.94,
@@ -653,13 +683,13 @@ export class GameScene extends Phaser.Scene {
     const { color, kind, powerUpChance, score } = brick.spec;
     this.bricks.remove(brick, true, true);
     this.audioSystem.break();
-    this.particleSystem.burst(x, y, color, kind === 'explosive' ? 28 : 16);
 
     if (kind === 'explosive') {
       this.explosionsTriggered += 1;
-      this.fxManager.cameraImpact(0.008, 180);
-      this.fxManager.cameraFlash(this.theme.danger, 90);
+      this.fxManager.playExplosion(x, y, color, 28);
       this.damageNearbyBricks(x, y, chainDepth + 1);
+    } else {
+      this.fxManager.playBreak(x, y, color, 16);
     }
 
     const combo = this.comboSystem.registerBreak();
@@ -757,8 +787,7 @@ export class GameScene extends Phaser.Scene {
         this.setTimedEffect(
           type,
           9000,
-          () =>
-            this.particleSystem.burst(this.paddle.x, this.paddle.y - 26, this.theme.primary, 14),
+          () => this.fxManager.playBreak(this.paddle.x, this.paddle.y - 26, this.theme.primary, 14),
           () => undefined
         );
         break;
@@ -779,7 +808,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.lives = Math.min(this.lives + 1, MAX_LIVES);
-    this.particleSystem.burst(this.paddle.x, this.paddle.y - 24, this.theme.danger, 14);
+    this.fxManager.playBreak(this.paddle.x, this.paddle.y - 24, this.theme.danger, 14);
     this.hud.update(this.buildHudState());
   }
 
@@ -826,7 +855,7 @@ export class GameScene extends Phaser.Scene {
       return null;
     }
 
-    const newBall = this.balls.get(source.x, source.y) as Ball | null;
+    const newBall = this.acquireBall(source.x, source.y);
     if (!newBall) {
       return null;
     }
@@ -1080,7 +1109,13 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.scene.launch('PauseScene', { levelIndex: this.levelIndex });
+    const payload: PauseScenePayload = {
+      levelIndex: this.levelIndex,
+      source: this.levelSource,
+      editorReturn: this.editorReturn
+    };
+
+    this.scene.launch('PauseScene', payload);
     this.scene.pause();
   }
 

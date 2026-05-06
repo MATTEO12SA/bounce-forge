@@ -20,6 +20,8 @@ const windowSize = process.env.BROWSER_TEST_WINDOW_SIZE ?? (visible ? '720,1280'
 const devServerUrl = 'http://localhost:5173/';
 const targetUrl = `${devServerUrl}?menu=1`;
 const consoleErrors = [];
+const worldWidth = 1080;
+const worldHeight = 1920;
 
 if (!browserPath) {
   console.error('No supported browser found. Install Edge/Chrome or set BROWSER_TEST_EDGE_PATH.');
@@ -245,10 +247,25 @@ async function captureUiState(page, name, expectations) {
         .filter((child) => child.type === 'Text' && child.visible !== false)
         .map((child) => String(child.text ?? ''));
       const buttonCount = children.filter((child) => child.constructor?.name === 'Button').length;
+      const buttonBounds = children
+        .filter((child) => child.constructor?.name === 'Button' && child.visible !== false)
+        .map((child) => {
+          const width = Number(child.input?.hitArea?.width ?? child.width ?? 0) * Math.abs(child.scaleX || 1);
+          const height = Number(child.input?.hitArea?.height ?? child.height ?? 0) * Math.abs(child.scaleY || 1);
+          return {
+            x: Number(child.x),
+            y: Number(child.y),
+            left: Number(child.x) - width / 2,
+            right: Number(child.x) + width / 2,
+            top: Number(child.y) - height / 2,
+            bottom: Number(child.y) + height / 2
+          };
+        });
       return {
         activeSceneKeys,
         textCount: texts.length,
         buttonCount,
+        buttonBounds,
         texts,
         hasCanvas: Boolean(document.querySelector('canvas')),
         canvasCount: document.querySelectorAll('canvas').length
@@ -265,6 +282,16 @@ async function captureUiState(page, name, expectations) {
     failures.push(`not enough text (${state.textCount})`);
   if (state.buttonCount < expectations.minButtons)
     failures.push(`not enough buttons (${state.buttonCount})`);
+  const outOfBoundsButtons = state.buttonBounds.filter(
+    (bounds) =>
+      bounds.left < -2 ||
+      bounds.right > worldWidth + 2 ||
+      bounds.top < -2 ||
+      bounds.bottom > worldHeight + 2
+  );
+  if (outOfBoundsButtons.length > 0) {
+    failures.push(`button bounds outside world (${JSON.stringify(outOfBoundsButtons[0])})`);
+  }
   if (
     expectations.requiredText &&
     !state.texts.some((text) => text.includes(expectations.requiredText))
@@ -356,6 +383,14 @@ try {
     minTexts: 3,
     minButtons: 5,
     requiredText: 'Bounce Forge'
+  });
+
+  await startScene(page, 'OptionsScene', { returnTo: 'MainMenuScene' });
+  await captureUiState(page, 'options', {
+    scene: 'OptionsScene',
+    minTexts: 6,
+    minButtons: 15,
+    requiredText: 'OPTIONS'
   });
 
   await startScene(page, 'LevelSelectScene');

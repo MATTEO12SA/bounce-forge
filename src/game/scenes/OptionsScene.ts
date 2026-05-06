@@ -8,6 +8,8 @@ import { drawScreenBackground } from '../ui/sceneChrome';
 import { DEPTHS, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 
 const VOLUME_STEPS = [0, 0.25, 0.5, 0.75, 1];
+const ROW_LABEL_X = 116;
+const ROW_CONTROL_CENTER_X = WORLD_WIDTH / 2 + 180;
 
 interface OptionsSceneData {
   returnTo?: string;
@@ -72,27 +74,39 @@ export class OptionsScene extends Phaser.Scene {
       this.applyVolumeMusic(value)
     );
     this.renderQualityRow('FX QUALITY', 720, this.settings.get().fxQuality);
-    this.renderToggle(
-      'FULLSCREEN',
-      900,
-      this.settings.get().fullscreen,
-      (next) => this.applyFullscreen(next)
+    this.renderToggle('FULLSCREEN', 900, this.settings.get().fullscreen, (next) =>
+      this.applyFullscreen(next)
     );
-    this.renderToggle(
-      'SOUND',
-      1040,
-      this.settings.get().soundEnabled,
-      (next) => this.applySoundEnabled(next)
+    this.renderToggle('SOUND', 1040, this.settings.get().soundEnabled, (next) =>
+      this.applySoundEnabled(next)
     );
 
-    new Button(this, WORLD_WIDTH / 2 - 250, 1240, 460, 96, 'RESET SAVE', () => {
-      this.confirmingReset = true;
-      this.renderAll();
-    }, { variant: 'danger' }).setDepth(DEPTHS.overlay);
+    new Button(
+      this,
+      WORLD_WIDTH / 2 - 250,
+      1240,
+      460,
+      96,
+      'RESET SAVE',
+      () => {
+        this.confirmingReset = true;
+        this.renderAll();
+      },
+      { variant: 'danger' }
+    ).setDepth(DEPTHS.overlay);
 
-    new Button(this, WORLD_WIDTH / 2 + 250, 1240, 460, 96, 'BACK', () => {
-      this.scene.start(this.returnTo);
-    }, { variant: 'ghost' }).setDepth(DEPTHS.overlay);
+    new Button(
+      this,
+      WORLD_WIDTH / 2 + 250,
+      1240,
+      460,
+      96,
+      'BACK',
+      () => {
+        this.scene.start(this.returnTo);
+      },
+      { variant: 'ghost' }
+    ).setDepth(DEPTHS.overlay);
   }
 
   private renderSection(
@@ -102,40 +116,34 @@ export class OptionsScene extends Phaser.Scene {
     onPick: (value: number) => void
   ): void {
     this.add
-      .text(WORLD_WIDTH / 2 - 460, y, label, {
+      .text(ROW_LABEL_X, y, label, {
         fontFamily: 'Arial, sans-serif',
-        fontSize: '34px',
+        fontSize: '32px',
         fontStyle: '800',
         color: this.theme.textMuted
       })
       .setOrigin(0, 0.5);
 
-    const buttonWidth = 130;
-    const gap = 16;
+    const buttonWidth = 112;
+    const gap = 12;
     const total = VOLUME_STEPS.length * buttonWidth + (VOLUME_STEPS.length - 1) * gap;
-    const startX = WORLD_WIDTH / 2 + 220 - total / 2;
+    const startX = ROW_CONTROL_CENTER_X - total / 2;
 
     VOLUME_STEPS.forEach((step, index) => {
       const x = startX + index * (buttonWidth + gap) + buttonWidth / 2;
       const isSelected = Math.abs(step - currentValue) < 0.01;
-      new Button(
-        this,
-        x,
-        y,
-        buttonWidth,
-        88,
-        `${Math.round(step * 100)}%`,
-        () => onPick(step),
-        { selected: isSelected, compact: true }
-      ).setDepth(DEPTHS.overlay);
+      new Button(this, x, y, buttonWidth, 88, `${Math.round(step * 100)}%`, () => onPick(step), {
+        selected: isSelected,
+        compact: true
+      }).setDepth(DEPTHS.overlay);
     });
   }
 
   private renderQualityRow(label: string, y: number, current: FxQuality): void {
     this.add
-      .text(WORLD_WIDTH / 2 - 460, y, label, {
+      .text(ROW_LABEL_X, y, label, {
         fontFamily: 'Arial, sans-serif',
-        fontSize: '34px',
+        fontSize: '32px',
         fontStyle: '800',
         color: this.theme.textMuted
       })
@@ -147,23 +155,16 @@ export class OptionsScene extends Phaser.Scene {
       { label: 'HIGH', value: 'high' }
     ];
 
-    const buttonWidth = 200;
-    const gap = 18;
+    const buttonWidth = 190;
+    const gap = 16;
     const total = buttons.length * buttonWidth + (buttons.length - 1) * gap;
-    const startX = WORLD_WIDTH / 2 + 200 - total / 2;
+    const startX = ROW_CONTROL_CENTER_X - total / 2;
 
     buttons.forEach((entry, index) => {
       const x = startX + index * (buttonWidth + gap) + buttonWidth / 2;
-      new Button(
-        this,
-        x,
-        y,
-        buttonWidth,
-        96,
-        entry.label,
-        () => this.applyFxQuality(entry.value),
-        { selected: current === entry.value }
-      ).setDepth(DEPTHS.overlay);
+      new Button(this, x, y, buttonWidth, 96, entry.label, () => this.applyFxQuality(entry.value), {
+        selected: current === entry.value
+      }).setDepth(DEPTHS.overlay);
     });
   }
 
@@ -174,9 +175,9 @@ export class OptionsScene extends Phaser.Scene {
     onToggle: (next: boolean) => void
   ): void {
     this.add
-      .text(WORLD_WIDTH / 2 - 460, y, label, {
+      .text(ROW_LABEL_X, y, label, {
         fontFamily: 'Arial, sans-serif',
-        fontSize: '34px',
+        fontSize: '32px',
         fontStyle: '800',
         color: this.theme.textMuted
       })
@@ -184,7 +185,7 @@ export class OptionsScene extends Phaser.Scene {
 
     new Button(
       this,
-      WORLD_WIDTH / 2 + 260,
+      ROW_CONTROL_CENTER_X,
       y,
       280,
       96,

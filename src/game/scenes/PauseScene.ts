@@ -7,10 +7,17 @@ import { DEPTHS, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 
 interface PauseSceneData {
   levelIndex?: number;
+  source?: 'campaign' | 'creative';
+  editorReturn?: {
+    mode: 'creative' | 'admin';
+    slotIndex: number;
+  };
 }
 
 export class PauseScene extends Phaser.Scene {
   private levelIndex = 0;
+  private source: 'campaign' | 'creative' = 'campaign';
+  private editorReturn?: PauseSceneData['editorReturn'];
 
   public constructor() {
     super('PauseScene');
@@ -18,6 +25,8 @@ export class PauseScene extends Phaser.Scene {
 
   public create(data: PauseSceneData): void {
     this.levelIndex = data.levelIndex ?? 0;
+    this.source = data.source ?? 'campaign';
+    this.editorReturn = data.editorReturn;
     const save = new SaveSystem();
     const theme = getTheme(save.snapshot().preferences.themeId);
 
@@ -54,7 +63,11 @@ export class PauseScene extends Phaser.Scene {
       'RESTART',
       () => {
         this.scene.stop('GameScene');
-        this.scene.start('GameScene', { levelIndex: this.levelIndex });
+        this.scene.start('GameScene', {
+          levelIndex: this.levelIndex,
+          source: this.source,
+          editorReturn: this.editorReturn
+        });
       },
       { variant: 'secondary' }
     ).setDepth(DEPTHS.overlay + 2);
