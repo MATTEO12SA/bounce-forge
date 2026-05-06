@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { createReadStream, existsSync } from 'node:fs';
 import http from 'node:http';
 import { extname, join, resolve } from 'node:path';
@@ -13,15 +12,27 @@ const defaultDataFile = resolve(root, 'data', 'campaign-level-overrides.json');
 const defaultDistDir = resolve(root, 'dist');
 const LOGIN_WINDOW_MS = 5 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 8;
+const BODY_READ_TIMEOUT_MS = 10_000;
+const MAX_PASSWORD_LENGTH = 256;
+const MAX_LEVEL_NAME_LENGTH = 120;
+const STATIC_ASSET_MAX_AGE = 3600;
 
 const SECURITY_HEADERS = {
   'Content-Security-Policy':
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
   'Referrer-Policy': 'no-referrer',
+  'Strict-Transport-Security': 'max-age=15552000; includeSubDomains',
   'X-Content-Type-Options': 'nosniff',
   'X-Frame-Options': 'DENY'
 };
+
+class BadRequestError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'BadRequestError';
+  }
+}
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -43,17 +54,29 @@ function sendJson(res, status, payload, headers = {}) {
 }
 
 async function readJsonBody(req) {
+  req.setTimeout(BODY_READ_TIMEOUT_MS, () => {
+    req.destroy();
+  });
+
   let raw = '';
 
   for await (const chunk of req) {
     raw += chunk;
 
     if (raw.length > 1_000_000) {
-      throw new Error('Request body too large.');
+      throw new BadRequestError('Request body too large.');
     }
   }
 
-  return raw ? JSON.parse(raw) : {};
+  if (!raw) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new BadRequestError('Malformed JSON body.');
+  }
 }
 
 function getClientKey(req) {
@@ -147,9 +170,14 @@ function serveStatic(req, res, distDir) {
     return;
   }
 
+  const ext = extname(target);
+  const cacheControl =
+    ext === '.html' ? 'no-cache' : `public, max-age=${STATIC_ASSET_MAX_AGE}`;
+
   res.writeHead(200, {
     ...SECURITY_HEADERS,
-    'Content-Type': CONTENT_TYPES[extname(target)] ?? 'application/octet-stream'
+    'Content-Type': CONTENT_TYPES[ext] ?? 'application/octet-stream',
+    'Cache-Control': cacheControl
   });
   createReadStream(target).pipe(res);
 }
@@ -197,6 +225,13 @@ export function createAdminServer({
         }
 
         const body = await readJsonBody(req);
+
+        if (typeof body.password !== 'string' || body.password.length > MAX_PASSWORD_LENGTH) {
+          registerLoginFailure(loginAttempts, clientKey);
+          sendJson(res, 400, { authenticated: false, message: 'Invalid request.' });
+          return;
+        }
+
         const token = auth.login(body.password);
 
         if (!token) {
@@ -247,6 +282,14 @@ export function createAdminServer({
         }
 
         const body = await readJsonBody(req);
+
+        if (body.name !== undefined && body.name !== null) {
+          if (typeof body.name !== 'string' || body.name.length > MAX_LEVEL_NAME_LENGTH) {
+            sendJson(res, 400, { message: 'Invalid level name.' });
+            return;
+          }
+        }
+
         const override = await store.save(Number(levelMatch[1]), body.rows, body.name);
         sendJson(res, 200, override);
         return;
@@ -279,12 +322,25 @@ export function createAdminServer({
 
       serveStatic(req, res, distDir);
     } catch (error) {
-      sendJson(res, 500, { message: error instanceof Error ? error.message : 'Server error.' });
+      if (error instanceof BadRequestError) {
+        sendJson(res, 400, { message: error.message });
+        return;
+      }
+
+      console.error('Admin server error:', error);
+      sendJson(res, 500, { message: 'Internal server error.' });
     }
   });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection:', reason);
+  });
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+  });
+
   const port = Number(process.env.API_PORT ?? process.env.PORT ?? 8787);
   const server = createAdminServer();
   server.listen(port, '0.0.0.0', () => {
