@@ -8,7 +8,14 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: `http://localhost:${process.env.API_PORT ?? '8787'}`,
-        changeOrigin: true
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
+            if (req.headers.host) {
+              proxyReq.setHeader('x-forwarded-host', req.headers.host);
+            }
+          });
+        }
       }
     }
   },
