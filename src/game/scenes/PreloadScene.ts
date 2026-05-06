@@ -3,6 +3,7 @@ import { GAME_TITLE, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 import { ProgressBar } from '../ui/ProgressBar';
 import { getTheme } from '../config/themeConfig';
 import { drawScreenBackground } from '../ui/sceneChrome';
+import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
 
 export class PreloadScene extends Phaser.Scene {
   public constructor() {
@@ -11,6 +12,7 @@ export class PreloadScene extends Phaser.Scene {
 
   public create(): void {
     const theme = getTheme('forge');
+    const overridesReady = CampaignOverrideSystem.refresh();
     drawScreenBackground(this, theme, { panel: false, sideRails: true });
 
     this.add
@@ -50,7 +52,9 @@ export class PreloadScene extends Phaser.Scene {
       },
       onComplete: () => {
         const showMenu = new URLSearchParams(window.location.search).get('menu') === '1';
-        this.scene.start(showMenu ? 'MainMenuScene' : 'GameScene', { levelIndex: 0 });
+        void overridesReady.finally(() => {
+          this.scene.start(showMenu ? 'MainMenuScene' : 'GameScene', { levelIndex: 0 });
+        });
       }
     });
   }

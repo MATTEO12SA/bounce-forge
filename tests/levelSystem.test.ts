@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { campaignLevels } from '../src/game/levels/campaignLevels';
 import { EDITOR_GRID_COLS, createEmptyEditorRows } from '../src/game/levels/editorGrid';
-import { SaveSystem } from '../src/game/systems/SaveSystem';
 import { LevelSystem } from '../src/game/systems/LevelSystem';
+import { CampaignOverrideSystem } from '../src/game/systems/CampaignOverrideSystem';
+import { SaveSystem } from '../src/game/systems/SaveSystem';
 import type { KeyValueStorage } from '../src/game/utils/storage';
 
 class MemoryStorage implements KeyValueStorage {
@@ -27,15 +28,15 @@ function makeOneBrickRows(): string[] {
   return rows;
 }
 
-describe('level system custom overrides', () => {
+describe('level system creative and admin levels', () => {
   it('exposes the full 24-level campaign', () => {
     expect(campaignLevels).toHaveLength(24);
     expect(new LevelSystem(new SaveSystem(new MemoryStorage())).count).toBe(24);
   });
 
-  it('keeps campaign levels fixed when a saved override exists', () => {
+  it('keeps campaign levels fixed when a creative slot exists', () => {
     const save = new SaveSystem(new MemoryStorage());
-    save.setCustomLevelOverride(0, makeOneBrickRows(), 'Tiny Custom', 1000);
+    save.setCreativeLevelSlot(0, makeOneBrickRows(), 'Tiny Creative', 1000);
 
     const level = new LevelSystem(save).getLevel(0);
 
@@ -43,25 +44,47 @@ describe('level system custom overrides', () => {
     expect(level.name).toBe(campaignLevels[0].name);
   });
 
-  it('returns a custom level only when explicitly requested', () => {
+  it('returns a creative level only when explicitly requested', () => {
     const save = new SaveSystem(new MemoryStorage());
-    save.setCustomLevelOverride(0, makeOneBrickRows(), 'Tiny Custom', 1000);
+    save.setCreativeLevelSlot(0, makeOneBrickRows(), 'Tiny Creative', 1000);
 
-    const level = new LevelSystem(save).getLevel(0, 'custom');
+    const level = new LevelSystem(save).getLevel(0, 'creative');
 
-    expect(level.id).toBe('custom-slot-0');
-    expect(level.name).toBe('Tiny Custom');
+    expect(level.id).toBe('creative-slot-0');
+    expect(level.name).toBe('Tiny Creative');
     expect(level.bricks).toHaveLength(1);
   });
 
-  it('returns to the campaign level after resetting the custom slot', () => {
+  it('returns to an empty creative slot after resetting the creative level', () => {
     const save = new SaveSystem(new MemoryStorage());
-    save.setCustomLevelOverride(0, makeOneBrickRows(), 'Tiny Custom', 1000);
+    save.setCreativeLevelSlot(0, makeOneBrickRows(), 'Tiny Creative', 1000);
     const levelSystem = new LevelSystem(save);
 
-    save.removeCustomLevelOverride(0);
+    save.removeCreativeLevelSlot(0);
 
     expect(levelSystem.getLevel(0).id).toBe(campaignLevels[0].id);
-    expect(levelSystem.hasCustomLevelOverride(0)).toBe(false);
+    expect(levelSystem.hasCreativeLevelSlot(0)).toBe(false);
+    expect(
+      levelSystem.getCreativePatternForEditing(0).rows.every((row) => row.startsWith('.'))
+    ).toBe(true);
+  });
+
+  it('applies admin campaign overrides without reading creative slots', () => {
+    CampaignOverrideSystem.clear();
+    const save = new SaveSystem(new MemoryStorage());
+    save.setCreativeLevelSlot(0, makeOneBrickRows(), 'Tiny Creative', 1000);
+    CampaignOverrideSystem.setOverride({
+      levelIndex: 0,
+      name: 'Admin Level',
+      rows: makeOneBrickRows(),
+      updatedAt: 2000
+    });
+
+    const level = new LevelSystem(save).getCampaignLevel(0);
+
+    expect(level.id).toBe(campaignLevels[0].id);
+    expect(level.name).toBe('Admin Level');
+    expect(level.bricks).toHaveLength(1);
+    CampaignOverrideSystem.clear();
   });
 });

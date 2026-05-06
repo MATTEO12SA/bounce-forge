@@ -1,0 +1,144 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+// @ts-expect-error Server modules are runtime .mjs files exercised by Vitest.
+import { createAdminServer } from '../server/index.mjs';
+// @ts-expect-error Server modules are runtime .mjs files exercised by Vitest.
+import { EDITOR_GRID_COLS, normalizeRows } from '../server/campaignOverrideStore.mjs';
+
+let tempDir: string | null = null;
+
+async function createTestServer(adminPassword = 'secret') {
+  tempDir = await mkdtemp(join(tmpdir(), 'bounce-forge-api-'));
+  const server = createAdminServer({
+    adminPassword,
+    dataFile: join(tempDir, 'campaign-level-overrides.json'),
+    apiOnly: true
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Invalid test server address.');
+  }
+
+  return {
+    server,
+    baseUrl: `http://127.0.0.1:${address.port}`
+  };
+}
+
+function makeRows(): string[] {
+  const rows = normalizeRows([]);
+  rows[0] = `1${'.'.repeat(EDITOR_GRID_COLS - 1)}`;
+  return rows;
+}
+
+afterEach(async () => {
+  if (tempDir) {
+    await rm(tempDir, { recursive: true, force: true });
+    tempDir = null;
+  }
+});
+
+describe('admin server API', () => {
+  it('rejects campaign writes without an admin session', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const response = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Blocked', rows: makeRows() })
+      });
+
+      expect(response.status).toBe(401);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('logs in and persists admin campaign changes', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const login = await fetch(`${baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'secret' })
+      });
+      const cookie = login.headers.get('set-cookie') ?? '';
+      expect(login.status).toBe(200);
+      expect(cookie).toContain('bounce_forge_admin');
+
+      const save = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie
+        },
+        body: JSON.stringify({ name: 'Admin Level', rows: makeRows() })
+      });
+      expect(save.status).toBe(200);
+
+      const levels = await fetch(`${baseUrl}/api/admin/campaign-levels`);
+      const payload = (await levels.json()) as { overrides: Array<{ name: string }> };
+
+      expect(payload.overrides[0]?.name).toBe('Admin Level');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('keeps admin campaign changes after server restart', async () => {
+    const first = await createTestServer();
+
+    try {
+      const login = await fetch(`${first.baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'secret' })
+      });
+      const cookie = login.headers.get('set-cookie') ?? '';
+
+      await fetch(`${first.baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie
+        },
+        body: JSON.stringify({ name: 'Reboot Level', rows: makeRows() })
+      });
+    } finally {
+      await new Promise<void>((resolve) => first.server.close(() => resolve()));
+    }
+
+    const secondServer = createAdminServer({
+      adminPassword: 'secret',
+      dataFile: join(tempDir!, 'campaign-level-overrides.json'),
+      apiOnly: true
+    });
+
+    await new Promise<void>((resolve) => {
+      secondServer.listen(0, '127.0.0.1', resolve);
+    });
+
+    const address = secondServer.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Invalid restarted server address.');
+    }
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/api/admin/campaign-levels`);
+      const payload = (await response.json()) as { overrides: Array<{ name: string }> };
+
+      expect(payload.overrides[0]?.name).toBe('Reboot Level');
+    } finally {
+      await new Promise<void>((resolve) => secondServer.close(() => resolve()));
+    }
+  });
+});

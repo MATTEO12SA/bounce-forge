@@ -1,12 +1,17 @@
 import { campaignLevels } from '../levels/campaignLevels';
-import { createPatternFromCustomOverride, normalizeEditorRows } from '../levels/editorGrid';
+import {
+  createPatternFromCreativeSlot,
+  createPatternFromEditorRows,
+  normalizeEditorRows
+} from '../levels/editorGrid';
 import { createLevelFromPattern } from '../levels/levelFactory';
 import { LEVEL_PATTERNS } from '../levels/levelPatterns';
-import type { CustomLevelOverride, LevelDefinition, PatternDefinition } from '../levels/levelTypes';
+import type { CreativeLevelSlot, LevelDefinition, PatternDefinition } from '../levels/levelTypes';
 import { clamp } from '../utils/math';
+import { CampaignOverrideSystem } from './CampaignOverrideSystem';
 import { SaveSystem } from './SaveSystem';
 
-export type LevelSource = 'campaign' | 'custom';
+export type LevelSource = 'campaign' | 'creative';
 
 export class LevelSystem {
   public constructor(private readonly saveSystem = new SaveSystem()) {}
@@ -18,25 +23,36 @@ export class LevelSystem {
   public getLevel(levelIndex: number, source: LevelSource = 'campaign'): LevelDefinition {
     const safeIndex = Math.floor(clamp(levelIndex, 0, campaignLevels.length - 1));
 
-    if (source === 'custom') {
-      return this.getCustomLevel(safeIndex) ?? campaignLevels[safeIndex];
+    if (source === 'creative') {
+      return this.getCreativeLevel(safeIndex) ?? this.createEmptyCreativeLevel(safeIndex);
     }
 
-    return campaignLevels[safeIndex];
+    return this.getCampaignLevel(safeIndex);
   }
 
   public getCampaignLevel(levelIndex: number): LevelDefinition {
     const safeIndex = Math.floor(clamp(levelIndex, 0, campaignLevels.length - 1));
-    return campaignLevels[safeIndex];
+    const fallback = campaignLevels[safeIndex];
+    const override = CampaignOverrideSystem.getOverride(safeIndex);
+
+    if (!override) {
+      return fallback;
+    }
+
+    try {
+      return CampaignOverrideSystem.createLevelFromOverride(override, fallback);
+    } catch {
+      return fallback;
+    }
   }
 
-  public getCustomLevel(levelIndex: number): LevelDefinition | null {
+  public getCreativeLevel(levelIndex: number): LevelDefinition | null {
     const safeIndex = Math.floor(clamp(levelIndex, 0, campaignLevels.length - 1));
-    const override = this.saveSystem.getCustomLevelOverride(safeIndex);
+    const slot = this.saveSystem.getCreativeLevelSlot(safeIndex);
 
-    if (override) {
+    if (slot) {
       try {
-        return this.createLevelFromOverride(override, safeIndex);
+        return this.createLevelFromSlot(slot, safeIndex);
       } catch {
         return null;
       }
@@ -45,41 +61,99 @@ export class LevelSystem {
     return null;
   }
 
-  public getPatternForEditing(levelIndex: number): PatternDefinition {
+  public getCustomLevel(levelIndex: number): LevelDefinition | null {
+    return this.getCreativeLevel(levelIndex);
+  }
+
+  public getCreativePatternForEditing(levelIndex: number): PatternDefinition {
     const safeIndex = Math.floor(clamp(levelIndex, 0, LEVEL_PATTERNS.length - 1));
-    const override = this.saveSystem.getCustomLevelOverride(safeIndex);
+    const slot = this.saveSystem.getCreativeLevelSlot(safeIndex);
+
+    if (slot) {
+      try {
+        return createPatternFromCreativeSlot(slot);
+      } catch {
+        return this.createEmptyCreativePattern(safeIndex);
+      }
+    }
+
+    return this.createEmptyCreativePattern(safeIndex);
+  }
+
+  public getAdminPatternForEditing(levelIndex: number): PatternDefinition {
+    const safeIndex = Math.floor(clamp(levelIndex, 0, campaignLevels.length - 1));
+    const fallbackPattern = LEVEL_PATTERNS[safeIndex];
+    const override = CampaignOverrideSystem.getOverride(safeIndex);
 
     if (override) {
       try {
-        return createPatternFromCustomOverride(override);
+        return createPatternFromEditorRows(safeIndex, override.name, override.rows);
       } catch {
         return {
-          ...LEVEL_PATTERNS[safeIndex],
-          rows: normalizeEditorRows(LEVEL_PATTERNS[safeIndex].rows)
+          ...fallbackPattern,
+          rows: normalizeEditorRows(fallbackPattern.rows)
         };
       }
     }
 
+    return {
+      ...fallbackPattern,
+      rows: normalizeEditorRows(fallbackPattern.rows)
+    };
+  }
+
+  public getOfficialPatternForEditing(levelIndex: number): PatternDefinition {
+    const safeIndex = Math.floor(clamp(levelIndex, 0, LEVEL_PATTERNS.length - 1));
     return {
       ...LEVEL_PATTERNS[safeIndex],
       rows: normalizeEditorRows(LEVEL_PATTERNS[safeIndex].rows)
     };
   }
 
-  public hasCustomLevelOverride(levelIndex: number): boolean {
+  public getPatternForEditing(levelIndex: number): PatternDefinition {
+    return this.getCreativePatternForEditing(levelIndex);
+  }
+
+  public hasCreativeLevelSlot(levelIndex: number): boolean {
     const safeIndex = Math.floor(clamp(levelIndex, 0, campaignLevels.length - 1));
-    return Boolean(this.saveSystem.getCustomLevelOverride(safeIndex));
+    return Boolean(this.saveSystem.getCreativeLevelSlot(safeIndex));
+  }
+
+  public hasCustomLevelOverride(levelIndex: number): boolean {
+    return this.hasCreativeLevelSlot(levelIndex);
+  }
+
+  public hasAdminCampaignOverride(levelIndex: number): boolean {
+    return Boolean(CampaignOverrideSystem.getOverride(levelIndex));
   }
 
   public hasNext(levelIndex: number): boolean {
     return levelIndex + 1 < campaignLevels.length;
   }
 
-  private createLevelFromOverride(
-    override: CustomLevelOverride,
-    levelIndex: number
-  ): LevelDefinition {
-    const pattern = createPatternFromCustomOverride(override);
+  private createLevelFromSlot(override: CreativeLevelSlot, levelIndex: number): LevelDefinition {
+    const pattern = createPatternFromCreativeSlot(override);
     return createLevelFromPattern(pattern, levelIndex);
+  }
+
+  private createEmptyCreativePattern(slotIndex: number): PatternDefinition {
+    return {
+      id: `creative-slot-${slotIndex}`,
+      name: `Creative ${slotIndex + 1}`,
+      rows: normalizeEditorRows([])
+    };
+  }
+
+  private createEmptyCreativeLevel(slotIndex: number): LevelDefinition {
+    const rows = normalizeEditorRows([]);
+    rows[0] = `1${'.'.repeat(rows[0].length - 1)}`;
+    return createLevelFromPattern(
+      {
+        id: `creative-slot-${slotIndex}`,
+        name: `Creative ${slotIndex + 1}`,
+        rows
+      },
+      slotIndex
+    );
   }
 }

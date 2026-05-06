@@ -44,7 +44,7 @@ import {
 
 interface GameSceneData {
   levelIndex?: number;
-  source?: 'campaign' | 'custom';
+  source?: 'campaign' | 'creative';
 }
 
 interface BallPhysicsSnapshot {

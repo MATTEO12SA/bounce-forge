@@ -10,6 +10,8 @@ import {
   validateEditorRows,
   type EditorCell
 } from '../levels/editorGrid';
+import { AdminApiSystem } from '../systems/AdminApiSystem';
+import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
 import { LevelSystem } from '../systems/LevelSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
@@ -19,6 +21,7 @@ import { clamp } from '../utils/math';
 
 interface LevelEditorSceneData {
   slotIndex?: number;
+  mode?: 'creative' | 'admin';
 }
 
 const CELL_SIZE = 19;
@@ -32,10 +35,12 @@ const GRID_TOP = 260;
 export class LevelEditorScene extends Phaser.Scene {
   private saveSystem!: SaveSystem;
   private levelSystem!: LevelSystem;
+  private adminApi = new AdminApiSystem();
   private theme!: ThemeDefinition;
   private rows: string[] = createEmptyEditorRows();
   private selectedCell: EditorCell = '1';
   private slotIndex = 0;
+  private mode: 'creative' | 'admin' = 'creative';
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private gridHitArea!: Phaser.GameObjects.Zone;
   private slotLabel!: Phaser.GameObjects.Text;
@@ -53,6 +58,7 @@ export class LevelEditorScene extends Phaser.Scene {
     this.saveSystem = new SaveSystem();
     this.levelSystem = new LevelSystem(this.saveSystem);
     this.theme = getTheme(this.saveSystem.snapshot().preferences.themeId);
+    this.mode = data.mode === 'admin' ? 'admin' : 'creative';
     this.slotIndex = Math.floor(clamp(data.slotIndex ?? 0, 0, this.levelSystem.count - 1));
     this.selectedCell = '1';
     this.painting = false;
@@ -102,7 +108,7 @@ export class LevelEditorScene extends Phaser.Scene {
       .setShadow(0, 4, '#000814', 8, false, true);
 
     this.add
-      .text(WORLD_WIDTH / 2, 124, 'WORLD EDITOR', {
+      .text(WORLD_WIDTH / 2, 124, this.mode === 'admin' ? 'ADMIN EDITOR' : 'MODE CREATIF', {
         fontFamily: 'Arial, sans-serif',
         fontSize: '36px',
         fontStyle: '900',
@@ -126,10 +132,10 @@ export class LevelEditorScene extends Phaser.Scene {
     this.renderSlotButtons();
     this.renderPaletteButtons();
 
-    new Button(this, 234, 1664, 192, 74, 'SAVE', () => this.saveCurrentSlot(), {
+    new Button(this, 234, 1664, 192, 74, 'SAVE', () => void this.saveCurrentSlot(), {
       compact: true
     }).setDepth(DEPTHS.hud);
-    new Button(this, 450, 1664, 192, 74, 'PLAY', () => this.playCurrentSlot(), {
+    new Button(this, 450, 1664, 192, 74, 'PLAY', () => void this.playCurrentSlot(), {
       selected: true,
       compact: true
     }).setDepth(DEPTHS.hud);
@@ -150,7 +156,7 @@ export class LevelEditorScene extends Phaser.Scene {
       80,
       'BACK',
       () => {
-        this.scene.start('MainMenuScene');
+        this.scene.start(this.mode === 'admin' ? 'AdminMenuScene' : 'MainMenuScene');
       },
       { variant: 'ghost' }
     ).setDepth(DEPTHS.hud);
@@ -196,15 +202,22 @@ export class LevelEditorScene extends Phaser.Scene {
 
     for (let index = pageStart; index < pageEnd; index += 1) {
       const isSelected = index === this.slotIndex;
-      const hasCustomMap = this.levelSystem.hasCustomLevelOverride(index);
+      const hasSavedMap =
+        this.mode === 'admin'
+          ? this.levelSystem.hasAdminCampaignOverride(index)
+          : this.levelSystem.hasCreativeLevelSlot(index);
       const button = new Button(
         this,
         startX + index * gap,
         188,
         104,
         58,
-        `${index + 1}${hasCustomMap ? '*' : ''}`,
-        () => this.loadSlot(index, `Slot ${index + 1} loaded.`),
+        `${index + 1}${hasSavedMap ? '*' : ''}`,
+        () =>
+          this.loadSlot(
+            index,
+            `${this.mode === 'admin' ? 'Campaign' : 'Creative'} ${index + 1} loaded.`
+          ),
         {
           fill: isSelected ? 0x123445 : 0x10202d,
           hoverFill: isSelected ? 0x123445 : undefined,
@@ -344,10 +357,21 @@ export class LevelEditorScene extends Phaser.Scene {
 
   private loadSlot(slotIndex: number, message: string): void {
     this.slotIndex = Math.floor(clamp(slotIndex, 0, this.levelSystem.count - 1));
-    const pattern = this.levelSystem.getPatternForEditing(this.slotIndex);
+    const pattern =
+      this.mode === 'admin'
+        ? this.levelSystem.getAdminPatternForEditing(this.slotIndex)
+        : this.levelSystem.getCreativePatternForEditing(this.slotIndex);
+    const savedSuffix =
+      this.mode === 'admin'
+        ? this.levelSystem.hasAdminCampaignOverride(this.slotIndex)
+          ? ' *admin'
+          : ''
+        : this.levelSystem.hasCreativeLevelSlot(this.slotIndex)
+          ? ' *local'
+          : '';
     this.rows = normalizeEditorRows(pattern.rows);
     this.slotLabel.setText(
-      `Slot ${this.slotIndex + 1}: ${pattern.name}${this.levelSystem.hasCustomLevelOverride(this.slotIndex) ? ' *custom' : ''}`
+      `${this.mode === 'admin' ? 'Campaign' : 'Creative'} ${this.slotIndex + 1}: ${pattern.name}${savedSuffix}`
     );
     this.renderSlotButtons();
     this.drawGrid();
@@ -383,7 +407,7 @@ export class LevelEditorScene extends Phaser.Scene {
     this.gridGraphics.strokeRect(GRID_LEFT - 8, GRID_TOP - 8, GRID_WIDTH + 16, GRID_HEIGHT + 16);
   }
 
-  private saveCurrentSlot(): boolean {
+  private async saveCurrentSlot(): Promise<boolean> {
     const validation = validateEditorRows(this.rows);
 
     if (!validation.valid) {
@@ -391,23 +415,46 @@ export class LevelEditorScene extends Phaser.Scene {
       return false;
     }
 
-    this.saveSystem.setCustomLevelOverride(
+    if (this.mode === 'admin') {
+      try {
+        this.setStatus('Saving campaign level...', false);
+        const fallback = this.levelSystem.getCampaignLevel(this.slotIndex);
+        const override = await this.adminApi.saveCampaignOverride(
+          this.slotIndex,
+          this.rows,
+          fallback.name
+        );
+        CampaignOverrideSystem.setOverride(override);
+        this.slotLabel.setText(`Campaign ${this.slotIndex + 1}: ${override.name} *admin`);
+        this.renderSlotButtons();
+        this.setStatus(`Campaign level ${this.slotIndex + 1} saved for everyone.`, false);
+        return true;
+      } catch (error) {
+        this.setStatus(error instanceof Error ? error.message : 'Admin save failed.', true);
+        return false;
+      }
+    }
+
+    this.saveSystem.setCreativeLevelSlot(
       this.slotIndex,
       this.rows,
-      `Custom ${this.slotIndex + 1}`
+      `Creative ${this.slotIndex + 1}`
     );
-    this.slotLabel.setText(`Slot ${this.slotIndex + 1}: Custom ${this.slotIndex + 1} *custom`);
+    this.slotLabel.setText(`Creative ${this.slotIndex + 1}: Creative ${this.slotIndex + 1} *local`);
     this.renderSlotButtons();
-    this.setStatus(`Slot ${this.slotIndex + 1} saved.`, false);
+    this.setStatus(`Creative ${this.slotIndex + 1} saved locally.`, false);
     return true;
   }
 
-  private playCurrentSlot(): void {
-    if (!this.saveCurrentSlot()) {
+  private async playCurrentSlot(): Promise<void> {
+    if (!(await this.saveCurrentSlot())) {
       return;
     }
 
-    this.scene.start('GameScene', { levelIndex: this.slotIndex, source: 'custom' });
+    this.scene.start('GameScene', {
+      levelIndex: this.slotIndex,
+      source: this.mode === 'admin' ? 'campaign' : 'creative'
+    });
   }
 
   private clearGrid(): void {
@@ -417,8 +464,16 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   private resetSlot(): void {
-    this.saveSystem.removeCustomLevelOverride(this.slotIndex);
-    this.loadSlot(this.slotIndex, `Slot ${this.slotIndex + 1} restored to campaign map.`);
+    if (this.mode === 'admin') {
+      const pattern = this.levelSystem.getOfficialPatternForEditing(this.slotIndex);
+      this.rows = normalizeEditorRows(pattern.rows);
+      this.drawGrid();
+      this.setStatus('Campaign grid reset locally. Save to publish this layout.', false);
+      return;
+    }
+
+    this.saveSystem.removeCreativeLevelSlot(this.slotIndex);
+    this.loadSlot(this.slotIndex, `Creative ${this.slotIndex + 1} reset to empty.`);
   }
 
   private setStatus(message: string, isError: boolean): void {

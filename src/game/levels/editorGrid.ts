@@ -1,4 +1,4 @@
-import type { CustomLevelOverride, PatternDefinition } from './levelTypes';
+import type { CreativeLevelSlot, PatternDefinition } from './levelTypes';
 
 export const EDITOR_GRID_COLS = 36;
 export const EDITOR_GRID_ROWS = 58;
@@ -148,12 +148,16 @@ export function createPatternFromEditorRows(
   }
 
   return {
-    id: `custom-slot-${slotIndex}`,
+    id: `creative-slot-${slotIndex}`,
     name,
     rows: normalizedRows
   };
 }
 
-export function createPatternFromCustomOverride(override: CustomLevelOverride): PatternDefinition {
+export function createPatternFromCreativeSlot(slot: CreativeLevelSlot): PatternDefinition {
+  return createPatternFromEditorRows(slot.slotIndex, slot.name, slot.rows);
+}
+
+export function createPatternFromCustomOverride(override: CreativeLevelSlot): PatternDefinition {
   return createPatternFromEditorRows(override.slotIndex, override.name, override.rows);
 }

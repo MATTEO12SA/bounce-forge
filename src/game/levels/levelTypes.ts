@@ -64,9 +64,18 @@ export interface PatternDefinition {
   medalTargets?: LevelMedalTargets;
 }
 
-export interface CustomLevelOverride {
+export interface CreativeLevelSlot {
   slotIndex: number;
   name: string;
   rows: string[];
   updatedAt: number;
 }
+
+export interface AdminCampaignOverride {
+  levelIndex: number;
+  name: string;
+  rows: string[];
+  updatedAt: number;
+}
+
+export type CustomLevelOverride = CreativeLevelSlot;

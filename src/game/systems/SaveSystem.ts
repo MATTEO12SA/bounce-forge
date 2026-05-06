@@ -1,6 +1,6 @@
 import { getTheme } from '../config/themeConfig';
 import { isValidEditorRows, normalizeEditorRows, validateEditorRows } from '../levels/editorGrid';
-import type { CustomLevelOverride } from '../levels/levelTypes';
+import type { CreativeLevelSlot } from '../levels/levelTypes';
 import { SAVE_STORAGE_KEY } from '../utils/constants';
 import { getBrowserStorage, saveJson, type KeyValueStorage } from '../utils/storage';
 
@@ -12,26 +12,28 @@ export interface SavePreferences {
 export type LevelMedal = 'bronze' | 'silver' | 'gold';
 
 export interface SaveData {
-  version: 3;
+  version: 4;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
   levelMedals: Record<string, LevelMedal>;
   preferences: SavePreferences;
-  customLevelOverrides: Record<string, CustomLevelOverride>;
+  creativeLevelSlots: Record<string, CreativeLevelSlot>;
 }
 
 interface SaveDataV2 {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
   preferences: SavePreferences;
-  customLevelOverrides?: Record<string, CustomLevelOverride>;
+  levelMedals?: Record<string, LevelMedal>;
+  customLevelOverrides?: Record<string, CreativeLevelSlot>;
+  creativeLevelSlots?: Record<string, CreativeLevelSlot>;
 }
 
 export const DEFAULT_SAVE_DATA: SaveData = {
-  version: 3,
+  version: 4,
   bestScore: 0,
   unlockedLevel: 0,
   completedLevels: [],
@@ -40,7 +42,7 @@ export const DEFAULT_SAVE_DATA: SaveData = {
     soundEnabled: true,
     themeId: 'forge'
   },
-  customLevelOverrides: {}
+  creativeLevelSlots: {}
 };
 
 type PersistedSaveData = SaveData | SaveDataV2;
@@ -69,18 +71,18 @@ function isPersistedSaveData(value: unknown): value is PersistedSaveData {
     return true;
   }
 
-  if (value.version === 2) {
+  if (value.version === 2 || value.version === 3) {
     return true;
   }
 
   return (
-    value.version === 3 &&
+    value.version === 4 &&
     Boolean(value.levelMedals) &&
     typeof value.levelMedals === 'object' &&
     !Array.isArray(value.levelMedals) &&
-    Boolean(value.customLevelOverrides) &&
-    typeof value.customLevelOverrides === 'object' &&
-    !Array.isArray(value.customLevelOverrides)
+    Boolean(value.creativeLevelSlots) &&
+    typeof value.creativeLevelSlots === 'object' &&
+    !Array.isArray(value.creativeLevelSlots)
   );
 }
 
@@ -107,19 +109,19 @@ function loadPersistedSaveData(
   }
 }
 
-function sanitizeCustomLevelOverrides(overrides: unknown): Record<string, CustomLevelOverride> {
+function sanitizeCreativeLevelSlots(overrides: unknown): Record<string, CreativeLevelSlot> {
   if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) {
     return {};
   }
 
-  const sanitized: Record<string, CustomLevelOverride> = {};
+  const sanitized: Record<string, CreativeLevelSlot> = {};
 
   Object.entries(overrides).forEach(([key, value]) => {
     if (!value || typeof value !== 'object') {
       return;
     }
 
-    const candidate = value as Partial<CustomLevelOverride>;
+    const candidate = value as Partial<CreativeLevelSlot>;
 
     if (
       typeof candidate.slotIndex !== 'number' ||
@@ -175,9 +177,13 @@ function sanitizeLevelMedals(medals: unknown): Record<string, LevelMedal> {
 }
 
 function migrateSaveData(value: PersistedSaveData): SaveData {
-  const customLevelOverrides =
-    value.version >= 2 ? sanitizeCustomLevelOverrides(value.customLevelOverrides) : {};
-  const levelMedals = value.version === 3 ? sanitizeLevelMedals(value.levelMedals) : {};
+  const legacyOverrides = 'customLevelOverrides' in value ? value.customLevelOverrides : undefined;
+  const persistedCreativeSlots =
+    'creativeLevelSlots' in value ? value.creativeLevelSlots : undefined;
+  const legacyCreativeSlots = value.version >= 2 ? sanitizeCreativeLevelSlots(legacyOverrides) : {};
+  const creativeLevelSlots =
+    value.version >= 4 ? sanitizeCreativeLevelSlots(persistedCreativeSlots) : legacyCreativeSlots;
+  const levelMedals = value.version >= 3 ? sanitizeLevelMedals(value.levelMedals) : {};
 
   value.completedLevels.forEach((level) => {
     if (typeof level === 'number' && Number.isFinite(level)) {
@@ -187,7 +193,7 @@ function migrateSaveData(value: PersistedSaveData): SaveData {
   });
 
   return {
-    version: 3,
+    version: 4,
     bestScore: Math.max(0, Math.floor(value.bestScore)),
     unlockedLevel: Math.max(0, Math.floor(value.unlockedLevel)),
     completedLevels: value.completedLevels
@@ -199,7 +205,7 @@ function migrateSaveData(value: PersistedSaveData): SaveData {
       soundEnabled: value.preferences.soundEnabled,
       themeId: getTheme(value.preferences.themeId).id
     },
-    customLevelOverrides
+    creativeLevelSlots
   };
 }
 
@@ -221,7 +227,7 @@ export class SaveSystem {
       completedLevels: [...this.data.completedLevels],
       levelMedals: { ...this.data.levelMedals },
       preferences: { ...this.data.preferences },
-      customLevelOverrides: this.cloneCustomLevelOverrides()
+      creativeLevelSlots: this.cloneCreativeLevelSlots()
     };
   }
 
@@ -264,11 +270,11 @@ export class SaveSystem {
     return this.snapshot();
   }
 
-  public getCustomLevelOverride(slotIndex: number): CustomLevelOverride | null {
-    return this.cloneCustomLevelOverride(this.data.customLevelOverrides[String(slotIndex)]);
+  public getCreativeLevelSlot(slotIndex: number): CreativeLevelSlot | null {
+    return this.cloneCreativeLevelSlot(this.data.creativeLevelSlots[String(slotIndex)]);
   }
 
-  public setCustomLevelOverride(
+  public setCreativeLevelSlot(
     slotIndex: number,
     rows: readonly string[],
     name = `Custom ${slotIndex + 1}`,
@@ -282,7 +288,7 @@ export class SaveSystem {
     }
 
     const safeSlotIndex = Math.max(0, Math.floor(slotIndex));
-    this.data.customLevelOverrides[String(safeSlotIndex)] = {
+    this.data.creativeLevelSlots[String(safeSlotIndex)] = {
       slotIndex: safeSlotIndex,
       name,
       rows: normalizedRows,
@@ -292,10 +298,27 @@ export class SaveSystem {
     return this.snapshot();
   }
 
-  public removeCustomLevelOverride(slotIndex: number): SaveData {
-    delete this.data.customLevelOverrides[String(slotIndex)];
+  public removeCreativeLevelSlot(slotIndex: number): SaveData {
+    delete this.data.creativeLevelSlots[String(slotIndex)];
     this.persist();
     return this.snapshot();
+  }
+
+  public getCustomLevelOverride(slotIndex: number): CreativeLevelSlot | null {
+    return this.getCreativeLevelSlot(slotIndex);
+  }
+
+  public setCustomLevelOverride(
+    slotIndex: number,
+    rows: readonly string[],
+    name = `Creative ${slotIndex + 1}`,
+    updatedAt = Date.now()
+  ): SaveData {
+    return this.setCreativeLevelSlot(slotIndex, rows, name, updatedAt);
+  }
+
+  public removeCustomLevelOverride(slotIndex: number): SaveData {
+    return this.removeCreativeLevelSlot(slotIndex);
   }
 
   public reset(): SaveData {
@@ -304,15 +327,15 @@ export class SaveSystem {
       completedLevels: [],
       levelMedals: {},
       preferences: { ...DEFAULT_SAVE_DATA.preferences },
-      customLevelOverrides: {}
+      creativeLevelSlots: {}
     };
     this.persist();
     return this.snapshot();
   }
 
-  private cloneCustomLevelOverrides(): Record<string, CustomLevelOverride> {
+  private cloneCreativeLevelSlots(): Record<string, CreativeLevelSlot> {
     return Object.fromEntries(
-      Object.entries(this.data.customLevelOverrides).map(([slotIndex, override]) => [
+      Object.entries(this.data.creativeLevelSlots).map(([slotIndex, override]) => [
         slotIndex,
         {
           ...override,
@@ -322,9 +345,9 @@ export class SaveSystem {
     );
   }
 
-  private cloneCustomLevelOverride(
-    override: CustomLevelOverride | undefined
-  ): CustomLevelOverride | null {
+  private cloneCreativeLevelSlot(
+    override: CreativeLevelSlot | undefined
+  ): CreativeLevelSlot | null {
     if (!override) {
       return null;
     }

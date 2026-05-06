@@ -43,10 +43,10 @@ describe('editor grid helpers', () => {
     const rows = createEmptyEditorRows();
     rows[0] = `1${'.'.repeat(EDITOR_GRID_COLS - 1)}`;
 
-    const pattern = createPatternFromEditorRows(2, 'Custom 3', rows);
+    const pattern = createPatternFromEditorRows(2, 'Creative 3', rows);
 
-    expect(pattern.id).toBe('custom-slot-2');
-    expect(pattern.name).toBe('Custom 3');
+    expect(pattern.id).toBe('creative-slot-2');
+    expect(pattern.name).toBe('Creative 3');
     expect(pattern.rows).toHaveLength(EDITOR_GRID_ROWS);
   });
 

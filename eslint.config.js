@@ -19,7 +19,7 @@ export default [
     }
   },
   {
-    files: ['tests/**/*.ts', 'vite.config.ts', 'scripts/**/*.mjs'],
+    files: ['tests/**/*.ts', 'vite.config.ts', 'scripts/**/*.mjs', 'server/**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.browser,

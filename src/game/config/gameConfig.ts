@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
+import { AdminLoginScene } from '../scenes/AdminLoginScene';
+import { AdminMenuScene } from '../scenes/AdminMenuScene';
 import { BootScene } from '../scenes/BootScene';
 import { GameOverScene } from '../scenes/GameOverScene';
 import { GameScene } from '../scenes/GameScene';
@@ -44,6 +46,8 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       BootScene,
       PreloadScene,
       MainMenuScene,
+      AdminLoginScene,
+      AdminMenuScene,
       LevelSelectScene,
       LevelEditorScene,
       GameScene,

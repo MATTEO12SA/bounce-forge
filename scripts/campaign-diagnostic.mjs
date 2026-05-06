@@ -166,7 +166,8 @@ async function removeTempProfile() {
 async function evaluate(page, expression) {
   const result = await page.send('Runtime.evaluate', {
     expression,
-    returnByValue: true
+    returnByValue: true,
+    awaitPromise: true
   });
   return result.result.result.value;
 }
@@ -285,17 +286,17 @@ try {
     }
   }
 
-  await startScene(page, 'LevelEditorScene', { slotIndex: 0 });
+  await startScene(page, 'LevelEditorScene', { slotIndex: 0, mode: 'creative' });
   const editorState = await evaluate(
     page,
-    `(() => {
+    `(async () => {
       const scene = window.__bounceForge.scene.getScene('LevelEditorScene');
       scene.rows = ['BS..................................', ...scene.rows.slice(1)];
-      scene.saveCurrentSlot();
+      await scene.saveCurrentSlot();
       window.__bounceForge.scene.start('GameScene', { levelIndex: 0 });
       const campaignScene = window.__bounceForge.scene.getScene('GameScene');
       const campaignName = campaignScene.level.name;
-      window.__bounceForge.scene.start('GameScene', { levelIndex: 0, source: 'custom' });
+      window.__bounceForge.scene.start('GameScene', { levelIndex: 0, source: 'creative' });
       const customScene = window.__bounceForge.scene.getScene('GameScene');
       const kinds = customScene.bricks.getChildren().map((brick) => brick.spec.kind);
       return {
@@ -311,8 +312,8 @@ try {
     throw new Error('Campaign level changed after saving an editor slot');
   }
 
-  if (!editorState.hasBonus || !editorState.hasShield || editorState.customName !== 'Custom 1') {
-    throw new Error('Explicit custom play path did not create bonus and shield bricks');
+  if (!editorState.hasBonus || !editorState.hasShield || editorState.customName !== 'Creative 1') {
+    throw new Error('Explicit creative play path did not create bonus and shield bricks');
   }
 
   const chapters = [...new Set(campaignSummary.map((level) => level.chapter))];

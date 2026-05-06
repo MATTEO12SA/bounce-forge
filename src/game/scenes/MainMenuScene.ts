@@ -22,6 +22,19 @@ export class MainMenuScene extends Phaser.Scene {
     drawScreenBackground(this, theme, { panel: false, sideRails: true });
     drawPanel(this, WORLD_WIDTH / 2, 540, 746, 940, theme, { alpha: 0.76 });
 
+    new Button(
+      this,
+      WORLD_WIDTH - 142,
+      74,
+      204,
+      58,
+      'ADMIN',
+      () => {
+        this.scene.start('AdminLoginScene');
+      },
+      { variant: 'ghost', compact: true }
+    );
+
     this.add
       .text(WORLD_WIDTH / 2, 132, GAME_TITLE, {
         fontFamily: 'Arial, sans-serif',
@@ -73,9 +86,9 @@ export class MainMenuScene extends Phaser.Scene {
       676,
       620,
       88,
-      'EDITOR',
+      'MODE CREATIF',
       () => {
-        this.scene.start('LevelEditorScene');
+        this.scene.start('LevelEditorScene', { mode: 'creative' });
       },
       { variant: 'secondary' }
     );

@@ -316,7 +316,7 @@ async function runEditorSmoke(page, rect) {
     expression: `(() => {
       const game = window.__bounceForge;
       game.scene.stop('MainMenuScene');
-      game.scene.start('LevelEditorScene', { slotIndex: 0 });
+      game.scene.start('LevelEditorScene', { slotIndex: 0, mode: 'creative' });
       return true;
     })()`,
     returnByValue: true
@@ -503,7 +503,7 @@ try {
       expression: `(() => {
         const raw = localStorage.getItem('bounce-forge.save.v1');
         const data = raw ? JSON.parse(raw) : null;
-        const override = data?.customLevelOverrides?.['0'];
+        const override = data?.creativeLevelSlots?.['0'];
         return {
           version: data?.version,
           hasOverride: Boolean(override),

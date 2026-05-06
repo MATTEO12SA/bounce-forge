@@ -258,9 +258,23 @@ try {
         const sceneManager = game && game.scene;
         if (sceneManager) {
           const sceneList = sceneManager.scenes.map((scene) => scene.scene.key);
-          if (sceneList.includes('GameScene')) {
+          if (sceneList.includes('GameScene') && sceneList.includes('LevelEditorScene')) {
             sceneList.forEach((key) => sceneManager.stop(key));
-            sceneManager.start('GameScene', { levelIndex: 0 });
+            sceneManager.start('LevelEditorScene', { mode: 'creative', slotIndex: 0 });
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            const editor = sceneManager.getScene('LevelEditorScene');
+            const rows = Array.from({ length: 58 }, () => '.'.repeat(36));
+            for (let row = 8; row <= 22; row += 1) {
+              const chars = [...rows[row]];
+              chars[16] = 'X';
+              chars[17] = 'E';
+              chars[18] = 'X';
+              rows[row] = chars.join('');
+            }
+            editor.rows = rows;
+            await editor.saveCurrentSlot();
+            sceneList.forEach((key) => sceneManager.stop(key));
+            sceneManager.start('GameScene', { levelIndex: 0, source: 'creative' });
             return { ok: true, sceneList };
           }
         }

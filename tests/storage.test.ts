@@ -21,7 +21,7 @@ class MemoryStorage implements KeyValueStorage {
 }
 
 function isSaveData(value: unknown): value is SaveData {
-  return Boolean(value && typeof value === 'object' && (value as Partial<SaveData>).version === 3);
+  return Boolean(value && typeof value === 'object' && (value as Partial<SaveData>).version === 4);
 }
 
 function makeOneBrickRows(): string[] {
@@ -49,7 +49,7 @@ describe('storage helpers and save system', () => {
     expect(reloaded.bestScore).toBe(2400);
     expect(reloaded.unlockedLevel).toBe(3);
     expect(reloaded.completedLevels).toContain(2);
-    expect(reloaded.version).toBe(3);
+    expect(reloaded.version).toBe(4);
     expect(reloaded.levelMedals['2']).toBe('bronze');
   });
 
@@ -78,29 +78,59 @@ describe('storage helpers and save system', () => {
 
     const migrated = new SaveSystem(storage).snapshot();
 
-    expect(migrated.version).toBe(3);
+    expect(migrated.version).toBe(4);
     expect(migrated.bestScore).toBe(4200);
     expect(migrated.unlockedLevel).toBe(4);
     expect(migrated.completedLevels).toEqual([0, 1, 3]);
     expect(migrated.levelMedals).toEqual({ '0': 'bronze', '1': 'bronze', '3': 'bronze' });
     expect(migrated.preferences.soundEnabled).toBe(false);
     expect(migrated.preferences.themeId).toBe('neon');
-    expect(migrated.customLevelOverrides).toEqual({});
+    expect(migrated.creativeLevelSlots).toEqual({});
   });
 
-  it('saves reloads and removes custom level overrides', () => {
+  it('saves reloads and removes creative level slots', () => {
     const storage = new MemoryStorage();
     const save = new SaveSystem(storage);
 
-    save.setCustomLevelOverride(1, makeOneBrickRows(), 'Tiny Custom', 1234);
+    save.setCreativeLevelSlot(1, makeOneBrickRows(), 'Tiny Creative', 1234);
 
     const reloaded = new SaveSystem(storage);
-    expect(reloaded.getCustomLevelOverride(1)?.name).toBe('Tiny Custom');
-    expect(reloaded.getCustomLevelOverride(1)?.rows[0][0]).toBe('1');
+    expect(reloaded.getCreativeLevelSlot(1)?.name).toBe('Tiny Creative');
+    expect(reloaded.getCreativeLevelSlot(1)?.rows[0][0]).toBe('1');
 
-    reloaded.removeCustomLevelOverride(1);
+    reloaded.removeCreativeLevelSlot(1);
 
-    expect(new SaveSystem(storage).getCustomLevelOverride(1)).toBeNull();
+    expect(new SaveSystem(storage).getCreativeLevelSlot(1)).toBeNull();
+  });
+
+  it('migrates legacy custom overrides into creative slots', () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      SAVE_STORAGE_KEY,
+      JSON.stringify({
+        version: 3,
+        bestScore: 0,
+        unlockedLevel: 0,
+        completedLevels: [],
+        levelMedals: {},
+        preferences: {
+          soundEnabled: true,
+          themeId: 'forge'
+        },
+        customLevelOverrides: {
+          '0': {
+            slotIndex: 0,
+            name: 'Old Custom',
+            rows: makeOneBrickRows(),
+            updatedAt: 123
+          }
+        }
+      })
+    );
+
+    const migrated = new SaveSystem(storage);
+
+    expect(migrated.getCreativeLevelSlot(0)?.name).toBe('Old Custom');
   });
 
   it('keeps the best medal earned for each level', () => {

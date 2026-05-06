@@ -48,6 +48,7 @@ export class LevelSelectScene extends Phaser.Scene {
       const y = 300 + row * 104;
       const locked = index > saveData.unlockedLevel;
       const medal = saveData.levelMedals[String(index)]?.toUpperCase();
+      const adminMark = levelSystem.hasAdminCampaignOverride(index) ? ' *' : '';
 
       new Button(
         this,
@@ -55,7 +56,9 @@ export class LevelSelectScene extends Phaser.Scene {
         y,
         382,
         76,
-        locked ? `LOCKED ${index + 1}` : `${index + 1}. ${level.name}${medal ? ` ${medal}` : ''}`,
+        locked
+          ? `LOCKED ${index + 1}`
+          : `${index + 1}. ${level.name}${adminMark}${medal ? ` ${medal}` : ''}`,
         () => {
           this.scene.start('GameScene', { levelIndex: index });
         },

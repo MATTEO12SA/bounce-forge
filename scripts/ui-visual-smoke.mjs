@@ -365,12 +365,12 @@ try {
     requiredText: 'CAMPAIGN'
   });
 
-  await startScene(page, 'LevelEditorScene');
+  await startScene(page, 'LevelEditorScene', { mode: 'creative' });
   await captureUiState(page, 'editor', {
     scene: 'LevelEditorScene',
     minTexts: 3,
     minButtons: 16,
-    requiredText: 'WORLD EDITOR'
+    requiredText: 'MODE CREATIF'
   });
 
   await startScene(page, 'GameScene', { levelIndex: 0 });
