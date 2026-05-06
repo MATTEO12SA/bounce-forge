@@ -78,13 +78,13 @@ export class AdminAuth {
     }
   }
 
-  createCookie(token) {
-    return `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${Math.floor(
+  createCookie(token, { secure = false } = {}) {
+    return `${COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.floor(
       SESSION_TTL_MS / 1000
-    )}`;
+    )}${secure ? '; Secure' : ''}`;
   }
 
-  clearCookie() {
-    return `${COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+  clearCookie({ secure = false } = {}) {
+    return `${COOKIE_NAME}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
   }
 }

@@ -87,9 +87,15 @@ export class AdminLoginScene extends Phaser.Scene {
 
     addCreatorCredit(this, theme);
     this.updatePasswordText();
+    void this.redirectIfAuthenticated();
   }
 
   private handleKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      this.scene.start('MainMenuScene');
+      return;
+    }
+
     if (event.key === 'Enter') {
       void this.login();
       return;
@@ -110,6 +116,18 @@ export class AdminLoginScene extends Phaser.Scene {
   private updatePasswordText(): void {
     this.passwordText.setText(this.password ? '*'.repeat(this.password.length) : 'PASSWORD');
     this.passwordText.setAlpha(this.password ? 1 : 0.48);
+  }
+
+  private async redirectIfAuthenticated(): Promise<void> {
+    try {
+      const session = await this.api.getSession();
+
+      if (session.authenticated && this.scene.isActive('AdminLoginScene')) {
+        this.scene.start('AdminMenuScene');
+      }
+    } catch {
+      // Stay on the login screen if the admin API is unavailable.
+    }
   }
 
   private async login(): Promise<void> {

@@ -22,4 +22,10 @@ describe('power up system', () => {
 
     expect(system.roll(1)).toBe('multiBall');
   });
+
+  it('can roll the sticky paddle skill power-up', () => {
+    const system = new PowerUpSystem(new FixedRandom([0.1, 0.902]));
+
+    expect(system.roll(1)).toBe('stickyPaddle');
+  });
 });

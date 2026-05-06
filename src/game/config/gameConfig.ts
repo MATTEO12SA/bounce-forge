@@ -5,6 +5,7 @@ import { AdminMenuScene } from '../scenes/AdminMenuScene';
 import { BootScene } from '../scenes/BootScene';
 import { GameOverScene } from '../scenes/GameOverScene';
 import { GameScene } from '../scenes/GameScene';
+import { GuideScene } from '../scenes/GuideScene';
 import { LevelEditorScene } from '../scenes/LevelEditorScene';
 import { LevelSelectScene } from '../scenes/LevelSelectScene';
 import { MainMenuScene } from '../scenes/MainMenuScene';
@@ -48,6 +49,7 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       MainMenuScene,
       AdminLoginScene,
       AdminMenuScene,
+      GuideScene,
       LevelSelectScene,
       LevelEditorScene,
       GameScene,

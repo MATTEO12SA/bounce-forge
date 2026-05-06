@@ -74,6 +74,9 @@ describe('admin server API', () => {
       const cookie = login.headers.get('set-cookie') ?? '';
       expect(login.status).toBe(200);
       expect(cookie).toContain('bounce_forge_admin');
+      expect(cookie).toContain('HttpOnly');
+      expect(cookie).toContain('SameSite=Strict');
+      expect(login.headers.get('content-security-policy')).toContain("default-src 'self'");
 
       const save = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
         method: 'PUT',
@@ -89,6 +92,91 @@ describe('admin server API', () => {
       const payload = (await levels.json()) as { overrides: Array<{ name: string }> };
 
       expect(payload.overrides[0]?.name).toBe('Admin Level');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('rate limits repeated failed admin logins', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const response = await fetch(`${baseUrl}/api/admin/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: 'wrong' })
+        });
+        expect(response.status).toBe(401);
+      }
+
+      const limited = await fetch(`${baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'wrong' })
+      });
+      expect(limited.status).toBe(429);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('marks admin cookies secure behind HTTPS proxies', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const login = await fetch(`${baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-forwarded-proto': 'https'
+        },
+        body: JSON.stringify({ password: 'secret' })
+      });
+      const cookie = login.headers.get('set-cookie') ?? '';
+
+      expect(login.status).toBe(200);
+      expect(cookie).toContain('Secure');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('deletes admin campaign overrides only with a session', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const login = await fetch(`${baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'secret' })
+      });
+      const cookie = login.headers.get('set-cookie') ?? '';
+
+      await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie
+        },
+        body: JSON.stringify({ name: 'Temporary Level', rows: makeRows() })
+      });
+
+      const blocked = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'DELETE'
+      });
+      expect(blocked.status).toBe(401);
+
+      const removed = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'DELETE',
+        headers: { cookie }
+      });
+      expect(removed.status).toBe(200);
+      await expect(removed.json()).resolves.toEqual({ removed: true });
+
+      const levels = await fetch(`${baseUrl}/api/admin/campaign-levels`);
+      const payload = (await levels.json()) as { overrides: Array<{ name: string }> };
+      expect(payload.overrides).toEqual([]);
     } finally {
       server.close();
     }

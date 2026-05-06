@@ -52,6 +52,10 @@ export class CampaignOverrideSystem {
     });
   }
 
+  public static removeOverride(levelIndex: number): void {
+    this.overrides.delete(Math.max(0, Math.floor(levelIndex)));
+  }
+
   public static clear(): void {
     this.overrides.clear();
     this.loaded = false;

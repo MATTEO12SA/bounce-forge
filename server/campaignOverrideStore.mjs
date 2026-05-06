@@ -103,6 +103,19 @@ export class CampaignOverrideStore {
     return next;
   }
 
+  async remove(levelIndex) {
+    const safeIndex = Math.floor(Number(levelIndex));
+
+    if (!Number.isFinite(safeIndex) || safeIndex < 0 || safeIndex >= 24) {
+      throw new Error('Unknown campaign level.');
+    }
+
+    const overrides = await this.list();
+    const merged = overrides.filter((override) => override.levelIndex !== safeIndex);
+    await this.writeFile({ overrides: merged });
+    return { removed: overrides.length !== merged.length };
+  }
+
   async readFile() {
     try {
       return JSON.parse(await readFile(this.filePath, 'utf8'));

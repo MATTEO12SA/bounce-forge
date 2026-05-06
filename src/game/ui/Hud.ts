@@ -11,6 +11,7 @@ export interface HudState {
   bestCombo: number;
   balls: number;
   waitingToLaunch: boolean;
+  effectLabel?: string;
 }
 
 export class Hud {
@@ -117,7 +118,9 @@ export class Hud {
         ? `TAP / SPACE  |  ${state.objectiveLabel}`
         : `COMBO x${state.combo}  |  ${state.objectiveLabel}`
     );
-    this.rightText.setText(`L ${state.lives}  B ${state.balls}`);
+    this.rightText.setText(
+      `L ${state.lives}  B ${state.balls}${state.effectLabel ? `  ${state.effectLabel}` : ''}`
+    );
   }
 
   private formatLevelName(levelName: string): string {

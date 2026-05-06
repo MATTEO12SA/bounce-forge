@@ -8,6 +8,11 @@ import { WORLD_WIDTH } from '../utils/constants';
 interface EndSceneData {
   score?: number;
   levelIndex?: number;
+  source?: 'campaign' | 'creative';
+  editorReturn?: {
+    mode: 'creative' | 'admin';
+    slotIndex: number;
+  };
 }
 
 export class GameOverScene extends Phaser.Scene {
@@ -18,6 +23,8 @@ export class GameOverScene extends Phaser.Scene {
   public create(data: EndSceneData): void {
     const score = data.score ?? 0;
     const levelIndex = data.levelIndex ?? 0;
+    const source = data.source ?? 'campaign';
+    const editorReturn = data.editorReturn;
     const save = new SaveSystem();
     const theme = getTheme(save.snapshot().preferences.themeId);
 
@@ -43,9 +50,22 @@ export class GameOverScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    new Button(this, WORLD_WIDTH / 2, 900, 620, 104, 'RESTART', () => {
-      this.scene.start('GameScene', { levelIndex });
-    });
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      900,
+      620,
+      104,
+      editorReturn ? 'BACK TO EDITOR' : 'RESTART',
+      () => {
+        if (editorReturn) {
+          this.scene.start('LevelEditorScene', editorReturn);
+          return;
+        }
+
+        this.scene.start('GameScene', { levelIndex, source });
+      }
+    );
 
     new Button(
       this,
