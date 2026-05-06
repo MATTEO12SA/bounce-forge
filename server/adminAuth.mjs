@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 const COOKIE_NAME = 'bounce_forge_admin';
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-const MIN_PASSWORD_LENGTH = 12;
+const MIN_PASSWORD_LENGTH = 8;
 const BLOCKED_PASSWORDS = new Set(['change-me', 'password', 'admin', 'secret', 'admin-test']);
 
 function parseCookies(cookieHeader = '') {
