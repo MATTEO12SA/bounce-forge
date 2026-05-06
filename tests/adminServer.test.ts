@@ -9,7 +9,7 @@ import { EDITOR_GRID_COLS, normalizeRows } from '../server/campaignOverrideStore
 
 let tempDir: string | null = null;
 
-async function createTestServer(adminPassword = 'secret') {
+async function createTestServer(adminPassword = 'test-secret-password') {
   tempDir = await mkdtemp(join(tmpdir(), 'bounce-forge-api-'));
   const server = createAdminServer({
     adminPassword,
@@ -69,7 +69,7 @@ describe('admin server API', () => {
       const login = await fetch(`${baseUrl}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: 'secret' })
+        body: JSON.stringify({ password: 'test-secret-password' })
       });
       const cookie = login.headers.get('set-cookie') ?? '';
       expect(login.status).toBe(200);
@@ -92,6 +92,22 @@ describe('admin server API', () => {
       const payload = (await levels.json()) as { overrides: Array<{ name: string }> };
 
       expect(payload.overrides[0]?.name).toBe('Admin Level');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('refuses weak admin password configuration', async () => {
+    const { server, baseUrl } = await createTestServer('secret');
+
+    try {
+      const login = await fetch(`${baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'secret' })
+      });
+
+      expect(login.status).toBe(503);
     } finally {
       server.close();
     }
@@ -121,6 +137,33 @@ describe('admin server API', () => {
     }
   });
 
+  it('rejects cross-origin admin mutations', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const login = await fetch(`${baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'test-secret-password' })
+      });
+      const cookie = login.headers.get('set-cookie') ?? '';
+
+      const response = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie,
+          origin: 'https://evil.example'
+        },
+        body: JSON.stringify({ name: 'Blocked', rows: makeRows() })
+      });
+
+      expect(response.status).toBe(403);
+    } finally {
+      server.close();
+    }
+  });
+
   it('marks admin cookies secure behind HTTPS proxies', async () => {
     const { server, baseUrl } = await createTestServer();
 
@@ -131,7 +174,7 @@ describe('admin server API', () => {
           'Content-Type': 'application/json',
           'x-forwarded-proto': 'https'
         },
-        body: JSON.stringify({ password: 'secret' })
+        body: JSON.stringify({ password: 'test-secret-password' })
       });
       const cookie = login.headers.get('set-cookie') ?? '';
 
@@ -149,7 +192,7 @@ describe('admin server API', () => {
       const login = await fetch(`${baseUrl}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: 'secret' })
+        body: JSON.stringify({ password: 'test-secret-password' })
       });
       const cookie = login.headers.get('set-cookie') ?? '';
 
@@ -189,7 +232,7 @@ describe('admin server API', () => {
       const login = await fetch(`${first.baseUrl}/api/admin/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: 'secret' })
+        body: JSON.stringify({ password: 'test-secret-password' })
       });
       const cookie = login.headers.get('set-cookie') ?? '';
 
@@ -206,7 +249,7 @@ describe('admin server API', () => {
     }
 
     const secondServer = createAdminServer({
-      adminPassword: 'secret',
+      adminPassword: 'test-secret-password',
       dataFile: join(tempDir!, 'campaign-level-overrides.json'),
       apiOnly: true
     });

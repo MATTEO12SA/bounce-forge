@@ -40,48 +40,49 @@ export class GuideScene extends Phaser.Scene {
       {
         title: 'CONTROLS',
         lines: [
-          'Mouse, touch, arrows or A/D: move paddle',
-          'Space or tap: launch attached balls',
-          'P or Esc: pause, R: restart'
+          'Mouse / touch / arrows / A-D',
+          'Space or tap launches the ball',
+          'P or Esc pauses, R restarts'
         ]
       },
       {
         title: 'POWER-UPS',
         lines: [
-          'x3 and x2 add balls from the source ball',
-          'W widens the paddle, AIM catches balls for relaunch',
-          '+1 restores one life up to the cap'
+          'x3 and x2 create extra balls',
+          'W widens the paddle',
+          'AIM catches the next paddle hit'
         ]
       },
       {
         title: 'OBJECTIVES',
         lines: [
-          'Clear every breakable brick to win',
-          'HUD objectives track balls, combos, explosions, or lives',
-          'Bronze clears, Silver keeps lives, Gold hits score/combo'
+          'Clear all breakable bricks',
+          'HUD tracks combo, balls, lives, explosions',
+          'Gold asks for score or best combo'
         ]
       },
       {
         title: 'EDITOR',
         lines: [
-          'Creative slots stay local to this browser',
-          'Admin publishes campaign overrides through the server',
-          'Import/export codes share maps; playtest returns here'
+          'Creative maps stay local',
+          'Admin publishes campaign overrides',
+          'Import/export codes share levels'
         ]
       }
     ];
 
     sections.forEach((section, index) => {
       const x = WORLD_WIDTH / 2;
-      const y = 332 + index * 286;
+      const y = 338 + index * 292;
 
       this.add
-        .rectangle(x, y + 78, 704, 216, theme.surface, 0.5)
-        .setStrokeStyle(2, theme.borderDim, 0.72);
+        .rectangle(x, y + 156, 690, 2, theme.borderDim, 0.7)
+        .setOrigin(0.5)
+        .setDepth(1);
       this.add
         .text(x, y, section.title, {
           fontFamily: 'Arial, sans-serif',
-          fontSize: '32px',
+          fontSize: '34px',
           fontStyle: '900',
           color: `#${theme.primary.toString(16).padStart(6, '0')}`,
           align: 'center'
@@ -89,15 +90,16 @@ export class GuideScene extends Phaser.Scene {
         .setOrigin(0.5);
 
       this.add
-        .text(x - 312, y + 50, section.lines.join('\n'), {
+        .text(x, y + 54, section.lines.join('\n'), {
           fontFamily: 'Arial, sans-serif',
-          fontSize: '28px',
+          fontSize: '30px',
           fontStyle: '800',
           color: theme.text,
-          lineSpacing: 10,
-          wordWrap: { width: 624 }
+          align: 'center',
+          fixedWidth: 704,
+          lineSpacing: 8
         })
-        .setOrigin(0, 0);
+        .setOrigin(0.5, 0);
     });
 
     new Button(

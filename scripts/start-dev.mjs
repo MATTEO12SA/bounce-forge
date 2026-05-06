@@ -23,7 +23,14 @@ const api = spawn(process.execPath, ['server/index.mjs'], {
   env: {
     ...process.env,
     ADMIN_API_ONLY: '1',
-    API_PORT: apiPort
+    API_PORT: apiPort,
+    ADMIN_ALLOWED_ORIGINS: [
+      process.env.ADMIN_ALLOWED_ORIGINS,
+      `http://localhost:${port}`,
+      `http://127.0.0.1:${port}`
+    ]
+      .filter(Boolean)
+      .join(',')
   },
   stdio: 'inherit'
 });
