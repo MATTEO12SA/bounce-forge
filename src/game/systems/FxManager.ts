@@ -197,6 +197,9 @@ export class FxManager {
     if (!this.profile.postFx) {
       return;
     }
+    if (kind !== 'ball') {
+      return;
+    }
     const fxTarget = target as Phaser.GameObjects.GameObject & {
       postFX?: PostFxController | undefined;
     };
@@ -205,34 +208,10 @@ export class FxManager {
       return;
     }
 
-    switch (kind) {
-      case 'ball':
-        fx.addBloom?.(theme.primary, 1, 1, 1.4, 1.1);
-        if (this.profile.ballTrail) {
-          fx.addBlur?.(0, 1, 1, 0.6, theme.primary);
-        }
-        break;
-      case 'paddle':
-        fx.addGlow?.(theme.primary, 2, 0.8, false, 0.1, 12);
-        break;
-      case 'brick-bonus':
-        if (this.profile.brickShine) {
-          fx.addShine?.(0.4, 0.25, 3);
-        }
-        break;
-      case 'brick-explosive':
-        if (this.profile.brickGlow) {
-          fx.addGlow?.(theme.danger, 2, 0.6, false, 0.1, 8);
-        }
-        break;
-      case 'brick-shield':
-        if (this.profile.brickShine) {
-          fx.addShine?.(0.2, 0.15, 2);
-        }
-        break;
-      case 'brick-standard':
-      case 'brick-indestructible':
-        break;
+    try {
+      fx.addBloom?.(theme.primary, 1, 1, 1.2, 0.8);
+    } catch {
+      // postFX availability varies between renderers and Phaser builds; fall back silently.
     }
   }
 

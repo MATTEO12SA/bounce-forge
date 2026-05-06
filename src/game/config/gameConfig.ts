@@ -16,7 +16,7 @@ import { VictoryScene } from '../scenes/VictoryScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
   return {
-    type: Phaser.WEBGL,
+    type: Phaser.AUTO,
     parent,
     width: WORLD_WIDTH,
     height: WORLD_HEIGHT,

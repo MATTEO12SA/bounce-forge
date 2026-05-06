@@ -8,8 +8,6 @@ export class InputSystem {
   private readonly keyA: Phaser.Input.Keyboard.Key | null;
   private readonly keyD: Phaser.Input.Keyboard.Key | null;
   private pointerTargetX: number | null = null;
-  private dragOffsetX = 0;
-  private isDragging = false;
 
   public constructor(private readonly scene: Phaser.Scene) {
     this.cursors = scene.input.keyboard?.createCursorKeys() ?? null;
@@ -17,8 +15,7 @@ export class InputSystem {
     this.keyD = scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D) ?? null;
 
     scene.input.on('pointermove', this.handlePointerMove, this);
-    scene.input.on('pointerdown', this.handlePointerDown, this);
-    scene.input.on('pointerup', this.handlePointerUp, this);
+    scene.input.on('pointerdown', this.handlePointerMove, this);
   }
 
   public updatePaddle(paddle: Paddle, deltaMs: number): void {
@@ -30,39 +27,17 @@ export class InputSystem {
     }
 
     if (this.pointerTargetX !== null) {
-      const target = this.isDragging ? this.pointerTargetX + this.dragOffsetX : this.pointerTargetX;
-      paddle.setCenterX(lerp(paddle.x, target, this.isDragging ? 0.6 : 0.42));
+      paddle.setCenterX(lerp(paddle.x, this.pointerTargetX, 0.42));
     }
   }
 
   public destroy(): void {
     this.scene.input.off('pointermove', this.handlePointerMove, this);
-    this.scene.input.off('pointerdown', this.handlePointerDown, this);
-    this.scene.input.off('pointerup', this.handlePointerUp, this);
+    this.scene.input.off('pointerdown', this.handlePointerMove, this);
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
     this.pointerTargetX = pointer.worldX;
-  }
-
-  private handlePointerDown(pointer: Phaser.Input.Pointer): void {
-    this.pointerTargetX = pointer.worldX;
-    this.isDragging = true;
-    const paddle = this.findPaddle();
-    this.dragOffsetX = paddle ? paddle.x - pointer.worldX : 0;
-  }
-
-  private handlePointerUp(): void {
-    this.isDragging = false;
-    this.dragOffsetX = 0;
-  }
-
-  private findPaddle(): Paddle | null {
-    const candidate = this.scene.children.list.find(
-      (child): child is Paddle =>
-        (child as Phaser.GameObjects.GameObject).constructor.name === 'Paddle'
-    );
-    return candidate ?? null;
   }
 
   private getKeyboardDirection(): number {
