@@ -102,8 +102,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   public create(data: GameSceneData): void {
-    this.cameras.main.resetFX();
-    this.cameras.main.setAlpha(1);
+    const mainCamera = this.cameras.main;
+    this.tweens.killTweensOf(mainCamera);
+    mainCamera.resetFX();
+    mainCamera.setAlpha(1);
+    mainCamera.setZoom(1);
+    mainCamera.setScroll(0, 0);
 
     this.levelIndex = data.levelIndex ?? 0;
     this.levelSource = data.source ?? 'campaign';
@@ -802,7 +806,6 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.fxManager.cameraImpact(0.003, 100);
-    this.fxManager.cameraComboZoom();
   }
 
   private applySplitBall(sourceBall?: Ball): void {

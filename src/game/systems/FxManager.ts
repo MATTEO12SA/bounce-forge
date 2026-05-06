@@ -172,13 +172,15 @@ export class FxManager {
       return;
     }
     const camera = this.scene.cameras.main;
-    const baseZoom = camera.zoom || 1;
+    this.scene.tweens.killTweensOf(camera);
+    camera.setZoom(1);
     this.scene.tweens.add({
       targets: camera,
-      zoom: baseZoom * 1.04,
-      duration: 90,
+      zoom: 1.025,
+      duration: 80,
       yoyo: true,
-      ease: 'Quad.easeOut'
+      ease: 'Quad.easeOut',
+      onComplete: () => camera.setZoom(1)
     });
   }
 
