@@ -118,6 +118,21 @@ Les medailles sont sauvegardees par niveau :
 
 Les medailles sont optionnelles et ne bloquent pas la progression.
 
+## Pause Et Options
+
+L'ecran pause expose quatre actions : `RESUME`, `RESTART`, `OPTIONS`, `MENU`.
+
+L'ecran `OPTIONS` (accessible aussi depuis le menu principal) regroupe :
+
+- volume effets sonores ;
+- volume musique ;
+- qualite des effets visuels (`LOW` / `MED` / `HIGH`) ;
+- bascule plein ecran ;
+- bascule son global ;
+- reinitialisation de la sauvegarde, avec dialog de confirmation.
+
+La qualite des effets visuels controle l'intensite des particules et des camera shakes. Le moteur surveille le framerate et baisse automatiquement la qualite si les FPS chutent.
+
 ## Mode Creatif Et Admin
 
 Le mode creatif est separe de la progression de campagne.
@@ -173,24 +188,42 @@ Elle contient :
 - niveau de campagne debloque ;
 - niveaux termines ;
 - medaille par niveau de campagne ;
-- preferences son/theme ;
+- preferences :
+  - son active ;
+  - theme actif ;
+  - volume des effets sonores ;
+  - volume de la musique ;
+  - qualite des effets visuels ;
+  - plein ecran ;
 - slots creatifs de l'editeur.
 
-Le schema de sauvegarde migre automatiquement les anciennes sauvegardes.
+Le schema de sauvegarde migre automatiquement les anciennes sauvegardes (v1 a v4 vers v5). Les saves anterieures conservent leurs medailles, niveaux debloques et slots creatifs.
 
 ## Structure Du Projet
 
-- `src/game/scenes` : scenes Phaser.
-- `src/game/entities` : balle, barre, briques, bonus.
-- `src/game/systems` : sauvegarde, score, combo, niveaux, collisions, audio, bonus.
+- `src/game/scenes` : scenes Phaser, dont `OptionsScene` pour les reglages.
+- `src/game/entities` : balle, barre, briques, bonus, avec pooling Phaser Group.
+- `src/game/systems` : sauvegarde, score, combo, niveaux, collisions, audio, bonus, FX manager, settings.
+- `src/game/managers` : `PlayfieldRenderer` et autres managers extraits de GameScene.
 - `src/game/levels` : patterns de campagne, grille editeur, factory de niveaux.
 - `src/game/ui` : boutons, HUD, barre de progression, chrome d'ecran partage.
 - `scripts` : diagnostics navigateur et helpers locaux.
 - `tests` : tests unitaires Vitest.
 
+## Performance
+
+Pour rester stable jusqu'a 96 balles :
+
+- les balles et les bonus sont alloues depuis un `Phaser.Physics.Arcade.Group` avec `classType` et `maxSize`, donc recycles au lieu d'etre detruits ;
+- les particules utilisent `scene.add.particles` natif Phaser 4, avec textures procedurales generees au boot ;
+- la qualite des effets (`fxQuality`) regle l'intensite des particules et des camera shakes ;
+- un auto-degrade FPS baisse la qualite si la frame depasse 22 ms pendant 3 s, et la restaure si elle reste sous 17 ms pendant 5 s ;
+- les logs de diagnostic sont absents du chemin chaud du gameplay pour eviter les pics de frame en dev.
+
 ## Notes
 
 - Le jeu utilise de la geometrie Phaser et des visuels proceduraux simples.
 - Aucun asset graphique externe n'est requis.
-- Le runtime utilise le renderer WebGL de Phaser 4.1.0 sans render nodes custom ni shaders externes.
+- Le runtime cible Phaser 4.1.0 et choisit automatiquement entre WebGL et Canvas via `Phaser.AUTO`.
 - La direction visuelle actuelle est jaune/forge, parce qu'elle est plus lisible et correspond mieux au jeu que l'ancienne passe sci-fi bleue.
+- Les effets postFX (Bloom, Glow, Shine) sont disponibles dans le code mais desactives par defaut : ils etaient trop couteux a empiler sur 40-96 balles. La forge identity passe par les couleurs du theme, les particules teintees et les camera shakes/flashs.
