@@ -15,8 +15,10 @@ const edgeCandidates = [
 ].filter(Boolean);
 const browserPath = edgeCandidates.find((candidate) => existsSync(candidate));
 const cdpPort = Number(process.env.BROWSER_TEST_CDP_PORT ?? 9231);
+const appPort = Number(process.env.BROWSER_TEST_APP_PORT ?? 5174);
+const apiPort = Number(process.env.BROWSER_TEST_API_PORT ?? 8788);
 const userDataDir = `${root}/.edge-admin-test-profile`;
-const targetUrl = 'http://localhost:5173/?menu=1';
+const targetUrl = `http://localhost:${appPort}/?menu=1`;
 const adminPassword = 'admin-test';
 const tempDir = await mkdtemp(join(tmpdir(), 'bounce-forge-admin-browser-'));
 const overrideFile = join(tempDir, 'campaign-level-overrides.json');
@@ -73,7 +75,7 @@ function createCdpClient(wsUrl) {
             const timer = setTimeout(() => {
               pending.delete(callId);
               fail(new Error(`CDP timeout: ${method}`));
-            }, 5000);
+            }, 15000);
             pending.set(callId, (message) => {
               clearTimeout(timer);
               if (message.error) {
@@ -127,7 +129,9 @@ try {
     env: {
       ...process.env,
       ADMIN_PASSWORD: adminPassword,
-      CAMPAIGN_OVERRIDES_FILE: overrideFile
+      CAMPAIGN_OVERRIDES_FILE: overrideFile,
+      PORT: String(appPort),
+      API_PORT: String(apiPort)
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -177,8 +181,27 @@ try {
       const stopActiveScenes = () => game.scene.scenes.forEach((scene) => {
         if (scene.scene.isActive()) scene.scene.stop();
       });
+      const readButtonLabel = (button) => collectTexts(button.list ?? []).join('');
+      const readEditorSlotPage = async (editor, slotIndex) => {
+        editor.loadSlot(slotIndex, 'Diagnostic slots.');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return editor.slotButtons
+          .map((button) => ({
+            label: readButtonLabel(button),
+            x: button.x,
+            y: button.y
+          }))
+          .filter((button) => /^\\d+\\*?$/.test(button.label));
+      };
+      const startMainMenuAndReadTexts = async () => {
+        stopActiveScenes();
+        game.scene.start('MainMenuScene');
+        await new Promise((resolve) => setTimeout(resolve, 550));
+        return sceneTexts();
+      };
 
       const menuTexts = sceneTexts();
+      const menuHasGuide = menuTexts.includes('GUIDE');
       stopActiveScenes();
       game.scene.start('GameScene', { levelIndex: 0 });
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -202,13 +225,29 @@ try {
       });
 
       stopActiveScenes();
+      game.scene.start('AdminMenuScene');
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      const adminMenuTexts = sceneTexts();
+      const adminMenu = game.scene.getScene('AdminMenuScene');
+      adminMenu.input.keyboard.emit('keydown-ESC');
+      await new Promise((resolve) => setTimeout(resolve, 550));
+      const menuTextsAfterEsc = sceneTexts();
+      const sessionAfterEsc = await fetch('/api/admin/session').then((response) => response.json());
+
+      stopActiveScenes();
       game.scene.start('LevelEditorScene', { mode: 'admin', slotIndex: 0 });
       await new Promise((resolve) => setTimeout(resolve, 250));
+      const adminEditorTexts = sceneTexts();
       const adminEditor = game.scene.getScene('LevelEditorScene');
       adminEditor.rows = Array.from({ length: 58 }, (_, row) =>
         row === 0 ? '1' + '.'.repeat(35) : '.'.repeat(36)
       );
       const adminEditorSaved = await adminEditor.saveCurrentSlot();
+      adminEditor.saveSystem.removeCreativeLevelSlot(0);
+      adminEditor.copyToCreativeSlot();
+      const copiedCreativeName = adminEditor.saveSystem.getCreativeLevelSlot(0)?.name;
+      const adminSlotPageTwo = await readEditorSlotPage(adminEditor, 6);
+      const adminSlotPageFour = await readEditorSlotPage(adminEditor, 18);
 
       stopActiveScenes();
       game.scene.start('GameScene', { levelIndex: 0 });
@@ -219,15 +258,31 @@ try {
         .filter((brick) => brick.isBreakable).length;
 
       const overrides = await fetch('/api/admin/campaign-levels').then((response) => response.json());
+      const resetResult = await fetch('/api/admin/campaign-levels/0', { method: 'DELETE' }).then((response) => response.json());
+      const overridesAfterReset = await fetch('/api/admin/campaign-levels').then((response) => response.json());
       return {
         menuHasAdmin: menuTexts.includes('ADMIN'),
         menuHasCreative: menuTexts.includes('MODE CREATIF'),
+        menuHasGuide,
         gameplayHasAdmin: gameplayTexts.includes('ADMIN'),
         campaignNameAfterCreativeSave,
         loginStatus: login.status,
+        adminMenuHasEditor: adminMenuTexts.includes('CAMPAIGN EDITOR'),
+        adminMenuHasPreview: adminMenuTexts.includes('LEVEL SELECT'),
+        adminMenuHasRefresh: adminMenuTexts.includes('REFRESH DATA'),
+        adminEditorHasUndo: adminEditorTexts.includes('UNDO'),
+        adminEditorHasImport: adminEditorTexts.includes('IMPORT CODE'),
+        adminEditorHasCopyLocal: adminEditorTexts.includes('COPY LOCAL'),
+        menuAfterEscHasAdminEditor: menuTextsAfterEsc.includes('ADMIN EDITOR'),
+        sessionAfterEscAuthenticated: sessionAfterEsc.authenticated,
         adminEditorSaved,
+        copiedCreativeName,
         adminCampaignBreakable,
-        savedOverrideName: overrides.overrides?.[0]?.name
+        savedOverrideName: overrides.overrides?.[0]?.name,
+        resetRemoved: resetResult.removed,
+        overridesAfterResetCount: overridesAfterReset.overrides?.length,
+        adminSlotPageTwo,
+        adminSlotPageFour
       };
     })()`,
     returnByValue: true,
@@ -240,6 +295,9 @@ try {
   if (!result.menuHasAdmin || !result.menuHasCreative) {
     throw new Error('Main menu does not expose ADMIN and MODE CREATIF.');
   }
+  if (!result.menuHasGuide) {
+    throw new Error('Main menu does not expose GUIDE.');
+  }
   if (result.gameplayHasAdmin) {
     throw new Error('ADMIN button leaked into gameplay.');
   }
@@ -249,11 +307,42 @@ try {
   if (result.loginStatus !== 200 || !result.adminEditorSaved) {
     throw new Error('Admin login or editor save failed.');
   }
+  if (!result.adminMenuHasEditor || !result.adminMenuHasPreview || !result.adminMenuHasRefresh) {
+    throw new Error('Admin menu is missing required admin actions.');
+  }
+  if (
+    !result.adminEditorHasUndo ||
+    !result.adminEditorHasImport ||
+    !result.adminEditorHasCopyLocal
+  ) {
+    throw new Error('Admin editor is missing editor/admin utility actions.');
+  }
+  if (!result.sessionAfterEscAuthenticated || !result.menuAfterEscHasAdminEditor) {
+    throw new Error('Admin session did not persist back to the main menu after Escape.');
+  }
+  if (result.copiedCreativeName !== 'Creative 1') {
+    throw new Error('Admin editor did not duplicate the campaign grid to a creative slot.');
+  }
   if (result.adminCampaignBreakable !== 1) {
     throw new Error('Admin campaign override did not replace the campaign level in gameplay.');
   }
   if (result.savedOverrideName !== 'Warm Ignition') {
     throw new Error('Admin override was not saved through the API.');
+  }
+  if (!result.resetRemoved || result.overridesAfterResetCount !== 0) {
+    throw new Error('Admin override reset did not remove the saved override.');
+  }
+  const pageTwoLabels = result.adminSlotPageTwo.map((button) => button.label);
+  const pageFourLabels = result.adminSlotPageFour.map((button) => button.label);
+  if (pageTwoLabels.join(',') !== '7,8,9,10,11,12') {
+    throw new Error(`Admin editor page 2 labels are wrong: ${pageTwoLabels.join(',')}`);
+  }
+  if (pageFourLabels.join(',') !== '19,20,21,22,23,24') {
+    throw new Error(`Admin editor page 4 labels are wrong: ${pageFourLabels.join(',')}`);
+  }
+  const visibleSlotButtons = [...result.adminSlotPageTwo, ...result.adminSlotPageFour];
+  if (visibleSlotButtons.some((button) => button.x < 0 || button.x > 1080)) {
+    throw new Error('Admin editor paged slot buttons are outside the world bounds.');
   }
 } finally {
   page?.close?.();

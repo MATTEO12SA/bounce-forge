@@ -13,6 +13,10 @@ interface AdminCampaignOverridesResponse {
   overrides: AdminCampaignOverride[];
 }
 
+interface AdminCampaignDeleteResponse {
+  removed: boolean;
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     credentials: 'include',
@@ -71,6 +75,12 @@ export class AdminApiSystem {
     return requestJson<AdminCampaignOverride>(`/api/admin/campaign-levels/${levelIndex}`, {
       method: 'PUT',
       body: JSON.stringify({ name, rows: normalizedRows })
+    });
+  }
+
+  public async deleteCampaignOverride(levelIndex: number): Promise<AdminCampaignDeleteResponse> {
+    return requestJson<AdminCampaignDeleteResponse>(`/api/admin/campaign-levels/${levelIndex}`, {
+      method: 'DELETE'
     });
   }
 }

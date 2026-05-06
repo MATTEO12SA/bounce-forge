@@ -128,10 +128,7 @@ async function evalInPage(page, expr) {
 async function stopProcess(child) {
   if (!child || child.exitCode !== null) return;
   child.kill('SIGTERM');
-  await Promise.race([
-    new Promise((r) => child.once('exit', () => r())),
-    delay(2500)
-  ]);
+  await Promise.race([new Promise((r) => child.once('exit', () => r())), delay(2500)]);
   if (child.exitCode === null) {
     spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
     await delay(500);

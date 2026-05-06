@@ -10,6 +10,10 @@ interface EndSceneData {
   score?: number;
   levelIndex?: number;
   medal?: string;
+  editorReturn?: {
+    mode: 'creative' | 'admin';
+    slotIndex: number;
+  };
 }
 
 export class VictoryScene extends Phaser.Scene {
@@ -21,6 +25,7 @@ export class VictoryScene extends Phaser.Scene {
     const score = data.score ?? 0;
     const levelIndex = data.levelIndex ?? 0;
     const medal = data.medal ?? 'bronze';
+    const editorReturn = data.editorReturn;
     const save = new SaveSystem();
     const theme = getTheme(save.snapshot().preferences.themeId);
     const levelSystem = new LevelSystem();
@@ -57,9 +62,22 @@ export class VictoryScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    new Button(this, WORLD_WIDTH / 2, 900, 620, 104, hasNext ? 'NEXT LEVEL' : 'RESTART', () => {
-      this.scene.start('GameScene', { levelIndex: hasNext ? levelIndex + 1 : levelIndex });
-    });
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      900,
+      620,
+      104,
+      editorReturn ? 'BACK TO EDITOR' : hasNext ? 'NEXT LEVEL' : 'RESTART',
+      () => {
+        if (editorReturn) {
+          this.scene.start('LevelEditorScene', editorReturn);
+          return;
+        }
+
+        this.scene.start('GameScene', { levelIndex: hasNext ? levelIndex + 1 : levelIndex });
+      }
+    );
 
     new Button(
       this,

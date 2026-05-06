@@ -348,6 +348,7 @@ try {
   await page.send('Log.enable');
   await page.send('Page.enable');
   await waitForGame(page);
+  await waitForScene(page, 'MainMenuScene');
   await startScene(page, 'MainMenuScene');
 
   await captureUiState(page, 'menu', {
@@ -363,6 +364,14 @@ try {
     minTexts: 2,
     minButtons: 7,
     requiredText: 'CAMPAIGN'
+  });
+
+  await startScene(page, 'GuideScene');
+  await captureUiState(page, 'guide', {
+    scene: 'GuideScene',
+    minTexts: 6,
+    minButtons: 1,
+    requiredText: 'GUIDE'
   });
 
   await startScene(page, 'LevelEditorScene', { mode: 'creative' });

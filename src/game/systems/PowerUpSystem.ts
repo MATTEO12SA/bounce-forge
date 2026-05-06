@@ -1,6 +1,6 @@
 import { chance, nativeRandom, pickWeighted, type RandomSource } from '../utils/random';
 
-export type PowerUpType = 'multiBall' | 'splitBall' | 'widePaddle' | 'extraLife';
+export type PowerUpType = 'multiBall' | 'splitBall' | 'widePaddle' | 'stickyPaddle' | 'extraLife';
 
 export interface PowerUpDefinition {
   type: PowerUpType;
@@ -34,6 +34,14 @@ export const POWER_UP_DEFINITIONS: Record<PowerUpType, PowerUpDefinition> = {
     color: 0x8da2ff,
     durationMs: 11000,
     weight: 0.45,
+    positive: true
+  },
+  stickyPaddle: {
+    type: 'stickyPaddle',
+    label: 'AIM',
+    color: 0xffd65a,
+    durationMs: 9000,
+    weight: 0.55,
     positive: true
   },
   extraLife: {

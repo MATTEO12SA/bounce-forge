@@ -19,4 +19,5 @@ export class CampaignOverrideStore {
     rows: readonly string[],
     name: string
   ): Promise<StoredCampaignOverride>;
+  public remove(levelIndex: number): Promise<{ removed: boolean }>;
 }

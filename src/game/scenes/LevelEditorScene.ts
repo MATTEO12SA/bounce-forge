@@ -10,12 +10,13 @@ import {
   validateEditorRows,
   type EditorCell
 } from '../levels/editorGrid';
+import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../levels/levelShare';
 import { AdminApiSystem } from '../systems/AdminApiSystem';
 import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
 import { LevelSystem } from '../systems/LevelSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
-import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { drawPanel, drawScreenBackground } from '../ui/sceneChrome';
 import { DEPTHS, GAME_TITLE, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 import { clamp } from '../utils/math';
 
@@ -47,8 +48,14 @@ export class LevelEditorScene extends Phaser.Scene {
   private statusText!: Phaser.GameObjects.Text;
   private readonly slotButtons: Button[] = [];
   private readonly paletteButtons: Button[] = [];
+  private baselineRows: string[] = createEmptyEditorRows();
+  private readonly undoStack: string[][] = [];
+  private readonly redoStack: string[][] = [];
+  private currentSlotName = '';
+  private currentSavedSuffix = '';
   private painting = false;
   private lastPaintedCell = '';
+  private isDirty = false;
 
   public constructor() {
     super('LevelEditorScene');
@@ -61,6 +68,9 @@ export class LevelEditorScene extends Phaser.Scene {
     this.mode = data.mode === 'admin' ? 'admin' : 'creative';
     this.slotIndex = Math.floor(clamp(data.slotIndex ?? 0, 0, this.levelSystem.count - 1));
     this.selectedCell = '1';
+    this.undoStack.splice(0);
+    this.redoStack.splice(0);
+    this.isDirty = false;
     this.painting = false;
     this.lastPaintedCell = '';
 
@@ -132,47 +142,67 @@ export class LevelEditorScene extends Phaser.Scene {
     this.renderSlotButtons();
     this.renderPaletteButtons();
 
-    new Button(this, 234, 1664, 192, 74, 'SAVE', () => void this.saveCurrentSlot(), {
+    new Button(this, 134, 1644, 150, 62, 'SAVE', () => void this.saveCurrentSlot(), {
       compact: true
     }).setDepth(DEPTHS.hud);
-    new Button(this, 450, 1664, 192, 74, 'PLAY', () => void this.playCurrentSlot(), {
+    new Button(this, 300, 1644, 150, 62, 'PLAY', () => void this.playCurrentSlot(), {
       selected: true,
       compact: true
     }).setDepth(DEPTHS.hud);
-    new Button(this, 666, 1664, 192, 74, 'CLEAR', () => this.clearGrid(), {
+    new Button(this, 466, 1644, 150, 62, 'UNDO', () => this.undoEdit(), {
       variant: 'secondary',
       compact: true
     }).setDepth(DEPTHS.hud);
-    new Button(this, 882, 1664, 192, 74, 'RESET', () => this.resetSlot(), {
+    new Button(this, 632, 1644, 150, 62, 'REDO', () => this.redoEdit(), {
+      variant: 'secondary',
+      compact: true
+    }).setDepth(DEPTHS.hud);
+    new Button(this, 798, 1644, 150, 62, 'CLEAR', () => this.clearGrid(), {
       variant: 'danger',
+      compact: true
+    }).setDepth(DEPTHS.hud);
+    new Button(this, 964, 1644, 150, 62, 'RESET', () => void this.resetSlot(), {
+      variant: 'danger',
+      compact: true
+    }).setDepth(DEPTHS.hud);
+
+    new Button(this, 216, 1724, 260, 62, 'EXPORT CODE', () => this.exportCurrentSlot(), {
+      variant: 'secondary',
+      compact: true
+    }).setDepth(DEPTHS.hud);
+    new Button(this, 540, 1724, 260, 62, 'IMPORT CODE', () => this.importLevelCode(), {
+      variant: 'secondary',
+      compact: true
+    }).setDepth(DEPTHS.hud);
+    new Button(this, 864, 1724, 260, 62, 'COPY LOCAL', () => this.copyToCreativeSlot(), {
+      variant: 'secondary',
       compact: true
     }).setDepth(DEPTHS.hud);
 
     new Button(
       this,
       WORLD_WIDTH / 2,
-      1784,
+      1870,
       420,
-      80,
+      70,
       'BACK',
       () => {
-        this.scene.start(this.mode === 'admin' ? 'AdminMenuScene' : 'MainMenuScene');
+        this.goBack();
       },
       { variant: 'ghost' }
     ).setDepth(DEPTHS.hud);
 
     this.statusText = this.add
-      .text(WORLD_WIDTH / 2, 1838, '', {
+      .text(WORLD_WIDTH / 2, 1802, '', {
         fontFamily: 'Arial, sans-serif',
-        fontSize: '28px',
+        fontSize: '24px',
         fontStyle: '800',
         color: `#${this.theme.primary.toString(16).padStart(6, '0')}`,
         align: 'center',
-        wordWrap: { width: 760 }
+        wordWrap: { width: 860 }
       })
       .setOrigin(0.5)
       .setDepth(DEPTHS.hud);
-    addCreatorCredit(this, this.theme);
   }
 
   private renderSlotButtons(): void {
@@ -201,6 +231,7 @@ export class LevelEditorScene extends Phaser.Scene {
     this.slotButtons.push(prev);
 
     for (let index = pageStart; index < pageEnd; index += 1) {
+      const visibleIndex = index - pageStart;
       const isSelected = index === this.slotIndex;
       const hasSavedMap =
         this.mode === 'admin'
@@ -208,7 +239,7 @@ export class LevelEditorScene extends Phaser.Scene {
           : this.levelSystem.hasCreativeLevelSlot(index);
       const button = new Button(
         this,
-        startX + index * gap,
+        startX + visibleIndex * gap,
         188,
         104,
         58,
@@ -260,9 +291,9 @@ export class LevelEditorScene extends Phaser.Scene {
       const button = new Button(
         this,
         startX + index * gap,
-        1582,
+        1568,
         96,
-        62,
+        54,
         definition.label,
         () => {
           this.selectedCell = cell;
@@ -286,6 +317,7 @@ export class LevelEditorScene extends Phaser.Scene {
     this.gridHitArea.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       this.painting = true;
       this.lastPaintedCell = '';
+      this.pushUndoSnapshot();
       this.paintPointer(pointer);
     });
     this.input.on('pointermove', this.handlePointerMove, this);
@@ -334,6 +366,7 @@ export class LevelEditorScene extends Phaser.Scene {
 
     rowChars[cell.col] = this.selectedCell;
     this.rows[cell.row] = rowChars.join('');
+    this.markDirty();
     this.drawGrid();
   }
 
@@ -361,7 +394,7 @@ export class LevelEditorScene extends Phaser.Scene {
       this.mode === 'admin'
         ? this.levelSystem.getAdminPatternForEditing(this.slotIndex)
         : this.levelSystem.getCreativePatternForEditing(this.slotIndex);
-    const savedSuffix =
+    this.currentSavedSuffix =
       this.mode === 'admin'
         ? this.levelSystem.hasAdminCampaignOverride(this.slotIndex)
           ? ' *admin'
@@ -369,10 +402,13 @@ export class LevelEditorScene extends Phaser.Scene {
         : this.levelSystem.hasCreativeLevelSlot(this.slotIndex)
           ? ' *local'
           : '';
+    this.currentSlotName = pattern.name;
     this.rows = normalizeEditorRows(pattern.rows);
-    this.slotLabel.setText(
-      `${this.mode === 'admin' ? 'Campaign' : 'Creative'} ${this.slotIndex + 1}: ${pattern.name}${savedSuffix}`
-    );
+    this.baselineRows = this.cloneRows(this.rows);
+    this.undoStack.splice(0);
+    this.redoStack.splice(0);
+    this.isDirty = false;
+    this.refreshSlotLabel();
     this.renderSlotButtons();
     this.drawGrid();
     this.setStatus(message, false);
@@ -425,7 +461,11 @@ export class LevelEditorScene extends Phaser.Scene {
           fallback.name
         );
         CampaignOverrideSystem.setOverride(override);
-        this.slotLabel.setText(`Campaign ${this.slotIndex + 1}: ${override.name} *admin`);
+        this.currentSlotName = override.name;
+        this.currentSavedSuffix = ' *admin';
+        this.baselineRows = this.cloneRows(this.rows);
+        this.isDirty = false;
+        this.refreshSlotLabel();
         this.renderSlotButtons();
         this.setStatus(`Campaign level ${this.slotIndex + 1} saved for everyone.`, false);
         return true;
@@ -440,7 +480,11 @@ export class LevelEditorScene extends Phaser.Scene {
       this.rows,
       `Creative ${this.slotIndex + 1}`
     );
-    this.slotLabel.setText(`Creative ${this.slotIndex + 1}: Creative ${this.slotIndex + 1} *local`);
+    this.currentSlotName = `Creative ${this.slotIndex + 1}`;
+    this.currentSavedSuffix = ' *local';
+    this.baselineRows = this.cloneRows(this.rows);
+    this.isDirty = false;
+    this.refreshSlotLabel();
     this.renderSlotButtons();
     this.setStatus(`Creative ${this.slotIndex + 1} saved locally.`, false);
     return true;
@@ -453,27 +497,186 @@ export class LevelEditorScene extends Phaser.Scene {
 
     this.scene.start('GameScene', {
       levelIndex: this.slotIndex,
-      source: this.mode === 'admin' ? 'campaign' : 'creative'
+      source: this.mode === 'admin' ? 'campaign' : 'creative',
+      editorReturn: {
+        mode: this.mode,
+        slotIndex: this.slotIndex
+      }
     });
   }
 
   private clearGrid(): void {
+    this.pushUndoSnapshot();
     this.rows = createEmptyEditorRows();
+    this.markDirty();
     this.drawGrid();
     this.setStatus('Grid cleared. Add at least one breakable block before saving.', true);
   }
 
-  private resetSlot(): void {
+  private async resetSlot(): Promise<void> {
     if (this.mode === 'admin') {
-      const pattern = this.levelSystem.getOfficialPatternForEditing(this.slotIndex);
-      this.rows = normalizeEditorRows(pattern.rows);
-      this.drawGrid();
-      this.setStatus('Campaign grid reset locally. Save to publish this layout.', false);
+      if (
+        typeof window.confirm === 'function' &&
+        !window.confirm(`Reset campaign override ${this.slotIndex + 1} for everyone?`)
+      ) {
+        return;
+      }
+
+      this.pushUndoSnapshot();
+      this.setStatus('Resetting campaign override...', false);
+
+      try {
+        await this.adminApi.deleteCampaignOverride(this.slotIndex);
+        CampaignOverrideSystem.removeOverride(this.slotIndex);
+        const pattern = this.levelSystem.getOfficialPatternForEditing(this.slotIndex);
+        this.rows = normalizeEditorRows(pattern.rows);
+        this.currentSlotName = pattern.name;
+        this.currentSavedSuffix = '';
+        this.baselineRows = this.cloneRows(this.rows);
+        this.isDirty = false;
+        this.refreshSlotLabel();
+        this.renderSlotButtons();
+        this.drawGrid();
+        this.setStatus(`Campaign override ${this.slotIndex + 1} reset.`, false);
+      } catch (error) {
+        this.setStatus(error instanceof Error ? error.message : 'Admin reset failed.', true);
+      }
       return;
     }
 
+    this.pushUndoSnapshot();
     this.saveSystem.removeCreativeLevelSlot(this.slotIndex);
     this.loadSlot(this.slotIndex, `Creative ${this.slotIndex + 1} reset to empty.`);
+  }
+
+  private copyToCreativeSlot(): void {
+    const validation = validateEditorRows(this.rows);
+
+    if (!validation.valid) {
+      this.setStatus(validation.message, true);
+      return;
+    }
+
+    const existing = this.saveSystem.getCreativeLevelSlot(this.slotIndex);
+    if (
+      existing &&
+      typeof window.confirm === 'function' &&
+      !window.confirm(`Overwrite Creative ${this.slotIndex + 1}?`)
+    ) {
+      return;
+    }
+
+    try {
+      this.saveSystem.setCreativeLevelSlot(
+        this.slotIndex,
+        this.rows,
+        `Creative ${this.slotIndex + 1}`
+      );
+      this.setStatus(`Copied to Creative ${this.slotIndex + 1}.`, false);
+    } catch (error) {
+      this.setStatus(error instanceof Error ? error.message : 'Creative copy failed.', true);
+    }
+  }
+
+  private undoEdit(): void {
+    const previous = this.undoStack.pop();
+
+    if (!previous) {
+      this.setStatus('Nothing to undo.', true);
+      return;
+    }
+
+    this.redoStack.push(this.cloneRows(this.rows));
+    this.rows = this.cloneRows(previous);
+    this.markDirty();
+    this.drawGrid();
+    this.setStatus('Undo.', false);
+  }
+
+  private redoEdit(): void {
+    const next = this.redoStack.pop();
+
+    if (!next) {
+      this.setStatus('Nothing to redo.', true);
+      return;
+    }
+
+    this.undoStack.push(this.cloneRows(this.rows));
+    this.rows = this.cloneRows(next);
+    this.markDirty();
+    this.drawGrid();
+    this.setStatus('Redo.', false);
+  }
+
+  private exportCurrentSlot(): void {
+    try {
+      const code = encodeCreativeLevelCode(this.rows, this.currentSlotName);
+      void navigator.clipboard?.writeText(code).catch(() => undefined);
+      window.prompt?.('Bounce Forge level code', code);
+      this.setStatus('Export code copied when clipboard is available.', false);
+    } catch (error) {
+      this.setStatus(error instanceof Error ? error.message : 'Export failed.', true);
+    }
+  }
+
+  private importLevelCode(): void {
+    const code = window.prompt?.('Paste Bounce Forge level code')?.trim();
+
+    if (!code) {
+      return;
+    }
+
+    try {
+      const decoded = decodeCreativeLevelCode(code);
+      this.pushUndoSnapshot();
+      this.rows = decoded.rows;
+      this.currentSlotName = decoded.name ?? this.currentSlotName;
+      this.markDirty();
+      this.drawGrid();
+      this.setStatus('Imported level code. Save to keep it.', false);
+    } catch (error) {
+      this.setStatus(error instanceof Error ? error.message : 'Import failed.', true);
+    }
+  }
+
+  private goBack(): void {
+    if (
+      this.isDirty &&
+      typeof window.confirm === 'function' &&
+      !window.confirm('Leave editor without saving changes?')
+    ) {
+      return;
+    }
+
+    this.scene.start(this.mode === 'admin' ? 'AdminMenuScene' : 'MainMenuScene');
+  }
+
+  private pushUndoSnapshot(): void {
+    this.undoStack.push(this.cloneRows(this.rows));
+    this.redoStack.splice(0);
+
+    if (this.undoStack.length > 60) {
+      this.undoStack.shift();
+    }
+  }
+
+  private markDirty(): void {
+    this.isDirty = !this.rowsEqual(this.rows, this.baselineRows);
+    this.refreshSlotLabel();
+  }
+
+  private refreshSlotLabel(): void {
+    this.slotLabel.setText(
+      `${this.mode === 'admin' ? 'Campaign' : 'Creative'} ${this.slotIndex + 1}: ${this.currentSlotName}${this.currentSavedSuffix}${this.isDirty ? ' *unsaved' : ''}`
+    );
+  }
+
+  private cloneRows(rows: readonly string[]): string[] {
+    return [...rows];
+  }
+
+  private rowsEqual(left: readonly string[], right: readonly string[]): boolean {
+    return left.length === right.length && left.every((row, index) => row === right[index]);
   }
 
   private setStatus(message: string, isError: boolean): void {

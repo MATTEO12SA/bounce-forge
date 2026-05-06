@@ -58,10 +58,12 @@ export class Button extends Phaser.GameObjects.Container {
         fontFamily: 'Arial, sans-serif',
         fontSize: `${Math.max(options.compact ? 20 : 24, Math.round(height * 0.34))}px`,
         fontStyle: '800',
-        color: textColor
+        color: textColor,
+        align: 'center'
       })
       .setOrigin(0.5)
       .setShadow(0, 2, '#000814', 3, false, true);
+    this.fitLabel(width, height);
 
     this.add([this.shadow, this.background, this.highlight, this.labelText]);
     this.setSize(width, height);
@@ -171,6 +173,16 @@ export class Button extends Phaser.GameObjects.Container {
           stroke: 0xff8a3d,
           textColor: '#f4f7fb'
         };
+    }
+  }
+
+  private fitLabel(width: number, height: number): void {
+    const maxWidth = width - 22;
+    const maxHeight = height - 16;
+    const scale = Math.min(1, maxWidth / this.labelText.width, maxHeight / this.labelText.height);
+
+    if (Number.isFinite(scale) && scale < 1) {
+      this.labelText.setScale(Math.max(0.72, scale));
     }
   }
 }

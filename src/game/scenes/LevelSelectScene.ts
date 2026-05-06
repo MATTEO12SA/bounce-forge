@@ -39,16 +39,34 @@ export class LevelSelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    Array.from({ length: levelSystem.count }, (_, index) =>
+    const levels = Array.from({ length: levelSystem.count }, (_, index) =>
       levelSystem.getCampaignLevel(index)
-    ).forEach((level, index) => {
+    );
+    const completed = saveData.completedLevels.length;
+    const medals = Object.values(saveData.levelMedals);
+    const gold = medals.filter((medal) => medal === 'gold').length;
+    const silver = medals.filter((medal) => medal === 'silver').length;
+    const bronze = medals.filter((medal) => medal === 'bronze').length;
+
+    levels.forEach((level, index) => {
       const col = index % 2;
       const row = Math.floor(index / 2);
       const x = col === 0 ? 326 : 754;
-      const y = 300 + row * 104;
+      const y = 350 + row * 100;
       const locked = index > saveData.unlockedLevel;
       const medal = saveData.levelMedals[String(index)]?.toUpperCase();
       const adminMark = levelSystem.hasAdminCampaignOverride(index) ? ' *' : '';
+
+      if (index % 6 === 0) {
+        this.add
+          .text(WORLD_WIDTH / 2, y - 58, level.chapter.toUpperCase(), {
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '24px',
+            fontStyle: '900',
+            color: theme.textMuted
+          })
+          .setOrigin(0.5);
+      }
 
       new Button(
         this,
@@ -65,6 +83,20 @@ export class LevelSelectScene extends Phaser.Scene {
         { disabled: locked, variant: locked ? 'ghost' : 'secondary', compact: true }
       );
     });
+
+    this.add
+      .text(
+        WORLD_WIDTH / 2,
+        238,
+        `CLEARED ${completed}/${levels.length}    GOLD ${gold}    SILVER ${silver}    BRONZE ${bronze}`,
+        {
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '26px',
+          fontStyle: '900',
+          color: theme.text
+        }
+      )
+      .setOrigin(0.5);
 
     new Button(
       this,

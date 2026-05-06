@@ -45,4 +45,20 @@ describe('campaign override store', () => {
       }
     ]);
   });
+
+  it('removes a stored admin campaign override', async () => {
+    const store = await makeStore();
+
+    await store.save(0, makeRows(), 'Admin Level');
+    await store.save(1, makeRows(), 'Second Level');
+
+    expect(await store.remove(0)).toEqual({ removed: true });
+    expect(await store.remove(0)).toEqual({ removed: false });
+    expect(await store.list()).toMatchObject([
+      {
+        levelIndex: 1,
+        name: 'Second Level'
+      }
+    ]);
+  });
 });

@@ -11,6 +11,17 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 loadDotEnv(root);
 const defaultDataFile = resolve(root, 'data', 'campaign-level-overrides.json');
 const defaultDistDir = resolve(root, 'dist');
+const LOGIN_WINDOW_MS = 5 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 8;
+
+const SECURITY_HEADERS = {
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
+  'Referrer-Policy': 'no-referrer',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY'
+};
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -24,6 +35,7 @@ const CONTENT_TYPES = {
 
 function sendJson(res, status, payload, headers = {}) {
   res.writeHead(status, {
+    ...SECURITY_HEADERS,
     'Content-Type': 'application/json; charset=utf-8',
     ...headers
   });
@@ -44,6 +56,48 @@ async function readJsonBody(req) {
   return raw ? JSON.parse(raw) : {};
 }
 
+function getClientKey(req) {
+  const forwardedFor = req.headers['x-forwarded-for'];
+  const forwardedAddress = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor;
+  return String(forwardedAddress ?? req.socket.remoteAddress ?? 'unknown')
+    .split(',')[0]
+    .trim();
+}
+
+function isLoginLimited(attempts, key) {
+  const entry = attempts.get(key);
+
+  if (!entry || entry.resetAt <= Date.now()) {
+    attempts.delete(key);
+    return false;
+  }
+
+  return entry.count >= LOGIN_MAX_ATTEMPTS;
+}
+
+function registerLoginFailure(attempts, key) {
+  const now = Date.now();
+  const current = attempts.get(key);
+  const entry =
+    current && current.resetAt > now
+      ? current
+      : {
+          count: 0,
+          resetAt: now + LOGIN_WINDOW_MS
+        };
+
+  entry.count += 1;
+  attempts.set(key, entry);
+}
+
+function isSecureRequest(req) {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const proto = Array.isArray(forwardedProto) ? forwardedProto[0] : forwardedProto;
+  return (
+    Boolean(req.socket.encrypted) || proto === 'https' || process.env.ADMIN_COOKIE_SECURE === '1'
+  );
+}
+
 function serveStatic(req, res, distDir) {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const pathname = decodeURIComponent(url.pathname);
@@ -58,6 +112,7 @@ function serveStatic(req, res, distDir) {
   }
 
   res.writeHead(200, {
+    ...SECURITY_HEADERS,
     'Content-Type': CONTENT_TYPES[extname(target)] ?? 'application/octet-stream'
   });
   createReadStream(target).pipe(res);
@@ -71,6 +126,7 @@ export function createAdminServer({
 } = {}) {
   const auth = new AdminAuth(adminPassword);
   const store = new CampaignOverrideStore(dataFile);
+  const loginAttempts = new Map();
 
   return http.createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://localhost');
@@ -82,6 +138,16 @@ export function createAdminServer({
       }
 
       if (url.pathname === '/api/admin/login' && req.method === 'POST') {
+        const clientKey = getClientKey(req);
+
+        if (isLoginLimited(loginAttempts, clientKey)) {
+          sendJson(res, 429, {
+            authenticated: false,
+            message: 'Too many failed login attempts. Try again later.'
+          });
+          return;
+        }
+
         if (!auth.isConfigured()) {
           sendJson(res, 503, {
             authenticated: false,
@@ -94,17 +160,29 @@ export function createAdminServer({
         const token = auth.login(body.password);
 
         if (!token) {
+          registerLoginFailure(loginAttempts, clientKey);
           sendJson(res, 401, { authenticated: false, message: 'Invalid admin password.' });
           return;
         }
 
-        sendJson(res, 200, { authenticated: true }, { 'Set-Cookie': auth.createCookie(token) });
+        loginAttempts.delete(clientKey);
+        sendJson(
+          res,
+          200,
+          { authenticated: true },
+          { 'Set-Cookie': auth.createCookie(token, { secure: isSecureRequest(req) }) }
+        );
         return;
       }
 
       if (url.pathname === '/api/admin/logout' && req.method === 'POST') {
         auth.logout(req);
-        sendJson(res, 200, { authenticated: false }, { 'Set-Cookie': auth.clearCookie() });
+        sendJson(
+          res,
+          200,
+          { authenticated: false },
+          { 'Set-Cookie': auth.clearCookie({ secure: isSecureRequest(req) }) }
+        );
         return;
       }
 
@@ -123,6 +201,17 @@ export function createAdminServer({
         const body = await readJsonBody(req);
         const override = await store.save(Number(levelMatch[1]), body.rows, body.name);
         sendJson(res, 200, override);
+        return;
+      }
+
+      if (levelMatch && req.method === 'DELETE') {
+        if (!auth.isRequestAuthenticated(req)) {
+          sendJson(res, 401, { message: 'Admin session required.' });
+          return;
+        }
+
+        const result = await store.remove(Number(levelMatch[1]));
+        sendJson(res, 200, result);
         return;
       }
 

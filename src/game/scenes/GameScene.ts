@@ -11,7 +11,7 @@ import { ComboSystem } from '../systems/ComboSystem';
 import { InputSystem } from '../systems/InputSystem';
 import { LevelSystem } from '../systems/LevelSystem';
 import { ParticleSystem } from '../systems/ParticleSystem';
-import { PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
+import { getPowerUpDefinition, PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import type { LevelMedal } from '../systems/SaveSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
@@ -45,6 +45,10 @@ import {
 interface GameSceneData {
   levelIndex?: number;
   source?: 'campaign' | 'creative';
+  editorReturn?: {
+    mode: 'creative' | 'admin';
+    slotIndex: number;
+  };
 }
 
 interface BallPhysicsSnapshot {
@@ -73,6 +77,8 @@ export class GameScene extends Phaser.Scene {
   private hud!: Hud;
   private lives = 3;
   private levelIndex = 0;
+  private levelSource: 'campaign' | 'creative' = 'campaign';
+  private editorReturn?: GameSceneData['editorReturn'];
   private ending = false;
   private respawning = false;
   private maxBallsReached = 1;
@@ -88,9 +94,11 @@ export class GameScene extends Phaser.Scene {
 
   public create(data: GameSceneData): void {
     this.levelIndex = data.levelIndex ?? 0;
+    this.levelSource = data.source ?? 'campaign';
+    this.editorReturn = data.editorReturn;
     this.saveSystem = new SaveSystem();
     this.levelSystem = new LevelSystem(this.saveSystem);
-    this.level = this.levelSystem.getLevel(this.levelIndex, data.source ?? 'campaign');
+    this.level = this.levelSystem.getLevel(this.levelIndex, this.levelSource);
     this.theme = getTheme(this.saveSystem.snapshot().preferences.themeId);
     this.audioSystem = new AudioSystem(this.saveSystem.snapshot().preferences.soundEnabled);
     this.scoreSystem = new ScoreSystem(this.saveSystem.snapshot().bestScore);
@@ -519,6 +527,15 @@ export class GameScene extends Phaser.Scene {
     }
 
     const body = ball.arcadeBody;
+
+    if (this.activeTimers.has('stickyPaddle')) {
+      ball.attachToPaddle(this.paddle);
+      this.rememberBallPhysics(ball);
+      this.particleSystem.burst(ball.x, ball.y, this.theme.primary, 8);
+      this.audioSystem.hit();
+      return;
+    }
+
     const speed = clamp(
       body.velocity.length() + 8,
       BALL_MIN_SPEED,
@@ -796,6 +813,15 @@ export class GameScene extends Phaser.Scene {
           () => this.refreshPaddleWidth()
         );
         break;
+      case 'stickyPaddle':
+        this.setTimedEffect(
+          type,
+          9000,
+          () =>
+            this.particleSystem.burst(this.paddle.x, this.paddle.y - 26, this.theme.primary, 14),
+          () => undefined
+        );
+        break;
       case 'extraLife':
         this.applyExtraLife();
         break;
@@ -903,16 +929,21 @@ export class GameScene extends Phaser.Scene {
     const stateBeforeBonus = this.scoreSystem.snapshot();
     this.scoreSystem.addLifeBonus(this.lives);
     const score = this.scoreSystem.snapshot().score;
-    this.saveSystem.updateBestScore(score);
     const medal = this.calculateLevelMedal(score);
-    this.saveSystem.completeLevel(this.levelIndex, medal);
+
+    if (!this.editorReturn && this.levelSource === 'campaign') {
+      this.saveSystem.updateBestScore(score);
+      this.saveSystem.completeLevel(this.levelIndex, medal);
+    }
+
     this.particleSystem.shake(0.004, 180);
 
     this.time.delayedCall(520, () => {
       this.scene.start('VictoryScene', {
         score: Math.max(score, stateBeforeBonus.score),
         levelIndex: this.levelIndex,
-        medal
+        medal,
+        editorReturn: this.editorReturn
       });
     });
   }
@@ -943,7 +974,9 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(460, () => {
       this.scene.start('GameOverScene', {
         score,
-        levelIndex: this.levelIndex
+        levelIndex: this.levelIndex,
+        source: this.levelSource,
+        editorReturn: this.editorReturn
       });
     });
   }
@@ -958,7 +991,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private restartLevel(): void {
-    this.scene.restart({ levelIndex: this.levelIndex });
+    this.scene.restart({
+      levelIndex: this.levelIndex,
+      source: this.levelSource,
+      editorReturn: this.editorReturn
+    });
   }
 
   private buildHudState() {
@@ -971,8 +1008,14 @@ export class GameScene extends Phaser.Scene {
       combo: combo.streak,
       bestCombo: combo.bestStreak,
       balls: this.getBalls().length,
-      waitingToLaunch: this.getBalls().some((ball) => ball.isAttached)
+      waitingToLaunch: this.getBalls().some((ball) => ball.isAttached),
+      effectLabel: this.getActiveEffectLabel()
     };
+  }
+
+  private getActiveEffectLabel(): string {
+    const labels = [...this.activeTimers.keys()].map((type) => getPowerUpDefinition(type).label);
+    return labels.length > 0 ? labels.join('+') : '';
   }
 
   private getObjectiveHudLabel(): string {
