@@ -12,7 +12,7 @@ settings.
 ## Web deployment
 
 - Set `ADMIN_PASSWORD` on the server before enabling admin publishing.
-- `ADMIN_PASSWORD` must be at least 12 characters and cannot use known placeholder values.
+- `ADMIN_PASSWORD` must be at least secret characters and cannot use known placeholder values.
 - Set `ADMIN_COOKIE_SECURE=1` when the admin API is served only through HTTPS.
 - Serve the admin API and the game from the same origin unless you add a deliberate CORS policy.
 - If a trusted proxy uses different ports during development, set `ADMIN_ALLOWED_ORIGINS` explicitly.

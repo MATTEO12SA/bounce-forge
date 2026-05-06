@@ -1,6 +1,6 @@
 import { BALL_MAX_SPEED, BALL_START_SPEED, STARTING_LIVES } from '../utils/constants';
 import { clamp } from '../utils/math';
-
+//pour push 
 export interface DifficultyConfig {
   levelIndex: number;
   ballSpeed: number;
