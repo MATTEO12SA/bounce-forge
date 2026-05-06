@@ -117,8 +117,8 @@
         "X..111SSSSSSSSSSSSSSSSSSSSSSSS111..X",
         "XX.111SSSSSSSSSSSSSSSSSSSSSSSS111.XX",
         ".X.111SSSSSSSSSSSSSSSSSSSSSSSS111.X.",
-        ".XX111SSSSSSSSSSSSSSSSSSSSSSSS111X..",
-        "..XXXXXXXXXXXXX.....XXXXXXXXXXXXXX..",
+        ".XX111SSSSSSSSSSSSSSSSSSSSSSSS111XX.",
+        "..XXXXXXXXXXXXXX....XXXXXXXXXXXXXX..",
         "....................................",
         "....................................",
         "....................................",
@@ -128,7 +128,7 @@
         "....................................",
         "...................................."
       ],
-      "updatedAt": 1778068011656
+      "updatedAt": 1778087056923
     }
   ]
 }
