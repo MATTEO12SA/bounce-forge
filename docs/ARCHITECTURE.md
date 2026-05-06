@@ -17,7 +17,7 @@ Bounce Forge separates Phaser runtime code, pure gameplay logic, local save stat
 - `LevelSystem` resolves campaign levels, creative slots, and server-backed admin overrides.
 - `CampaignOverrideSystem` keeps the fetched admin campaign overrides in memory and falls back to the committed campaign pattern if an override is invalid or unavailable.
 - `AdminApiSystem` wraps `/api/admin/*` requests for login, session checks, override listing, and override saves.
-- `PowerUpSystem` selects drops through injected RNG. Current power-ups are `multiBall`, `splitBall`, `widePaddle`, and `extraLife`.
+- `PowerUpSystem` selects drops through injected RNG. Current power-ups are `multiBall`, `splitBall`, `widePaddle`, `stickyPaddle`, and `extraLife`.
 - `ScoreSystem` and `ComboSystem` are pure and unit-tested.
 - `SaveSystem` isolates localStorage access, migrates older saves, and stores progress, medals, preferences, and local creative slots.
 - `AudioSystem` generates short procedural Web Audio effects after user input.

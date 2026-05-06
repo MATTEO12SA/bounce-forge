@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 export const EDITOR_GRID_COLS = 36;
@@ -117,8 +117,10 @@ export class CampaignOverrideStore {
   }
 
   async readFile() {
+    let raw;
+
     try {
-      return JSON.parse(await readFile(this.filePath, 'utf8'));
+      raw = await readFile(this.filePath, 'utf8');
     } catch (error) {
       if (error?.code === 'ENOENT') {
         return { overrides: [] };
@@ -126,10 +128,19 @@ export class CampaignOverrideStore {
 
       throw error;
     }
+
+    try {
+      return JSON.parse(raw);
+    } catch (error) {
+      console.warn(`Corrupt overrides file at ${this.filePath}, resetting in-memory view:`, error);
+      return { overrides: [] };
+    }
   }
 
   async writeFile(data) {
     await mkdir(dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    const tmpPath = `${this.filePath}.tmp`;
+    await writeFile(tmpPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+    await rename(tmpPath, this.filePath);
   }
 }

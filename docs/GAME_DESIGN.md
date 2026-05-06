@@ -27,9 +27,10 @@ The player clears breakable bricks by keeping one or more balls in play. Each cl
 - `x3` multi-ball: adds two clones from the source ball.
 - `x2` split-ball: adds one clone from the source ball.
 - `W` wide paddle: temporarily increases paddle width.
+- `AIM` sticky paddle: temporarily catches a paddle hit for an aimed relaunch.
 - `+1` extra life: grants one life, capped at 5.
 
-Power-ups are round pickups that fall from broken bricks. The drop chance scales with the campaign level and ball bonuses are intentionally dominant. The active-ball cap is 40.
+Power-ups are round pickups that fall from broken bricks. The drop chance scales with the campaign level and ball bonuses are intentionally dominant. The active-ball limiter starts at 40, grows while frame time is stable, and stops at 96. If `x2` or `x3` is collected at the limit, missing clones are queued instead of discarded.
 
 ## Progression
 

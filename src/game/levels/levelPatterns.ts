@@ -349,12 +349,13 @@ export const LEVEL_PATTERNS: PatternDefinition[] = [
     'Chain Reactor',
     (grid) => {
       rect(grid, 4, 34, 4, 31, '1');
-      [
+      const reactorClusters: Array<[number, number]> = [
         [7, 8],
         [7, 23],
         [20, 8],
         [20, 23]
-      ].forEach(([row, col]) => {
+      ];
+      reactorClusters.forEach(([row, col]) => {
         border(grid, row, row + 5, col, col + 5);
         rect(grid, row + 2, row + 3, col + 2, col + 3, 'E');
       });

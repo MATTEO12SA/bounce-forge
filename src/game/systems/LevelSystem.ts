@@ -33,6 +33,11 @@ export class LevelSystem {
   public getCampaignLevel(levelIndex: number): LevelDefinition {
     const safeIndex = Math.floor(clamp(levelIndex, 0, campaignLevels.length - 1));
     const fallback = campaignLevels[safeIndex];
+
+    if (!fallback) {
+      throw new Error(`Campaign level ${safeIndex} is not defined.`);
+    }
+
     const override = CampaignOverrideSystem.getOverride(safeIndex);
 
     if (!override) {
@@ -83,6 +88,11 @@ export class LevelSystem {
   public getAdminPatternForEditing(levelIndex: number): PatternDefinition {
     const safeIndex = Math.floor(clamp(levelIndex, 0, campaignLevels.length - 1));
     const fallbackPattern = LEVEL_PATTERNS[safeIndex];
+
+    if (!fallbackPattern) {
+      throw new Error(`Pattern ${safeIndex} is not defined.`);
+    }
+
     const override = CampaignOverrideSystem.getOverride(safeIndex);
 
     if (override) {
@@ -104,9 +114,15 @@ export class LevelSystem {
 
   public getOfficialPatternForEditing(levelIndex: number): PatternDefinition {
     const safeIndex = Math.floor(clamp(levelIndex, 0, LEVEL_PATTERNS.length - 1));
+    const pattern = LEVEL_PATTERNS[safeIndex];
+
+    if (!pattern) {
+      throw new Error(`Pattern ${safeIndex} is not defined.`);
+    }
+
     return {
-      ...LEVEL_PATTERNS[safeIndex],
-      rows: normalizeEditorRows(LEVEL_PATTERNS[safeIndex].rows)
+      ...pattern,
+      rows: normalizeEditorRows(pattern.rows)
     };
   }
 
@@ -146,7 +162,8 @@ export class LevelSystem {
 
   private createEmptyCreativeLevel(slotIndex: number): LevelDefinition {
     const rows = normalizeEditorRows([]);
-    rows[0] = `1${'.'.repeat(rows[0].length - 1)}`;
+    const firstRow = rows[0] ?? '';
+    rows[0] = `1${'.'.repeat(Math.max(0, firstRow.length - 1))}`;
     return createLevelFromPattern(
       {
         id: `creative-slot-${slotIndex}`,

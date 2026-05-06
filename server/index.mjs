@@ -121,6 +121,10 @@ function isSecureRequest(req) {
   );
 }
 
+function isLoopbackHostname(hostname) {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
 function isTrustedOrigin(req) {
   const origin = req.headers.origin;
 
@@ -142,7 +146,13 @@ function isTrustedOrigin(req) {
     const requestHost = req.headers['x-forwarded-host'] ?? req.headers.host;
     const originUrl = new URL(originValue);
     const expectedHost = Array.isArray(requestHost) ? requestHost[0] : requestHost;
-    return originUrl.host === expectedHost;
+
+    if (originUrl.host === expectedHost) {
+      return true;
+    }
+
+    const expectedUrl = new URL(`http://${expectedHost}`);
+    return isLoopbackHostname(originUrl.hostname) && isLoopbackHostname(expectedUrl.hostname);
   } catch {
     return false;
   }
@@ -171,8 +181,7 @@ function serveStatic(req, res, distDir) {
   }
 
   const ext = extname(target);
-  const cacheControl =
-    ext === '.html' ? 'no-cache' : `public, max-age=${STATIC_ASSET_MAX_AGE}`;
+  const cacheControl = ext === '.html' ? 'no-cache' : `public, max-age=${STATIC_ASSET_MAX_AGE}`;
 
   res.writeHead(200, {
     ...SECURITY_HEADERS,

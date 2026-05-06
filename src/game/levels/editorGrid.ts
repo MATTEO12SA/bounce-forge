@@ -99,7 +99,7 @@ export function validateEditorRows(rows: readonly string[]): EditorGridValidatio
   for (let row = 0; row < rows.length; row += 1) {
     const rowValue = rows[row];
 
-    if (rowValue.length !== EDITOR_GRID_COLS) {
+    if (typeof rowValue !== 'string' || rowValue.length !== EDITOR_GRID_COLS) {
       return {
         valid: false,
         message: `Row ${row + 1} must have ${EDITOR_GRID_COLS} columns.`

@@ -32,14 +32,16 @@ export function chance(probability: number, rng: RandomSource = nativeRandom): b
 }
 
 export function pickWeighted<T>(items: Array<WeightedItem<T>>, rng: RandomSource): T {
-  if (items.length === 0) {
+  const first = items[0];
+
+  if (!first) {
     throw new Error('Cannot pick from an empty weighted item list');
   }
 
   const totalWeight = items.reduce((total, item) => total + Math.max(item.weight, 0), 0);
 
   if (totalWeight <= 0) {
-    return items[0].item;
+    return first.item;
   }
 
   let roll = rng.next() * totalWeight;
@@ -52,5 +54,6 @@ export function pickWeighted<T>(items: Array<WeightedItem<T>>, rng: RandomSource
     }
   }
 
-  return items[items.length - 1].item;
+  const last = items[items.length - 1] ?? first;
+  return last.item;
 }

@@ -122,6 +122,18 @@ export const THEMES: ThemeDefinition[] = [
   }
 ];
 
+function requireDefaultTheme(): ThemeDefinition {
+  const fallback = THEMES[0];
+
+  if (!fallback) {
+    throw new Error('THEMES must contain at least one theme.');
+  }
+
+  return fallback;
+}
+
+const DEFAULT_THEME: ThemeDefinition = requireDefaultTheme();
+
 export function getTheme(themeId: string): ThemeDefinition {
-  return THEMES.find((theme) => theme.id === themeId) ?? THEMES[0];
+  return THEMES.find((theme) => theme.id === themeId) ?? DEFAULT_THEME;
 }

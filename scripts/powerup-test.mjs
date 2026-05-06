@@ -301,6 +301,10 @@ try {
         scene.activeTimers.clear();
         scene.respawning = false;
         scene.ending = false;
+        scene.ballExpansionBlocked = false;
+        scene.activeBallLimit = 40;
+        scene.ballLimitStressFrames = 0;
+        scene.pendingBallBonusClones = 0;
         scene.lives = 3;
         clearGroup(scene.powerUps);
         clearGroup(scene.balls);
@@ -387,6 +391,32 @@ try {
       record('widePaddle expiry restores normal width', close(scene.paddle.activeWidth, 230, 1), {
         after: snapshot()
       });
+
+      resetScene();
+      const stickyBall = createNormalBall();
+      const stickyCollected = await collect('stickyPaddle');
+      await wait(80);
+      stickyBall.setPosition(scene.paddle.x, scene.paddle.y - 44);
+      stickyBall.arcadeBody.updateFromGameObject();
+      stickyBall.arcadeBody.setVelocity(120, 380);
+      scene.handleBallPaddle(stickyBall);
+      const stickyAttached = stickyBall.isAttached;
+      scene.launchAttachedBalls();
+      const stickyRelaunched = !stickyBall.isAttached && stickyBall.arcadeBody.velocity.y < 0;
+      record(
+        'stickyPaddle catches and relaunches a paddle hit',
+        stickyCollected &&
+          scene.activeTimers.has('stickyPaddle') &&
+          stickyAttached &&
+          stickyRelaunched,
+        {
+          stickyAttached,
+          stickyRelaunched,
+          effectActive: scene.activeTimers.has('stickyPaddle'),
+          after: snapshot()
+        }
+      );
+      expire('stickyPaddle');
 
       resetScene();
       createNormalBall();

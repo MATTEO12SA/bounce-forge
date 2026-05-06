@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getTheme } from '../config/themeConfig';
 import { LevelSystem } from '../systems/LevelSystem';
+import type { LevelMedal } from '../systems/SaveSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
@@ -9,7 +10,7 @@ import { WORLD_WIDTH } from '../utils/constants';
 interface EndSceneData {
   score?: number;
   levelIndex?: number;
-  medal?: string;
+  medal?: LevelMedal;
   editorReturn?: {
     mode: 'creative' | 'admin';
     slotIndex: number;

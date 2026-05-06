@@ -33,7 +33,11 @@ export const MAX_LIVES = 5;
 export const COMBO_TIMEOUT_MS = 2200;
 
 export const POWER_UP_DROP_SPEED = 320;
-export const MAX_ACTIVE_BALLS = 40;
+export const INITIAL_ACTIVE_BALL_LIMIT = 40;
+export const MAX_ACTIVE_BALLS = 96;
+export const BALL_LIMIT_GROWTH_STEP = 8;
+export const BALL_LIMIT_STRESS_FRAME_MS = 34;
+export const BALL_LIMIT_STRESS_FRAMES = 10;
 export const MAX_ACTIVE_PARTICLES = 160;
 
 export const SAVE_STORAGE_KEY = 'bounce-forge.save.v1';

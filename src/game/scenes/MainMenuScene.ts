@@ -111,6 +111,11 @@ export class MainMenuScene extends Phaser.Scene {
       () => {
         const currentIndex = THEMES.findIndex((candidate) => candidate.id === theme.id);
         const nextTheme = THEMES[(currentIndex + 1) % THEMES.length];
+
+        if (!nextTheme) {
+          return;
+        }
+
         save.setTheme(nextTheme.id);
         this.scene.restart();
       },

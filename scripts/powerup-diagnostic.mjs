@@ -294,6 +294,10 @@ try {
         scene.activeTimers.clear();
         scene.respawning = false;
         scene.ending = false;
+        scene.ballExpansionBlocked = false;
+        scene.activeBallLimit = 40;
+        scene.ballLimitStressFrames = 0;
+        scene.pendingBallBonusClones = 0;
         scene.lives = 3;
         clearGroup(scene.powerUps);
         clearGroup(scene.balls);
@@ -347,7 +351,7 @@ try {
 
       const originalRandom = Math.random;
       Math.random = makeSeededRandom(0x51f15e);
-      const counts = { multiBall: 0, splitBall: 0, widePaddle: 0, extraLife: 0, null: 0 };
+      const counts = { multiBall: 0, splitBall: 0, widePaddle: 0, stickyPaddle: 0, extraLife: 0, null: 0 };
       const rollCount = 20000;
       for (let index = 0; index < rollCount; index += 1) {
         const type = scene.powerUpSystem.roll(1) ?? 'null';
@@ -368,13 +372,40 @@ try {
 
       resetScene();
       createSingleBall();
+      scene.applyPowerUp('multiBall');
+      record('x3 multiBall creates exactly two clones from one ball', scene.getBalls().length === 3, {
+        after: snapshot()
+      });
+
+      resetScene();
+      createSingleBall();
+      for (let index = 0; index < 38; index += 1) {
+        createLaunchedBall();
+      }
+      scene.activeBallLimit = scene.getBalls().length + 1;
+      scene.ballLimitStressFrames = 1;
+      const beforeTransientStressX3 = scene.getBalls().length;
+      scene.applyPowerUp('multiBall');
+      record(
+        'x3 multiBall still adds two clones with transient soft-limit pressure',
+        scene.getBalls().length === beforeTransientStressX3 + 2,
+        {
+          before: beforeTransientStressX3,
+          after: snapshot(),
+          activeBallLimit: scene.activeBallLimit,
+          ballLimitStressFrames: scene.ballLimitStressFrames
+        }
+      );
+
+      resetScene();
+      createSingleBall();
       const multiCounts = [scene.getBalls().length];
       for (let index = 0; index < 30; index += 1) {
         scene.applyPowerUp('multiBall');
         multiCounts.push(scene.getBalls().length);
       }
       const maxBallsReached = Math.max(...multiCounts);
-      record('repeated multiBall reaches 40 without exceeding cap', scene.getBalls().length === 40 && maxBallsReached === 40, {
+      record('repeated multiBall grows beyond 40 without exceeding adaptive limit', scene.getBalls().length > 40 && maxBallsReached === scene.getBalls().length && scene.getBalls().length <= 96, {
         maxBallsReached,
         final: snapshot(),
         multiCounts
@@ -387,7 +418,7 @@ try {
         scene.applyPowerUp('splitBall');
         splitCounts.push(scene.getBalls().length);
       }
-      record('repeated splitBall reaches 40 without exceeding cap', scene.getBalls().length === 40 && Math.max(...splitCounts) === 40, {
+      record('repeated splitBall grows beyond 40 without exceeding adaptive limit', scene.getBalls().length > 40 && Math.max(...splitCounts) === scene.getBalls().length && scene.getBalls().length <= 96, {
         maxBallsReached: Math.max(...splitCounts),
         final: snapshot(),
         splitCounts: splitCounts.slice(0, 12).concat(splitCounts.slice(-6))
@@ -407,11 +438,61 @@ try {
 
       resetScene();
       createSingleBall();
-      for (let index = 0; index < 25; index += 1) {
+      while (scene.getBalls().length < 96) {
         scene.applyPowerUp('multiBall');
       }
       scene.applyPowerUp('multiBall');
-      record('multiBall cap never exceeds 40', scene.getBalls().length === 40, {
+      record('multiBall adaptive hard limit never exceeds 96', scene.getBalls().length === 96, {
+        after: snapshot(),
+        pendingBallBonusClones: scene.pendingBallBonusClones
+      });
+
+      const pendingAtLimit = scene.pendingBallBonusClones;
+      scene.getBalls().slice(0, 4).forEach((ball) => scene.balls.remove(ball, true, true));
+      const afterRemoval = snapshot();
+      scene.flushPendingBallBonusClones();
+      const afterPendingFlush = snapshot();
+      record(
+        'ball bonus clones queue at the adaptive limit and resume after balls drop',
+        pendingAtLimit > 0 &&
+          afterRemoval.balls < 96 &&
+          afterPendingFlush.balls > afterRemoval.balls &&
+          scene.pendingBallBonusClones < pendingAtLimit,
+        {
+          pendingAtLimit,
+          pendingAfterFlush: scene.pendingBallBonusClones,
+          afterRemoval,
+          afterPendingFlush
+        }
+      );
+
+      scene.lives = 4;
+      scene.applyPowerUp('extraLife');
+      scene.applyPowerUp('widePaddle');
+      const utilityBonusAtLimit =
+        scene.lives === 5 && Math.abs(scene.paddle.activeWidth - 317.4) <= 2;
+      scene.activeTimers.get('widePaddle')?.remove(false);
+      scene.activeTimers.delete('widePaddle');
+      scene.refreshPaddleWidth();
+      record('utility bonuses still apply after the ball limit is reached', utilityBonusAtLimit, {
+        lives: scene.lives,
+        paddleWidth: scene.paddle.activeWidth,
+        balls: scene.getBalls().length
+      });
+
+      resetScene();
+      createSingleBall();
+      for (let index = 0; index < 20; index += 1) {
+        scene.applyPowerUp('multiBall');
+      }
+      scene.updateAdaptiveBallLimit(40);
+      for (let index = 0; index < 12; index += 1) {
+        scene.updateAdaptiveBallLimit(40);
+      }
+      const beforeBlockedExpansion = scene.getBalls().length;
+      scene.applyPowerUp('multiBall');
+      record('adaptive limiter blocks expansion during sustained frame stress', scene.getBalls().length === beforeBlockedExpansion, {
+        beforeBlockedExpansion,
         after: snapshot()
       });
 

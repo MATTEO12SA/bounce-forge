@@ -96,7 +96,7 @@ describe('storage helpers and save system', () => {
 
     const reloaded = new SaveSystem(storage);
     expect(reloaded.getCreativeLevelSlot(1)?.name).toBe('Tiny Creative');
-    expect(reloaded.getCreativeLevelSlot(1)?.rows[0][0]).toBe('1');
+    expect(reloaded.getCreativeLevelSlot(1)?.rows[0]?.[0]).toBe('1');
 
     reloaded.removeCreativeLevelSlot(1);
 

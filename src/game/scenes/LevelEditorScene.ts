@@ -358,7 +358,13 @@ export class LevelEditorScene extends Phaser.Scene {
     }
 
     this.lastPaintedCell = key;
-    const rowChars = [...this.rows[cell.row]];
+    const currentRow = this.rows[cell.row];
+
+    if (currentRow === undefined) {
+      return;
+    }
+
+    const rowChars = [...currentRow];
 
     if (rowChars[cell.col] === this.selectedCell) {
       return;
@@ -422,8 +428,10 @@ export class LevelEditorScene extends Phaser.Scene {
     this.gridGraphics.strokeRect(GRID_LEFT - 4, GRID_TOP - 4, GRID_WIDTH + 8, GRID_HEIGHT + 8);
 
     for (let row = 0; row < EDITOR_GRID_ROWS; row += 1) {
+      const rowValue = this.rows[row] ?? '';
+
       for (let col = 0; col < EDITOR_GRID_COLS; col += 1) {
-        const cell = this.rows[row][col] as EditorCell;
+        const cell = (rowValue[col] ?? '.') as EditorCell;
         const definition = EDITOR_CELL_DEFINITIONS[cell] ?? EDITOR_CELL_DEFINITIONS['.'];
         const x = GRID_LEFT + col * CELL_STEP;
         const y = GRID_TOP + row * CELL_STEP;

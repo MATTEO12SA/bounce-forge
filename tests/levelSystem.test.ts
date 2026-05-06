@@ -40,8 +40,8 @@ describe('level system creative and admin levels', () => {
 
     const level = new LevelSystem(save).getLevel(0);
 
-    expect(level.id).toBe(campaignLevels[0].id);
-    expect(level.name).toBe(campaignLevels[0].name);
+    expect(level.id).toBe(campaignLevels[0]?.id);
+    expect(level.name).toBe(campaignLevels[0]?.name);
   });
 
   it('returns a creative level only when explicitly requested', () => {
@@ -62,7 +62,7 @@ describe('level system creative and admin levels', () => {
 
     save.removeCreativeLevelSlot(0);
 
-    expect(levelSystem.getLevel(0).id).toBe(campaignLevels[0].id);
+    expect(levelSystem.getLevel(0).id).toBe(campaignLevels[0]?.id);
     expect(levelSystem.hasCreativeLevelSlot(0)).toBe(false);
     expect(
       levelSystem.getCreativePatternForEditing(0).rows.every((row) => row.startsWith('.'))
@@ -82,7 +82,7 @@ describe('level system creative and admin levels', () => {
 
     const level = new LevelSystem(save).getCampaignLevel(0);
 
-    expect(level.id).toBe(campaignLevels[0].id);
+    expect(level.id).toBe(campaignLevels[0]?.id);
     expect(level.name).toBe('Admin Level');
     expect(level.bricks).toHaveLength(1);
     CampaignOverrideSystem.clear();

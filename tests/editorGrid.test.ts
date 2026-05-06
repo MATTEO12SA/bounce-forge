@@ -55,6 +55,6 @@ describe('editor grid helpers', () => {
     rows[0] = `BS${'.'.repeat(EDITOR_GRID_COLS - 2)}`;
 
     expect(validateEditorRows(rows).valid).toBe(true);
-    expect(createPatternFromEditorRows(0, 'Bonus Shield', rows).rows[0].slice(0, 2)).toBe('BS');
+    expect(createPatternFromEditorRows(0, 'Bonus Shield', rows).rows[0]?.slice(0, 2)).toBe('BS');
   });
 });

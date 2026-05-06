@@ -19,10 +19,14 @@ import { Hud } from '../ui/Hud';
 import {
   BALL_MAX_PADDLE_ANGLE_DEGREES,
   BALL_AXIS_LOCK_MIN_SPEED,
+  BALL_LIMIT_GROWTH_STEP,
+  BALL_LIMIT_STRESS_FRAME_MS,
+  BALL_LIMIT_STRESS_FRAMES,
   BALL_MIN_SPEED,
   BALL_RADIUS,
   BRICK_GAP,
   DEPTHS,
+  INITIAL_ACTIVE_BALL_LIMIT,
   MAX_ACTIVE_BALLS,
   MAX_LIVES,
   PADDLE_HEIGHT,
@@ -82,6 +86,10 @@ export class GameScene extends Phaser.Scene {
   private ending = false;
   private respawning = false;
   private maxBallsReached = 1;
+  private ballExpansionBlocked = false;
+  private activeBallLimit = INITIAL_ACTIVE_BALL_LIMIT;
+  private ballLimitStressFrames = 0;
+  private pendingBallBonusClones = 0;
   private explosionsTriggered = 0;
   private readonly activeTimers = new Map<PowerUpType, Phaser.Time.TimerEvent>();
   private readonly ballNearWallFrames = new WeakMap<Ball, number>();
@@ -110,6 +118,10 @@ export class GameScene extends Phaser.Scene {
     this.ending = false;
     this.respawning = false;
     this.maxBallsReached = 1;
+    this.ballExpansionBlocked = false;
+    this.activeBallLimit = INITIAL_ACTIVE_BALL_LIMIT;
+    this.ballLimitStressFrames = 0;
+    this.pendingBallBonusClones = 0;
     this.explosionsTriggered = 0;
     this.activeTimers.clear();
 
@@ -139,6 +151,8 @@ export class GameScene extends Phaser.Scene {
     this.inputSystem.updatePaddle(this.paddle, delta);
     this.updateBalls();
     this.updatePowerUps();
+    this.updateAdaptiveBallLimit(delta);
+    this.flushPendingBallBonusClones();
     this.comboSystem.update(delta);
     this.maxBallsReached = Math.max(this.maxBallsReached, this.getBalls().length);
 
@@ -457,6 +471,7 @@ export class GameScene extends Phaser.Scene {
           `with vel (${ball.arcadeBody.velocity.x.toFixed(1)}, ${ball.arcadeBody.velocity.y.toFixed(1)}) ` +
           `— playfield is [${PLAYFIELD_LEFT}, ${PLAYFIELD_RIGHT}]`
       );
+      this.blockBallExpansion('ball tunneled outside playfield');
       return;
     }
 
@@ -486,6 +501,7 @@ export class GameScene extends Phaser.Scene {
         `[BALL STUCK ON WALL] Ball trapped near ${nearLeftWall ? 'LEFT' : 'RIGHT'} wall ` +
           `for ${frames} frames at (${ball.x.toFixed(1)}, ${ball.y.toFixed(1)}) — bug not self-resolving`
       );
+      this.blockBallExpansion('ball trapped near wall');
     }
   }
 
@@ -847,8 +863,7 @@ export class GameScene extends Phaser.Scene {
     const source = this.getPowerUpSourceBall(sourceBall);
 
     if (source) {
-      this.duplicateBall(source, -0.34);
-      this.duplicateBall(source, 0.34);
+      this.duplicateBallsOrQueue(source, [-0.34, 0.34]);
     }
 
     this.particleSystem.shake(0.003, 100);
@@ -858,7 +873,7 @@ export class GameScene extends Phaser.Scene {
     const source = this.getPowerUpSourceBall(sourceBall);
 
     if (source) {
-      this.duplicateBall(source, 0.7);
+      this.duplicateBallsOrQueue(source, [0.7]);
     }
 
     this.particleSystem.shake(0.002, 80);
@@ -873,7 +888,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private duplicateBall(source: Ball, angleOffsetRadians: number): Ball | null {
-    if (this.getBalls().length >= MAX_ACTIVE_BALLS) {
+    if (!this.canCreateMoreBalls()) {
       return null;
     }
 
@@ -882,6 +897,123 @@ export class GameScene extends Phaser.Scene {
     this.rememberBallPhysics(newBall);
     this.maxBallsReached = Math.max(this.maxBallsReached, this.getBalls().length);
     return newBall;
+  }
+
+  private duplicateBallsOrQueue(source: Ball, angleOffsetsRadians: number[]): void {
+    const reservedSlots = this.reserveBallCloneSlots(angleOffsetsRadians.length);
+
+    angleOffsetsRadians.forEach((angleOffsetRadians, index) => {
+      if (index < reservedSlots && this.duplicateBall(source, angleOffsetRadians)) {
+        return;
+      }
+
+      if (!this.ballExpansionBlocked) {
+        this.pendingBallBonusClones += 1;
+      }
+    });
+  }
+
+  private reserveBallCloneSlots(requestedSlots: number): number {
+    const ballCount = this.getBalls().length;
+
+    if (this.ballExpansionBlocked || requestedSlots <= 0 || ballCount >= MAX_ACTIVE_BALLS) {
+      return 0;
+    }
+
+    const availableHardSlots = Math.min(requestedSlots, MAX_ACTIVE_BALLS - ballCount);
+    const requiredLimit = ballCount + availableHardSlots;
+
+    if (requiredLimit <= this.activeBallLimit) {
+      return availableHardSlots;
+    }
+
+    this.activeBallLimit = Math.min(
+      MAX_ACTIVE_BALLS,
+      Math.max(this.activeBallLimit + BALL_LIMIT_GROWTH_STEP, requiredLimit)
+    );
+    console.info(
+      `[BALL LIMIT] Stable at ${ballCount} balls, raising limit to ${this.activeBallLimit}.`
+    );
+
+    return Math.max(0, Math.min(availableHardSlots, this.activeBallLimit - ballCount));
+  }
+
+  private flushPendingBallBonusClones(): void {
+    if (this.pendingBallBonusClones <= 0 || this.ballExpansionBlocked) {
+      return;
+    }
+
+    const source = this.getPowerUpSourceBall();
+
+    if (!source) {
+      return;
+    }
+
+    const offsets = [0.34, -0.34, 0.7, -0.7, 0.18, -0.18];
+
+    while (this.pendingBallBonusClones > 0) {
+      const offset = offsets[this.pendingBallBonusClones % offsets.length] ?? 0.34;
+      if (!this.duplicateBall(source, offset)) {
+        return;
+      }
+      this.pendingBallBonusClones -= 1;
+    }
+  }
+
+  private canCreateMoreBalls(): boolean {
+    const ballCount = this.getBalls().length;
+
+    if (this.ballExpansionBlocked) {
+      return false;
+    }
+
+    if (ballCount >= MAX_ACTIVE_BALLS) {
+      return false;
+    }
+
+    if (ballCount < this.activeBallLimit) {
+      return true;
+    }
+
+    this.activeBallLimit = Math.min(
+      MAX_ACTIVE_BALLS,
+      this.activeBallLimit + BALL_LIMIT_GROWTH_STEP
+    );
+    console.info(
+      `[BALL LIMIT] Stable at ${ballCount} balls, raising limit to ${this.activeBallLimit}.`
+    );
+    return ballCount < this.activeBallLimit;
+  }
+
+  private updateAdaptiveBallLimit(deltaMs: number): void {
+    if (this.ballExpansionBlocked || this.getBalls().length < INITIAL_ACTIVE_BALL_LIMIT) {
+      this.ballLimitStressFrames = 0;
+      return;
+    }
+
+    if (deltaMs < BALL_LIMIT_STRESS_FRAME_MS) {
+      this.ballLimitStressFrames = 0;
+      return;
+    }
+
+    this.ballLimitStressFrames += 1;
+
+    if (this.ballLimitStressFrames >= BALL_LIMIT_STRESS_FRAMES) {
+      this.blockBallExpansion(
+        `frame time stayed above ${BALL_LIMIT_STRESS_FRAME_MS}ms near ${this.getBalls().length} balls`
+      );
+    }
+  }
+
+  private blockBallExpansion(reason: string): void {
+    if (this.ballExpansionBlocked) {
+      return;
+    }
+
+    this.ballExpansionBlocked = true;
+    console.warn(
+      `[BALL EXPANSION BLOCKED] ${reason} — future ball creation is disabled to protect game stability.`
+    );
   }
 
   private setTimedEffect(
@@ -913,6 +1045,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.time.delayedCall(420, () => {
+      if (!this.scene.isActive()) {
+        return;
+      }
+
       if (!this.ending) {
         this.createBall(true);
       }
@@ -939,6 +1075,10 @@ export class GameScene extends Phaser.Scene {
     this.particleSystem.shake(0.004, 180);
 
     this.time.delayedCall(520, () => {
+      if (!this.scene.isActive()) {
+        return;
+      }
+
       this.scene.start('VictoryScene', {
         score: Math.max(score, stateBeforeBonus.score),
         levelIndex: this.levelIndex,
@@ -972,6 +1112,10 @@ export class GameScene extends Phaser.Scene {
     this.saveSystem.updateBestScore(score);
 
     this.time.delayedCall(460, () => {
+      if (!this.scene.isActive()) {
+        return;
+      }
+
       this.scene.start('GameOverScene', {
         score,
         levelIndex: this.levelIndex,
@@ -1014,8 +1158,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getActiveEffectLabel(): string {
+    if (this.activeTimers.size === 0) {
+      return '';
+    }
+
     const labels = [...this.activeTimers.keys()].map((type) => getPowerUpDefinition(type).label);
-    return labels.length > 0 ? labels.join('+') : '';
+    return labels.join('+');
   }
 
   private getObjectiveHudLabel(): string {

@@ -61,7 +61,7 @@ Boucle principale :
 - Terminer le niveau pour debloquer le suivant.
 - Gagner des medailles pour les meilleurs clears.
 
-Le cap actuel est de `40` balles actives. Les derniers niveaux sont donc concus pour devenir tres chaotiques et satisfaisants sans depasser la limite physique.
+La limite active commence a `40` balles puis augmente par paliers quand le framerate reste stable, avec une securite dure a `96` balles. Si un bonus `x2` ou `x3` est pris quand la limite est atteinte, ses clones sont mis en attente et reapparaissent des que des balles sortent du jeu.
 
 ## Campagne
 
@@ -70,7 +70,7 @@ La campagne contient **24 niveaux fixes** repartis en 4 chapitres :
 - **Forge Basics** : layouts ouverts, debut facile, premieres briques bonus.
 - **Wall Mazes** : murs proches des murs natifs, couloirs, rebonds precis.
 - **Chain Reactor** : niveaux explosifs avec de gros combos possibles.
-- **Ball Storm** : beaucoup de briques bonus et des niveaux faits pour atteindre 20 a 40 balles.
+- **Ball Storm** : beaucoup de briques bonus et des niveaux faits pour atteindre 20 a 40+ balles.
 
 Les niveaux de campagne sont fixes. Sauvegarder une map dans l'editeur ne remplace pas les niveaux de campagne au rechargement ou depuis la selection de niveau.
 
@@ -96,9 +96,10 @@ Bonus actuels :
 - `x3` multi-ball : ajoute 2 clones depuis la balle source.
 - `x2` split-ball : ajoute 1 clone depuis la balle source.
 - `W` wide paddle : agrandit temporairement la barre.
+- `AIM` sticky paddle : attrape temporairement la prochaine balle qui touche la barre et permet de la relancer.
 - `+1` extra life : ajoute une vie jusqu'au cap.
 
-Les bonus de balles sont largement majoritaires dans la distribution. `widePaddle` reste volontairement rare.
+Les bonus de balles sont largement majoritaires dans la distribution. `widePaddle` et `stickyPaddle` restent volontairement rares.
 
 ## Objectifs Et Medailles
 
@@ -158,7 +159,7 @@ Diagnostics navigateur :
 - `npm run test:browser:corridor` : verifie qu'un lancement normal peut entrer dans un couloir.
 - `npm run test:browser:walls` : compare les rebonds murs natifs et murs placables.
 - `npm run test:browser:powerups` : verifie les chemins de pickup des bonus.
-- `npm run test:browser:powerups:diagnostic` : verifie la distribution des bonus, le clonage source-only et le cap de 40 balles.
+- `npm run test:browser:powerups:diagnostic` : verifie la distribution des bonus, le clonage source-only, la limite adaptive et la file d'attente des clones au plafond.
 
 La plupart des tests navigateur creent des captures temporaires. Elles peuvent etre supprimees apres inspection et ne sont pas necessaires au jeu.
 

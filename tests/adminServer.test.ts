@@ -164,6 +164,25 @@ describe('admin server API', () => {
     }
   });
 
+  it('allows localhost dev proxy origins on different ports', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const login = await fetch(`${baseUrl}/api/admin/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          origin: 'http://localhost:5173'
+        },
+        body: JSON.stringify({ password: 'test-secret-password' })
+      });
+
+      expect(login.status).toBe(200);
+    } finally {
+      server.close();
+    }
+  });
+
   it('marks admin cookies secure behind HTTPS proxies', async () => {
     const { server, baseUrl } = await createTestServer();
 

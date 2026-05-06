@@ -43,14 +43,15 @@ Placed wall bricks use custom collision recovery so corridor and wall-junction b
 
 Definitions live in [src/game/systems/PowerUpSystem.ts](../src/game/systems/PowerUpSystem.ts). Every destructible brick has a `powerUpChance`; `B` bricks force a ball bonus.
 
-| Type         | Label | Effect                                    | Duration | Weight |
-| ------------ | ----- | ----------------------------------------- | -------- | ------ |
-| `multiBall`  | `x3`  | Adds two clones from the source ball.     | Instant  | 6.5    |
-| `splitBall`  | `x2`  | Adds one clone from the source ball.      | Instant  | 4      |
-| `widePaddle` | `W`   | Paddle width scale x1.38.                 | 11000 ms | 0.45   |
-| `extraLife`  | `+1`  | Adds one life, capped at `MAX_LIVES = 5`. | Instant  | 0.8    |
+| Type           | Label | Effect                                             | Duration | Weight |
+| -------------- | ----- | -------------------------------------------------- | -------- | ------ |
+| `multiBall`    | `x3`  | Adds two clones from the source ball.              | Instant  | 6.5    |
+| `splitBall`    | `x2`  | Adds one clone from the source ball.               | Instant  | 4      |
+| `widePaddle`   | `W`   | Paddle width scale x1.38.                          | 11000 ms | 0.45   |
+| `stickyPaddle` | `AIM` | Catches the next paddle hit for an aimed relaunch. | 9000 ms  | 0.55   |
+| `extraLife`    | `+1`  | Adds one life, capped at `MAX_LIVES = 5`.          | Instant  | 0.8    |
 
-Power-ups fall at `POWER_UP_DROP_SPEED = 320`. Active balls are capped at `MAX_ACTIVE_BALLS = 40`.
+Power-ups fall at `POWER_UP_DROP_SPEED = 320`. Active balls start with a soft limit of `INITIAL_ACTIVE_BALL_LIMIT = 40`, grow by stable performance steps, and stop at `MAX_ACTIVE_BALLS = 96`. Ball bonus clones that cannot spawn at the current limit are queued and resume once active balls drop.
 
 ## Scoring, Combo, And Medals
 

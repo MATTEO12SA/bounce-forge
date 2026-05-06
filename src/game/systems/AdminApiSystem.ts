@@ -27,13 +27,33 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     ...init
   });
 
-  const payload = (await response.json().catch(() => ({}))) as T & { message?: string };
+  const contentType = response.headers.get('content-type') ?? '';
+  let payload: (T & { message?: string }) | undefined;
 
-  if (!response.ok) {
-    throw new Error(payload.message ?? `Request failed: ${response.status}`);
+  if (contentType.includes('application/json')) {
+    try {
+      payload = (await response.json()) as T & { message?: string };
+    } catch {
+      payload = undefined;
+    }
   }
 
-  return payload;
+  if (!response.ok) {
+    if (payload?.message) {
+      throw new Error(payload.message);
+    }
+
+    if (!contentType.includes('application/json')) {
+      const text = (await response.text().catch(() => '')).trim().slice(0, 200);
+      throw new Error(
+        text ? `Request failed (${response.status}): ${text}` : `Request failed: ${response.status}`
+      );
+    }
+
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  return (payload ?? ({} as T & { message?: string })) as T;
 }
 
 export class AdminApiSystem {

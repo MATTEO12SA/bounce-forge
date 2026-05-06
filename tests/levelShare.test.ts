@@ -5,7 +5,7 @@ import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../src/game/le
 describe('level share codes', () => {
   it('round-trips a creative level as a compact code', () => {
     const rows = createEmptyEditorRows();
-    rows[0] = `1${'.'.repeat(rows[0].length - 1)}`;
+    rows[0] = `1${'.'.repeat((rows[0]?.length ?? 1) - 1)}`;
 
     const code = encodeCreativeLevelCode(rows, 'Shared Level');
     const decoded = decodeCreativeLevelCode(code);

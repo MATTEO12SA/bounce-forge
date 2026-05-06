@@ -230,8 +230,14 @@ try {
       const adminMenuTexts = sceneTexts();
       const adminMenu = game.scene.getScene('AdminMenuScene');
       adminMenu.input.keyboard.emit('keydown-ESC');
-      await new Promise((resolve) => setTimeout(resolve, 550));
-      const menuTextsAfterEsc = sceneTexts();
+      let menuTextsAfterEsc = [];
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        menuTextsAfterEsc = sceneTexts();
+        if (menuTextsAfterEsc.includes('ADMIN EDITOR')) {
+          break;
+        }
+      }
       const sessionAfterEsc = await fetch('/api/admin/session').then((response) => response.json());
 
       stopActiveScenes();
