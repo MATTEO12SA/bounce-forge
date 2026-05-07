@@ -1,7 +1,8 @@
+import { EDITOR_GRID_COLS, EDITOR_GRID_ROWS } from '../../../shared/editorGridRules.mjs';
 import type { LevelObjective, PatternDefinition } from './levelTypes';
 
-const ROWS = 58;
-const COLS = 36;
+const ROWS = EDITOR_GRID_ROWS;
+const COLS = EDITOR_GRID_COLS;
 
 type Grid = string[][];
 

@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  EDITOR_CELL_DEFINITIONS,
   EDITOR_GRID_COLS,
   EDITOR_GRID_ROWS,
+  EDITOR_PALETTE,
   createEmptyEditorRows,
   createPatternFromEditorRows,
   normalizeEditorRows,
   validateEditorRows
 } from '../src/game/levels/editorGrid';
+import {
+  EDITOR_GRID_COLS as SHARED_EDITOR_GRID_COLS,
+  EDITOR_GRID_ROWS as SHARED_EDITOR_GRID_ROWS,
+  EDITOR_PALETTE as SHARED_EDITOR_PALETTE,
+  validateRows as validateSharedRows
+} from '../shared/editorGridRules.mjs';
 
 describe('editor grid helpers', () => {
   it('creates a fixed empty 36x58 grid', () => {
@@ -56,5 +64,16 @@ describe('editor grid helpers', () => {
 
     expect(validateEditorRows(rows).valid).toBe(true);
     expect(createPatternFromEditorRows(0, 'Bonus Shield', rows).rows[0]?.slice(0, 2)).toBe('BS');
+  });
+
+  it('keeps front grid definitions aligned with shared validation rules', () => {
+    const rows = createEmptyEditorRows();
+    rows[0] = `1${'.'.repeat(EDITOR_GRID_COLS - 1)}`;
+
+    expect(EDITOR_GRID_COLS).toBe(SHARED_EDITOR_GRID_COLS);
+    expect(EDITOR_GRID_ROWS).toBe(SHARED_EDITOR_GRID_ROWS);
+    expect(EDITOR_PALETTE).toEqual(SHARED_EDITOR_PALETTE);
+    expect(Object.keys(EDITOR_CELL_DEFINITIONS)).toEqual([...SHARED_EDITOR_PALETTE]);
+    expect(validateEditorRows(rows)).toEqual(validateSharedRows(rows));
   });
 });

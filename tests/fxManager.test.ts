@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FxManager } from '../src/game/systems/FxManager';
 import type { ParticleSystem } from '../src/game/systems/ParticleSystem';
+import { isDebugOverlayEnabled } from '../src/game/ui/DebugOverlay';
 
 interface MockCamera {
   shake: ReturnType<typeof vi.fn>;
@@ -94,5 +95,11 @@ describe('FxManager', () => {
     }
     expect(fx.getQuality()).toBe('high');
     expect(fx.isDegraded()).toBe(false);
+  });
+
+  it('enables the debug overlay only through the debug query parameter', () => {
+    expect(isDebugOverlayEnabled('?debug=1')).toBe(true);
+    expect(isDebugOverlayEnabled('?debug=0')).toBe(false);
+    expect(isDebugOverlayEnabled('?menu=1')).toBe(false);
   });
 });

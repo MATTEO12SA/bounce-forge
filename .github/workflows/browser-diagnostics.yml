@@ -1,0 +1,42 @@
+name: Browser Diagnostics
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+jobs:
+  browser-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      BROWSER_TEST_EDGE_PATH: /usr/bin/google-chrome
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Heavier real-browser diagnostics stay out of push CI and can be run on demand.
+      - name: Campaign diagnostic
+        run: npm run test:browser:campaign
+
+      - name: Power-up diagnostic
+        run: npm run test:browser:powerups
+
+      - name: Wall diagnostic
+        run: npm run test:browser:walls
+
+      - name: UI smoke diagnostic
+        run: npm run test:browser:ui

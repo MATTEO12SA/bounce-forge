@@ -16,6 +16,7 @@ import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
 import { LevelSystem } from '../systems/LevelSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
+import { ConfirmDialog, TextAreaDialog } from '../ui/Dialog';
 import { drawPanel, drawScreenBackground } from '../ui/sceneChrome';
 import { DEPTHS, GAME_TITLE, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 import { clamp } from '../utils/math';
@@ -56,6 +57,7 @@ export class LevelEditorScene extends Phaser.Scene {
   private painting = false;
   private lastPaintedCell = '';
   private isDirty = false;
+  private dialogOpen = false;
 
   public constructor() {
     super('LevelEditorScene');
@@ -71,6 +73,7 @@ export class LevelEditorScene extends Phaser.Scene {
     this.undoStack.splice(0);
     this.redoStack.splice(0);
     this.isDirty = false;
+    this.dialogOpen = false;
     this.painting = false;
     this.lastPaintedCell = '';
 
@@ -85,6 +88,7 @@ export class LevelEditorScene extends Phaser.Scene {
 
     this.createControls();
     this.registerGridInput();
+    this.registerEditorShortcuts();
     this.loadSlot(this.slotIndex, 'Slot loaded.');
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownEditor, this);
@@ -166,15 +170,15 @@ export class LevelEditorScene extends Phaser.Scene {
       compact: true
     }).setDepth(DEPTHS.hud);
 
-    new Button(this, 216, 1724, 260, 62, 'EXPORT CODE', () => this.exportCurrentSlot(), {
+    new Button(this, 216, 1724, 260, 62, 'EXPORT CODE', () => void this.exportCurrentSlot(), {
       variant: 'secondary',
       compact: true
     }).setDepth(DEPTHS.hud);
-    new Button(this, 540, 1724, 260, 62, 'IMPORT CODE', () => this.importLevelCode(), {
+    new Button(this, 540, 1724, 260, 62, 'IMPORT CODE', () => void this.importLevelCode(), {
       variant: 'secondary',
       compact: true
     }).setDepth(DEPTHS.hud);
-    new Button(this, 864, 1724, 260, 62, 'COPY LOCAL', () => this.copyToCreativeSlot(), {
+    new Button(this, 864, 1724, 260, 62, 'COPY LOCAL', () => void this.copyToCreativeSlot(), {
       variant: 'secondary',
       compact: true
     }).setDepth(DEPTHS.hud);
@@ -187,7 +191,7 @@ export class LevelEditorScene extends Phaser.Scene {
       70,
       'BACK',
       () => {
-        this.goBack();
+        void this.goBack();
       },
       { variant: 'ghost' }
     ).setDepth(DEPTHS.hud);
@@ -325,10 +329,50 @@ export class LevelEditorScene extends Phaser.Scene {
     this.input.on('pointerupoutside', this.stopPainting, this);
   }
 
+  private registerEditorShortcuts(): void {
+    this.input.keyboard?.on('keydown', this.handleEditorShortcut, this);
+  }
+
   private shutdownEditor(): void {
     this.input.off('pointermove', this.handlePointerMove, this);
     this.input.off('pointerup', this.stopPainting, this);
     this.input.off('pointerupoutside', this.stopPainting, this);
+    this.input.keyboard?.off('keydown', this.handleEditorShortcut, this);
+  }
+
+  private handleEditorShortcut(event: KeyboardEvent): void {
+    if (this.dialogOpen) {
+      return;
+    }
+
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+
+    const selected = this.getPaletteShortcutCell(event.key);
+
+    if (!selected) {
+      return;
+    }
+
+    event.preventDefault();
+    this.selectedCell = selected;
+    this.renderPaletteButtons();
+    this.setStatus(`Brush ${EDITOR_CELL_DEFINITIONS[selected].label}.`, false);
+  }
+
+  private getPaletteShortcutCell(rawKey: string): EditorCell | null {
+    const key = rawKey.toUpperCase();
+
+    if (key === '.' || key === '1' || key === '2' || key === '3') {
+      return key;
+    }
+
+    if (key === 'E' || key === 'B' || key === 'S' || key === 'X') {
+      return key;
+    }
+
+    return null;
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
@@ -523,10 +567,14 @@ export class LevelEditorScene extends Phaser.Scene {
 
   private async resetSlot(): Promise<void> {
     if (this.mode === 'admin') {
-      if (
-        typeof window.confirm === 'function' &&
-        !window.confirm(`Reset campaign override ${this.slotIndex + 1} for everyone?`)
-      ) {
+      const confirmed = await this.showConfirmDialog({
+        title: 'RESET CAMPAIGN',
+        message: `Reset campaign override ${this.slotIndex + 1} for everyone?`,
+        confirmLabel: 'RESET',
+        danger: true
+      });
+
+      if (!confirmed) {
         return;
       }
 
@@ -552,12 +600,23 @@ export class LevelEditorScene extends Phaser.Scene {
       return;
     }
 
+    const confirmed = await this.showConfirmDialog({
+      title: 'RESET CREATIVE',
+      message: `Reset Creative ${this.slotIndex + 1} to an empty grid?`,
+      confirmLabel: 'RESET',
+      danger: true
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
     this.pushUndoSnapshot();
     this.saveSystem.removeCreativeLevelSlot(this.slotIndex);
     this.loadSlot(this.slotIndex, `Creative ${this.slotIndex + 1} reset to empty.`);
   }
 
-  private copyToCreativeSlot(): void {
+  private async copyToCreativeSlot(): Promise<void> {
     const validation = validateEditorRows(this.rows);
 
     if (!validation.valid) {
@@ -566,12 +625,17 @@ export class LevelEditorScene extends Phaser.Scene {
     }
 
     const existing = this.saveSystem.getCreativeLevelSlot(this.slotIndex);
-    if (
-      existing &&
-      typeof window.confirm === 'function' &&
-      !window.confirm(`Overwrite Creative ${this.slotIndex + 1}?`)
-    ) {
-      return;
+    if (existing) {
+      const confirmed = await this.showConfirmDialog({
+        title: 'OVERWRITE CREATIVE',
+        message: `Overwrite Creative ${this.slotIndex + 1}?`,
+        confirmLabel: 'OVERWRITE',
+        danger: true
+      });
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     try {
@@ -616,19 +680,43 @@ export class LevelEditorScene extends Phaser.Scene {
     this.setStatus('Redo.', false);
   }
 
-  private exportCurrentSlot(): void {
+  private async exportCurrentSlot(): Promise<void> {
     try {
       const code = encodeCreativeLevelCode(this.rows, this.currentSlotName);
-      void navigator.clipboard?.writeText(code).catch(() => undefined);
-      window.prompt?.('Bounce Forge level code', code);
-      this.setStatus('Export code copied when clipboard is available.', false);
+      const copiedBeforeDialog = await this.copyTextToClipboard(code);
+      const action = await this.showTextAreaDialog({
+        title: 'EXPORT CODE',
+        message: copiedBeforeDialog
+          ? 'The level code was copied. You can copy it again below.'
+          : 'Copy this level code to share or archive the map.',
+        initialValue: code,
+        confirmLabel: 'COPY',
+        cancelLabel: 'CLOSE',
+        readOnly: true
+      });
+
+      if (action !== null) {
+        const copied = await this.copyTextToClipboard(code);
+        this.setStatus(copied ? 'Export code copied.' : 'Export code shown.', !copied);
+        return;
+      }
+
+      this.setStatus(copiedBeforeDialog ? 'Export code copied.' : 'Export code shown.', false);
     } catch (error) {
       this.setStatus(error instanceof Error ? error.message : 'Export failed.', true);
     }
   }
 
-  private importLevelCode(): void {
-    const code = window.prompt?.('Paste Bounce Forge level code')?.trim();
+  private async importLevelCode(): Promise<void> {
+    const code = (
+      await this.showTextAreaDialog({
+        title: 'IMPORT CODE',
+        message: 'Paste a Bounce Forge level code.',
+        placeholder: 'BF1:...',
+        confirmLabel: 'IMPORT',
+        cancelLabel: 'CANCEL'
+      })
+    )?.trim();
 
     if (!code) {
       return;
@@ -647,13 +735,18 @@ export class LevelEditorScene extends Phaser.Scene {
     }
   }
 
-  private goBack(): void {
-    if (
-      this.isDirty &&
-      typeof window.confirm === 'function' &&
-      !window.confirm('Leave editor without saving changes?')
-    ) {
-      return;
+  private async goBack(): Promise<void> {
+    if (this.isDirty) {
+      const confirmed = await this.showConfirmDialog({
+        title: 'UNSAVED CHANGES',
+        message: 'Leave editor without saving changes?',
+        confirmLabel: 'LEAVE',
+        danger: true
+      });
+
+      if (!confirmed) {
+        return;
+      }
     }
 
     this.scene.start(this.mode === 'admin' ? 'AdminMenuScene' : 'MainMenuScene');
@@ -692,5 +785,36 @@ export class LevelEditorScene extends Phaser.Scene {
       isError ? '#ff7d92' : `#${this.theme.primary.toString(16).padStart(6, '0')}`
     );
     this.statusText.setText(message);
+  }
+
+  private async copyTextToClipboard(value: string): Promise<boolean> {
+    try {
+      await navigator.clipboard?.writeText(value);
+      return Boolean(navigator.clipboard);
+    } catch {
+      return false;
+    }
+  }
+
+  private async showConfirmDialog(
+    options: Parameters<typeof ConfirmDialog.show>[1]
+  ): Promise<boolean> {
+    this.dialogOpen = true;
+    try {
+      return await ConfirmDialog.show(this, options);
+    } finally {
+      this.dialogOpen = false;
+    }
+  }
+
+  private async showTextAreaDialog(
+    options: Parameters<typeof TextAreaDialog.show>[1]
+  ): Promise<string | null> {
+    this.dialogOpen = true;
+    try {
+      return await TextAreaDialog.show(this, options);
+    } finally {
+      this.dialogOpen = false;
+    }
   }
 }

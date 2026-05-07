@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getTheme, type ThemeDefinition } from '../config/themeConfig';
-import { Ball } from '../entities/Ball';
+import type { Ball } from '../entities/Ball';
 import { Brick } from '../entities/Brick';
 import { Paddle } from '../entities/Paddle';
 import { PowerUp } from '../entities/PowerUp';
@@ -17,24 +17,19 @@ import type { LevelMedal } from '../systems/SaveSystem';
 import { SettingsSystem } from '../systems/SettingsSystem';
 import { FxManager } from '../systems/FxManager';
 import { ScoreSystem } from '../systems/ScoreSystem';
+import { BallManager } from '../managers/BallManager';
 import { PlayfieldRenderer } from '../managers/PlayfieldRenderer';
+import { DebugOverlay, isDebugOverlayEnabled, type DebugOverlaySnapshot } from '../ui/DebugOverlay';
 import { Hud } from '../ui/Hud';
 import {
   BALL_MAX_PADDLE_ANGLE_DEGREES,
   BALL_AXIS_LOCK_MIN_SPEED,
-  BALL_LIMIT_GROWTH_STEP,
-  BALL_LIMIT_STRESS_FRAME_MS,
-  BALL_LIMIT_STRESS_FRAMES,
   BALL_MIN_SPEED,
   BALL_RADIUS,
   BRICK_GAP,
-  INITIAL_ACTIVE_BALL_LIMIT,
-  MAX_ACTIVE_BALLS,
   MAX_LIVES,
   PADDLE_HEIGHT,
   POWER_UP_DROP_SPEED,
-  PLAYFIELD_LEFT,
-  PLAYFIELD_RIGHT,
   WORLD_HEIGHT
 } from '../utils/constants';
 import {
@@ -67,11 +62,13 @@ interface PauseScenePayload {
 }
 
 export class GameScene extends Phaser.Scene {
+  public balls!: Phaser.Physics.Arcade.Group;
+
   private levelSystem!: LevelSystem;
   private level!: LevelDefinition;
   private theme!: ThemeDefinition;
   private paddle!: Paddle;
-  private balls!: Phaser.Physics.Arcade.Group;
+  private ballManager!: BallManager;
   private bricks!: Phaser.Physics.Arcade.Group;
   private powerUps!: Phaser.Physics.Arcade.Group;
   private inputSystem!: InputSystem;
@@ -84,27 +81,69 @@ export class GameScene extends Phaser.Scene {
   private settingsSystem!: SettingsSystem;
   private fxManager!: FxManager;
   private audioSystem!: AudioSystem;
-  private readonly ballsWithFx = new WeakSet<Ball>();
   private hud!: Hud;
+  private debugOverlay?: DebugOverlay;
   private lives = 3;
   private levelIndex = 0;
   private levelSource: 'campaign' | 'creative' = 'campaign';
   private editorReturn?: GameSceneData['editorReturn'];
   private ending = false;
   private respawning = false;
-  private maxBallsReached = 1;
-  private ballExpansionBlocked = false;
-  private activeBallLimit = INITIAL_ACTIVE_BALL_LIMIT;
-  private ballLimitStressFrames = 0;
-  private pendingBallBonusClones = 0;
   private explosionsTriggered = 0;
   private readonly activeTimers = new Map<PowerUpType, Phaser.Time.TimerEvent>();
-  private readonly ballNearWallFrames = new WeakMap<Ball, number>();
   private readonly ballPhysicsSnapshots = new WeakMap<Ball, BallPhysicsSnapshot>();
   private readonly lastIndestructibleWallBounceTimes = new WeakMap<Ball, number>();
 
   public constructor() {
     super('GameScene');
+  }
+
+  public get activeBallLimit(): number {
+    return this.ballManager.getActiveLimit();
+  }
+
+  public set activeBallLimit(limit: number) {
+    this.ballManager.setActiveLimit(limit);
+  }
+
+  public get pendingBallBonusClones(): number {
+    return this.ballManager.getPendingClones();
+  }
+
+  public set pendingBallBonusClones(count: number) {
+    this.ballManager.setPendingClones(count);
+  }
+
+  public get ballExpansionBlocked(): boolean {
+    return this.ballManager.getExpansionBlocked();
+  }
+
+  public set ballExpansionBlocked(blocked: boolean) {
+    this.ballManager.setExpansionBlocked(blocked);
+  }
+
+  public get ballLimitStressFrames(): number {
+    return this.ballManager.getStressFrames();
+  }
+
+  public set ballLimitStressFrames(frames: number) {
+    this.ballManager.setStressFrames(frames);
+  }
+
+  public createBall(attached: boolean): Ball | null {
+    return this.ballManager.createBall(attached);
+  }
+
+  public launchAttachedBalls(): void {
+    this.ballManager.launchAttachedBalls();
+  }
+
+  public flushPendingBallBonusClones(): void {
+    this.ballManager.flushPendingClones();
+  }
+
+  public updateAdaptiveBallLimit(deltaMs: number): void {
+    this.ballManager.updateAdaptiveLimit(deltaMs);
   }
 
   public create(data: GameSceneData): void {
@@ -136,22 +175,12 @@ export class GameScene extends Phaser.Scene {
     this.lives = this.level.difficulty.initialLives;
     this.ending = false;
     this.respawning = false;
-    this.maxBallsReached = 1;
-    this.ballExpansionBlocked = false;
-    this.activeBallLimit = INITIAL_ACTIVE_BALL_LIMIT;
-    this.ballLimitStressFrames = 0;
-    this.pendingBallBonusClones = 0;
     this.explosionsTriggered = 0;
+    this.debugOverlay = undefined;
     this.activeTimers.clear();
 
     new PlayfieldRenderer(this, this.theme).render();
 
-    this.balls = this.physics.add.group({
-      classType: Ball,
-      maxSize: MAX_ACTIVE_BALLS,
-      allowGravity: false,
-      runChildUpdate: false
-    });
     this.bricks = this.physics.add.group({ allowGravity: false, immovable: true });
     this.powerUps = this.physics.add.group({
       classType: PowerUp,
@@ -162,11 +191,25 @@ export class GameScene extends Phaser.Scene {
 
     this.paddle = new Paddle(this);
     this.fxManager.applyEntityFx(this.paddle, 'paddle', this.theme);
+    this.ballManager = new BallManager(this, this.paddle, {
+      ballSpeed: this.level.difficulty.ballSpeed,
+      maxBallSpeed: this.level.difficulty.maxBallSpeed,
+      applyBallFx: (ball) => this.applyBallFx(ball),
+      onBallActivated: (ball) => this.rememberBallPhysics(ball),
+      onAttachedBallCreated: (ball) =>
+        this.fxManager.playHit(ball.x, ball.y, this.theme.primary, 8),
+      onAttachedBallLaunched: (ball) =>
+        this.fxManager.playHit(ball.x, ball.y, this.theme.secondary, 10)
+    });
+    this.balls = this.ballManager.group;
     this.inputSystem = new InputSystem(this);
     this.createBricks();
-    this.createBall(true);
+    this.ballManager.createAttachedBall();
 
     this.hud = new Hud(this, this.buildHudState(), this.theme);
+    if (isDebugOverlayEnabled()) {
+      this.debugOverlay = new DebugOverlay(this);
+    }
     this.registerCollisions();
     this.registerSceneInput();
 
@@ -179,15 +222,17 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.inputSystem.updatePaddle(this.paddle, delta);
-    this.updateBalls();
+    if (this.ballManager.update(this.respawning)) {
+      this.loseLife();
+    }
     this.updatePowerUps();
-    this.updateAdaptiveBallLimit(delta);
+    this.ballManager.updateAdaptiveLimit(delta);
     this.fxManager.tickPerformance(delta);
-    this.flushPendingBallBonusClones();
+    this.ballManager.flushPendingClones();
     this.comboSystem.update(delta);
-    this.maxBallsReached = Math.max(this.maxBallsReached, this.getBalls().length);
 
     this.hud.update(this.buildHudState());
+    this.debugOverlay?.update(delta, this.buildDebugOverlaySnapshot());
   }
 
   private createBricks(): void {
@@ -333,60 +378,12 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private createBall(attached: boolean): Ball | null {
-    const startX = this.paddle.x;
-    const startY = this.paddle.y - 56;
-    const ball = this.acquireBall(startX, startY);
-    if (!ball) {
-      return null;
-    }
-
-    ball.reset(startX, startY);
-    this.applyBallFxOnce(ball);
-
-    if (attached) {
-      ball.attachToPaddle(this.paddle);
-    }
-
-    this.rememberBallPhysics(ball);
-    this.fxManager.playHit(ball.x, ball.y, this.theme.primary, 8);
-    return ball;
-  }
-
-  private acquireBall(x: number, y: number): Ball | null {
-    const reusable = this.balls
-      .getChildren()
-      .find((child): child is Ball => child instanceof Ball && !child.active);
-
-    if (reusable) {
-      return reusable;
-    }
-
-    const pooled = this.balls.get(x, y) as Ball | null;
-
-    if (pooled) {
-      return pooled;
-    }
-
-    if (this.balls.getChildren().length >= MAX_ACTIVE_BALLS) {
-      return null;
-    }
-
-    const ball = new Ball(this, x, y);
-    this.balls.add(ball);
-    return ball;
-  }
-
-  private applyBallFxOnce(ball: Ball): void {
-    if (this.ballsWithFx.has(ball)) {
-      return;
-    }
+  private applyBallFx(ball: Ball): void {
     this.fxManager.applyEntityFx(ball, 'ball', this.theme);
-    this.ballsWithFx.add(ball);
   }
 
   private registerCollisions(): void {
-    this.collisionSystem.register(this, this.paddle, this.balls, this.bricks, this.powerUps, {
+    this.collisionSystem.register(this, this.paddle, this.ballManager.group, this.bricks, this.powerUps, {
       onBallPaddle: (ball) => this.handleBallPaddle(ball),
       onBallBrick: (ball, brick) => this.handleBallBrick(ball, brick),
       onPowerUpPaddle: (powerUp) => this.handlePowerUpPaddle(powerUp)
@@ -403,6 +400,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private shutdownSystems(): void {
+    this.debugOverlay?.destroy();
+    this.debugOverlay = undefined;
     this.inputSystem.destroy();
     this.collisionSystem.destroy();
     this.input.off('pointerdown', this.unlockAndLaunch, this);
@@ -416,63 +415,6 @@ export class GameScene extends Phaser.Scene {
   private unlockAndLaunch(): void {
     this.audioSystem.unlock();
     this.launchAttachedBalls();
-  }
-
-  private launchAttachedBalls(): void {
-    this.getBalls()
-      .filter((ball) => ball.isAttached)
-      .forEach((ball) => {
-        ball.launch(this.level.difficulty.ballSpeed);
-        this.fxManager.playHit(ball.x, ball.y, this.theme.secondary, 10);
-      });
-  }
-
-  private detectWallTunneling(ball: Ball): void {
-    if (ball.x < PLAYFIELD_LEFT - BALL_RADIUS || ball.x > PLAYFIELD_RIGHT + BALL_RADIUS) {
-      this.blockBallExpansion('ball tunneled outside playfield');
-      return;
-    }
-
-    this.detectStuckNearWall(ball);
-  }
-
-  private detectStuckNearWall(ball: Ball): void {
-    const nearLeftWall = ball.x <= PLAYFIELD_LEFT + BALL_RADIUS * 3;
-    const nearRightWall = ball.x >= PLAYFIELD_RIGHT - BALL_RADIUS * 3;
-
-    if (!nearLeftWall && !nearRightWall) {
-      this.ballNearWallFrames.delete(ball);
-      return;
-    }
-
-    const frames = (this.ballNearWallFrames.get(ball) ?? 0) + 1;
-    this.ballNearWallFrames.set(ball, frames);
-
-    if (frames >= 90) {
-      this.blockBallExpansion('ball trapped near wall');
-    }
-  }
-
-  private updateBalls(): void {
-    this.getBalls().forEach((ball) => {
-      if (ball.isAttached) {
-        ball.attachToPaddle(this.paddle);
-        this.rememberBallPhysics(ball);
-        return;
-      }
-
-      ball.maintainSpeed(BALL_MIN_SPEED, this.level.difficulty.maxBallSpeed);
-      this.detectWallTunneling(ball);
-      this.rememberBallPhysics(ball);
-
-      if (ball.isOutOfPlay()) {
-        ball.disable();
-      }
-    });
-
-    if (this.getBalls().length === 0 && !this.respawning) {
-      this.loseLife();
-    }
   }
 
   private updatePowerUps(): void {
@@ -813,181 +755,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private applyMultiBall(sourceBall?: Ball): void {
-    const source = this.getPowerUpSourceBall(sourceBall);
+    const source = this.ballManager.getPowerUpSourceBall(sourceBall);
 
     if (source) {
-      this.duplicateBallsOrQueue(source, [-0.34, 0.34]);
+      this.ballManager.duplicateBallsOrQueue(source, [-0.34, 0.34]);
     }
 
     this.fxManager.cameraImpact(0.003, 100);
   }
 
   private applySplitBall(sourceBall?: Ball): void {
-    const source = this.getPowerUpSourceBall(sourceBall);
+    const source = this.ballManager.getPowerUpSourceBall(sourceBall);
 
     if (source) {
-      this.duplicateBallsOrQueue(source, [0.7]);
+      this.ballManager.duplicateBallsOrQueue(source, [0.7]);
     }
 
     this.fxManager.cameraImpact(0.002, 80);
-  }
-
-  private getPowerUpSourceBall(sourceBall?: Ball): Ball | null {
-    if (sourceBall && sourceBall.active && !sourceBall.isAttached) {
-      return sourceBall;
-    }
-
-    const launchedBall = this.getBalls().find((ball) => !ball.isAttached);
-
-    if (launchedBall) {
-      return launchedBall;
-    }
-
-    if (sourceBall && sourceBall.active) {
-      return sourceBall;
-    }
-
-    return this.getBalls()[0] ?? null;
-  }
-
-  private duplicateBall(source: Ball, angleOffsetRadians: number): Ball | null {
-    if (!this.canCreateMoreBalls()) {
-      return null;
-    }
-
-    const newBall = this.acquireBall(source.x, source.y);
-    if (!newBall) {
-      return null;
-    }
-
-    if (source.isAttached) {
-      newBall.configureAsLaunchedClone(source, angleOffsetRadians, this.level.difficulty.ballSpeed);
-    } else {
-      newBall.configureAsClone(source, angleOffsetRadians);
-    }
-
-    this.rememberBallPhysics(newBall);
-    this.maxBallsReached = Math.max(this.maxBallsReached, this.getBalls().length);
-    return newBall;
-  }
-
-  private duplicateBallsOrQueue(source: Ball, angleOffsetsRadians: number[]): void {
-    const reservedSlots = this.reserveBallCloneSlots(angleOffsetsRadians.length);
-
-    angleOffsetsRadians.forEach((angleOffsetRadians, index) => {
-      if (index < reservedSlots && this.duplicateBall(source, angleOffsetRadians)) {
-        return;
-      }
-
-      if (!this.isBallCloneLimitBlocked()) {
-        this.pendingBallBonusClones += 1;
-      }
-    });
-  }
-
-  private reserveBallCloneSlots(requestedSlots: number): number {
-    const ballCount = this.getBalls().length;
-
-    if (requestedSlots <= 0 || ballCount >= MAX_ACTIVE_BALLS) {
-      return 0;
-    }
-
-    const availableHardSlots = Math.min(requestedSlots, MAX_ACTIVE_BALLS - ballCount);
-    const requiredLimit = ballCount + availableHardSlots;
-    const blockedLimit = this.ballExpansionBlocked
-      ? INITIAL_ACTIVE_BALL_LIMIT
-      : this.activeBallLimit;
-
-    if (requiredLimit <= blockedLimit) {
-      return availableHardSlots;
-    }
-
-    if (this.ballExpansionBlocked) {
-      return Math.max(0, Math.min(availableHardSlots, INITIAL_ACTIVE_BALL_LIMIT - ballCount));
-    }
-
-    this.activeBallLimit = Math.min(
-      MAX_ACTIVE_BALLS,
-      Math.max(this.activeBallLimit + BALL_LIMIT_GROWTH_STEP, requiredLimit)
-    );
-
-    return Math.max(0, Math.min(availableHardSlots, this.activeBallLimit - ballCount));
-  }
-
-  private flushPendingBallBonusClones(): void {
-    if (this.pendingBallBonusClones <= 0 || this.isBallCloneLimitBlocked()) {
-      return;
-    }
-
-    const source = this.getPowerUpSourceBall();
-
-    if (!source) {
-      return;
-    }
-
-    const offsets = [0.34, -0.34, 0.7, -0.7, 0.18, -0.18];
-
-    while (this.pendingBallBonusClones > 0) {
-      const offset = offsets[this.pendingBallBonusClones % offsets.length] ?? 0.34;
-      if (!this.duplicateBall(source, offset)) {
-        return;
-      }
-      this.pendingBallBonusClones -= 1;
-    }
-  }
-
-  private canCreateMoreBalls(): boolean {
-    const ballCount = this.getBalls().length;
-
-    if (this.ballExpansionBlocked && ballCount >= INITIAL_ACTIVE_BALL_LIMIT) {
-      return false;
-    }
-
-    if (ballCount >= MAX_ACTIVE_BALLS) {
-      return false;
-    }
-
-    if (ballCount < this.activeBallLimit) {
-      return true;
-    }
-
-    this.activeBallLimit = Math.min(
-      MAX_ACTIVE_BALLS,
-      this.activeBallLimit + BALL_LIMIT_GROWTH_STEP
-    );
-    return ballCount < this.activeBallLimit;
-  }
-
-  private isBallCloneLimitBlocked(): boolean {
-    return this.ballExpansionBlocked && this.getBalls().length >= INITIAL_ACTIVE_BALL_LIMIT;
-  }
-
-  private updateAdaptiveBallLimit(deltaMs: number): void {
-    if (this.ballExpansionBlocked || this.getBalls().length < INITIAL_ACTIVE_BALL_LIMIT) {
-      this.ballLimitStressFrames = 0;
-      return;
-    }
-
-    if (deltaMs < BALL_LIMIT_STRESS_FRAME_MS) {
-      this.ballLimitStressFrames = 0;
-      return;
-    }
-
-    this.ballLimitStressFrames += 1;
-
-    if (this.ballLimitStressFrames >= BALL_LIMIT_STRESS_FRAMES) {
-      this.blockBallExpansion(
-        `frame time stayed above ${BALL_LIMIT_STRESS_FRAME_MS}ms near ${this.getBalls().length} balls`
-      );
-    }
-  }
-
-  private blockBallExpansion(reason: string): void {
-    void reason;
-    if (this.ballExpansionBlocked) {
-      return;
-    }
-    this.ballExpansionBlocked = true;
   }
 
   private setTimedEffect(
@@ -1025,7 +809,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (!this.ending) {
-        this.createBall(true);
+        this.ballManager.createAttachedBall();
       }
       this.respawning = false;
     });
@@ -1129,6 +913,7 @@ export class GameScene extends Phaser.Scene {
 
   private buildHudState() {
     const combo = this.comboSystem.snapshot();
+    const ballStats = this.ballManager.getStats();
     return {
       levelName: this.level.name,
       objectiveLabel: this.getObjectiveHudLabel(),
@@ -1136,9 +921,29 @@ export class GameScene extends Phaser.Scene {
       lives: this.lives,
       combo: combo.streak,
       bestCombo: combo.bestStreak,
-      balls: this.getBalls().length,
+      balls: ballStats.activeCount,
       waitingToLaunch: this.getBalls().some((ball) => ball.isAttached),
       effectLabel: this.getActiveEffectLabel()
+    };
+  }
+
+  private buildDebugOverlaySnapshot(): DebugOverlaySnapshot {
+    const ballStats = this.ballManager.getStats();
+    const performance = this.fxManager.getPerformanceSnapshot();
+
+    return {
+      fps: performance.fps,
+      averageDeltaMs: performance.averageDeltaMs,
+      fxQuality: this.fxManager.getQuality(),
+      fxDegraded: this.fxManager.isDegraded(),
+      activeBalls: ballStats.activeCount,
+      activeBallLimit: ballStats.activeLimit,
+      pendingClones: ballStats.pendingClones,
+      remainingBricks: this.getBricks().filter((brick) => brick.isBreakable).length,
+      activePowerUps: this.getPowerUps().length,
+      activeEffects: this.getActiveEffectLabel(),
+      levelIndex: this.levelIndex,
+      levelName: this.level.name
     };
   }
 
@@ -1157,7 +962,10 @@ export class GameScene extends Phaser.Scene {
 
     switch (objective.type) {
       case 'reachBalls':
-        return `${objective.label} ${Math.min(this.maxBallsReached, objective.target)}/${objective.target}`;
+        return `${objective.label} ${Math.min(
+          this.ballManager.getStats().maxBallsReached,
+          objective.target
+        )}/${objective.target}`;
       case 'triggerExplosions':
         return `${objective.label} ${Math.min(this.explosionsTriggered, objective.target)}/${objective.target}`;
       case 'clearWithLives':
@@ -1169,9 +977,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getBalls(): Ball[] {
-    return this.balls
-      .getChildren()
-      .filter((child): child is Ball => child instanceof Ball && child.active);
+    return this.ballManager.getActiveBalls();
   }
 
   private getBricks(): Brick[] {

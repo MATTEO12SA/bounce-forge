@@ -3,7 +3,7 @@ import http from 'node:http';
 import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AdminAuth } from './adminAuth.mjs';
-import { CampaignOverrideStore } from './campaignOverrideStore.mjs';
+import { CampaignOverrideStore, ValidationError } from './campaignOverrideStore.mjs';
 import { loadDotEnv } from './env.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -77,6 +77,14 @@ async function readJsonBody(req) {
   } catch {
     throw new BadRequestError('Malformed JSON body.');
   }
+}
+
+function assertObjectBody(body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new BadRequestError('Invalid request body.');
+  }
+
+  return body;
 }
 
 function getClientKey(req) {
@@ -233,7 +241,7 @@ export function createAdminServer({
           return;
         }
 
-        const body = await readJsonBody(req);
+        const body = assertObjectBody(await readJsonBody(req));
 
         if (typeof body.password !== 'string' || body.password.length > MAX_PASSWORD_LENGTH) {
           registerLoginFailure(loginAttempts, clientKey);
@@ -290,7 +298,7 @@ export function createAdminServer({
           return;
         }
 
-        const body = await readJsonBody(req);
+        const body = assertObjectBody(await readJsonBody(req));
 
         if (body.name !== undefined && body.name !== null) {
           if (typeof body.name !== 'string' || body.name.length > MAX_LEVEL_NAME_LENGTH) {
@@ -331,7 +339,7 @@ export function createAdminServer({
 
       serveStatic(req, res, distDir);
     } catch (error) {
-      if (error instanceof BadRequestError) {
+      if (error instanceof BadRequestError || error instanceof ValidationError) {
         sendJson(res, 400, { message: error.message });
         return;
       }

@@ -11,6 +11,10 @@ export const EDITOR_GRID_ROWS: number;
 export function normalizeRows(rows: unknown): string[];
 export function validateRows(rows: unknown): { valid: boolean; message: string };
 
+export class ValidationError extends Error {
+  public constructor(message: string);
+}
+
 export class CampaignOverrideStore {
   public constructor(filePath: string);
   public list(): Promise<StoredCampaignOverride[]>;

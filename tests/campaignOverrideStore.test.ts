@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 // prettier-ignore
 // @ts-expect-error Server modules are runtime .mjs files exercised by Vitest.
-import { CampaignOverrideStore, EDITOR_GRID_COLS, normalizeRows, validateRows } from '../server/campaignOverrideStore.mjs';
+import { CampaignOverrideStore, EDITOR_GRID_COLS, ValidationError, normalizeRows, validateRows } from '../server/campaignOverrideStore.mjs';
 
 let tempDir: string | null = null;
 
@@ -60,5 +60,15 @@ describe('campaign override store', () => {
         name: 'Second Level'
       }
     ]);
+  });
+
+  it('throws validation errors for invalid writes', async () => {
+    const store = await makeStore();
+    const rows = makeRows();
+    rows[0] = `Z${'.'.repeat(EDITOR_GRID_COLS - 1)}`;
+
+    await expect(store.save(24, makeRows(), 'Missing')).rejects.toBeInstanceOf(ValidationError);
+    await expect(store.save(0, rows, 'Broken')).rejects.toThrow('Unknown block');
+    await expect(store.remove(24)).rejects.toBeInstanceOf(ValidationError);
   });
 });

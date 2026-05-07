@@ -38,6 +38,17 @@ function makeRows(): string[] {
   return rows;
 }
 
+async function loginAdmin(baseUrl: string): Promise<string> {
+  const login = await fetch(`${baseUrl}/api/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: 'test-secret-password' })
+  });
+
+  expect(login.status).toBe(200);
+  return login.headers.get('set-cookie') ?? '';
+}
+
 afterEach(async () => {
   if (tempDir) {
     await rm(tempDir, { recursive: true, force: true });
@@ -159,6 +170,85 @@ describe('admin server API', () => {
       });
 
       expect(response.status).toBe(403);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('returns 400 for invalid campaign grids without exposing stack traces', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const cookie = await loginAdmin(baseUrl);
+      const rows = makeRows();
+      rows[0] = `Z${'.'.repeat(EDITOR_GRID_COLS - 1)}`;
+
+      const response = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie
+        },
+        body: JSON.stringify({ name: 'Broken Level', rows })
+      });
+      const payload = (await response.json()) as { message: string };
+
+      expect(response.status).toBe(400);
+      expect(payload.message).toContain('Unknown block');
+      expect(payload.message).not.toContain('Error:');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('returns 400 for out-of-range campaign levels', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const cookie = await loginAdmin(baseUrl);
+      const response = await fetch(`${baseUrl}/api/admin/campaign-levels/24`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie
+        },
+        body: JSON.stringify({ name: 'Level 25', rows: makeRows() })
+      });
+
+      await expect(response.json()).resolves.toMatchObject({ message: 'Unknown campaign level.' });
+      expect(response.status).toBe(400);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('returns 400 for invalid admin campaign payloads and names', async () => {
+    const { server, baseUrl } = await createTestServer();
+
+    try {
+      const cookie = await loginAdmin(baseUrl);
+      const invalidPayload = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie
+        },
+        body: JSON.stringify(null)
+      });
+
+      expect(invalidPayload.status).toBe(400);
+
+      const invalidName = await fetch(`${baseUrl}/api/admin/campaign-levels/0`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          cookie
+        },
+        body: JSON.stringify({ name: ['Bad'], rows: makeRows() })
+      });
+
+      await expect(invalidName.json()).resolves.toMatchObject({ message: 'Invalid level name.' });
+      expect(invalidName.status).toBe(400);
     } finally {
       server.close();
     }

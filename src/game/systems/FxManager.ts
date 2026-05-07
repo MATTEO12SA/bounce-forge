@@ -23,6 +23,12 @@ export interface FxQualityProfile {
   brickGlow: boolean;
 }
 
+export interface FxPerformanceSnapshot {
+  averageDeltaMs: number;
+  fps: number;
+  sampleCount: number;
+}
+
 const QUALITY_PROFILES: Record<FxQuality, FxQualityProfile> = {
   low: {
     postFx: false,
@@ -212,6 +218,24 @@ export class FxManager {
 
   public isDegraded(): boolean {
     return this.degraded;
+  }
+
+  public getPerformanceSnapshot(): FxPerformanceSnapshot {
+    if (this.fps.samples.length === 0) {
+      return {
+        averageDeltaMs: 0,
+        fps: 0,
+        sampleCount: 0
+      };
+    }
+
+    const averageDeltaMs = this.fps.windowMs / this.fps.samples.length;
+
+    return {
+      averageDeltaMs,
+      fps: averageDeltaMs > 0 ? 1000 / averageDeltaMs : 0,
+      sampleCount: this.fps.samples.length
+    };
   }
 
   private degradeQuality(): void {

@@ -1,12 +1,28 @@
 # Bounce Forge
 
-Bounce Forge est un brick breaker navigateur cree avec TypeScript, Vite et Phaser 4.
+> Brick breaker arcade en TypeScript + Phaser 4, centre sur le multi-ball massif et un editeur de niveaux integre.
 
-Cree par **Matteo_plmr**.
+[![CI](https://github.com/MATTEO12SA/bounce-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/MATTEO12SA/bounce-forge/actions/workflows/ci.yml)
+[![Browser Diagnostics](https://github.com/MATTEO12SA/bounce-forge/actions/workflows/browser-diagnostics.yml/badge.svg)](https://github.com/MATTEO12SA/bounce-forge/actions/workflows/browser-diagnostics.yml)
+[![Play Demo](https://img.shields.io/badge/Play-Demo-yellow)](https://matteo12sa.github.io/bounce-forge/)
 
-Le jeu est centre sur la multiplication de balles, une physique de murs propre, un style visuel jaune/forge lisible, et une campagne qui alterne niveaux ouverts, couloirs, chaines d'explosions et fins de niveau avec beaucoup de balles.
+![Gameplay](docs/screenshots/gameplay.png)
+> *Screenshot a venir : depose `gameplay.png` dans [docs/screenshots/](docs/screenshots/).*
+
+## Features
+
+- **Campagne 24 niveaux** organisee en 4 chapitres avec medailles secondaires.
+- **Multi-ball massif** jusqu'a 96 balles, avec limite adaptative qui suit le framerate.
+- **Editeur creatif local** + mode admin protege par mot de passe pour publier des niveaux officiels.
+- **Sauvegardes localStorage** v1 a v5 avec migration automatique.
+- **FX adaptatifs** qui degradent automatiquement la qualite si le framerate chute.
+- **Tests unitaires Vitest** + diagnostics navigateur (campagne, power-ups, murs, UI).
+
+Cree par **Matteo_plmr**. Style visuel jaune/forge, physique de murs propre, alternance de niveaux ouverts, couloirs, chaines d'explosions et fins de niveau avec beaucoup de balles.
 
 ## Installation
+
+Node.js 24 est recommande pour le developpement local. La CI verifie aussi Node 20 et Node 22.
 
 ```bash
 npm install

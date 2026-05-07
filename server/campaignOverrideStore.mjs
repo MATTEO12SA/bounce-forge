@@ -1,44 +1,19 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import {
+  EDITOR_GRID_COLS,
+  EDITOR_GRID_ROWS,
+  normalizeRows,
+  validateRows
+} from '../shared/editorGridRules.mjs';
 
-export const EDITOR_GRID_COLS = 36;
-export const EDITOR_GRID_ROWS = 58;
-const ALLOWED_CELLS = new Set(['.', '1', '2', '3', 'E', 'B', 'S', 'X']);
-const BREAKABLE_CELLS = new Set(['1', '2', '3', 'E', 'B', 'S']);
+export { EDITOR_GRID_COLS, EDITOR_GRID_ROWS, normalizeRows, validateRows };
 
-export function normalizeRows(rows) {
-  return Array.from({ length: EDITOR_GRID_ROWS }, (_, row) => {
-    const source = typeof rows?.[row] === 'string' ? rows[row] : '';
-    return source.padEnd(EDITOR_GRID_COLS, '.').slice(0, EDITOR_GRID_COLS);
-  });
-}
-
-export function validateRows(rows) {
-  if (!Array.isArray(rows) || rows.length !== EDITOR_GRID_ROWS) {
-    return { valid: false, message: `Grid must have ${EDITOR_GRID_ROWS} rows.` };
+export class ValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ValidationError';
   }
-
-  let hasBreakable = false;
-
-  for (let row = 0; row < rows.length; row += 1) {
-    const value = rows[row];
-
-    if (typeof value !== 'string' || value.length !== EDITOR_GRID_COLS) {
-      return { valid: false, message: `Row ${row + 1} must have ${EDITOR_GRID_COLS} columns.` };
-    }
-
-    for (const cell of value) {
-      if (!ALLOWED_CELLS.has(cell)) {
-        return { valid: false, message: `Unknown block "${cell}" in row ${row + 1}.` };
-      }
-
-      hasBreakable ||= BREAKABLE_CELLS.has(cell);
-    }
-  }
-
-  return hasBreakable
-    ? { valid: true, message: 'OK' }
-    : { valid: false, message: 'Add at least one breakable block.' };
 }
 
 function sanitizeOverride(value) {
@@ -78,15 +53,24 @@ export class CampaignOverrideStore {
 
   async save(levelIndex, rows, name) {
     const safeIndex = Math.floor(Number(levelIndex));
+
+    if (!Number.isFinite(safeIndex) || safeIndex < 0 || safeIndex >= 24) {
+      throw new ValidationError('Unknown campaign level.');
+    }
+
+    if (!Array.isArray(rows)) {
+      throw new ValidationError(`Grid must have ${EDITOR_GRID_ROWS} rows.`);
+    }
+
+    if (name !== undefined && name !== null && typeof name !== 'string') {
+      throw new ValidationError('Invalid level name.');
+    }
+
     const normalizedRows = normalizeRows(rows);
     const validation = validateRows(normalizedRows);
 
-    if (!Number.isFinite(safeIndex) || safeIndex < 0 || safeIndex >= 24) {
-      throw new Error('Unknown campaign level.');
-    }
-
     if (!validation.valid) {
-      throw new Error(validation.message);
+      throw new ValidationError(validation.message);
     }
 
     const overrides = await this.list();
@@ -107,7 +91,7 @@ export class CampaignOverrideStore {
     const safeIndex = Math.floor(Number(levelIndex));
 
     if (!Number.isFinite(safeIndex) || safeIndex < 0 || safeIndex >= 24) {
-      throw new Error('Unknown campaign level.');
+      throw new ValidationError('Unknown campaign level.');
     }
 
     const overrides = await this.list();

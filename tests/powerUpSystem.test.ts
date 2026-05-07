@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { PowerUpSystem } from '../src/game/systems/PowerUpSystem';
+import {
+  DEFAULT_POWER_UP_DROP_TABLE,
+  FUTURE_POWER_UP_DEFINITIONS,
+  PowerUpSystem
+} from '../src/game/systems/PowerUpSystem';
 import type { RandomSource } from '../src/game/utils/random';
 
 class FixedRandom implements RandomSource {
@@ -27,5 +31,42 @@ describe('power up system', () => {
     const system = new PowerUpSystem(new FixedRandom([0.1, 0.902]));
 
     expect(system.roll(1)).toBe('stickyPaddle');
+  });
+
+  it('keeps future power-ups documented but out of the active drop table', () => {
+    const activeTypes = DEFAULT_POWER_UP_DROP_TABLE.map((entry) => entry.type);
+
+    expect(Object.keys(FUTURE_POWER_UP_DEFINITIONS)).toContain('pierceBall');
+    expect(activeTypes).not.toContain('pierceBall');
+    expect(activeTypes).not.toContain('laserPaddle');
+  });
+
+  it('keeps all six future power-ups defined and inactive', () => {
+    const futureTypes = [
+      'pierceBall',
+      'fireBall',
+      'magnetPaddle',
+      'slowMotion',
+      'shieldBottom',
+      'laserPaddle'
+    ] as const;
+    const activeTypes = DEFAULT_POWER_UP_DROP_TABLE.map((entry) => entry.type);
+
+    for (const type of futureTypes) {
+      const definition = FUTURE_POWER_UP_DEFINITIONS[type];
+      expect(definition).toBeDefined();
+      expect(definition.type).toBe(type);
+      expect(definition.defaultWeight).toBeGreaterThan(0);
+      expect(definition.description.length).toBeGreaterThan(0);
+      expect(activeTypes).not.toContain(type);
+    }
+  });
+
+  it('accepts an injected weighted drop table', () => {
+    const system = new PowerUpSystem(new FixedRandom([0.1, 0]), [
+      { type: 'extraLife', weight: 1 }
+    ]);
+
+    expect(system.roll(1)).toBe('extraLife');
   });
 });
