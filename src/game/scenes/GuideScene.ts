@@ -1,18 +1,30 @@
 import Phaser from 'phaser';
+import { TOKENS } from '../config/designTokens';
 import { getTheme } from '../config/themeConfig';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
+import { ScrollPanel } from '../ui/ScrollPanel';
+import { TabBar } from '../ui/TabBar';
+import { drawRoundedRect } from '../ui/roundedShapes';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { startSceneWithTransition } from '../ui/uiFeedback';
 import { GAME_TITLE, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
+
+type GuideTab = 'basics' | 'powerups' | 'editor';
+
+interface GuideSceneData {
+  tab?: GuideTab;
+}
 
 export class GuideScene extends Phaser.Scene {
   public constructor() {
     super('GuideScene');
   }
 
-  public create(): void {
+  public create(data: GuideSceneData = {}): void {
     const save = new SaveSystem();
     const theme = getTheme(save.snapshot().preferences.themeId);
+    const selectedTab: GuideTab = data.tab ?? 'basics';
 
     drawScreenBackground(this, theme, { panel: false, sideRails: true });
     drawPanel(this, WORLD_WIDTH / 2, 940, 824, 1390, theme, { alpha: 0.76 });
@@ -36,8 +48,23 @@ export class GuideScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    new TabBar<GuideTab>(
+      this,
+      WORLD_WIDTH / 2,
+      248,
+      [
+        { label: 'BASICS', value: 'basics' },
+        { label: 'POWER-UPS', value: 'powerups' },
+        { label: 'EDITOR', value: 'editor' }
+      ],
+      selectedTab,
+      (tab) => this.scene.restart({ tab }),
+      { theme, buttonWidth: 216 }
+    );
+
     const sections = [
       {
+        tab: 'basics',
         title: 'CONTROLS',
         lines: [
           'Mouse / touch / arrows / A-D',
@@ -46,6 +73,7 @@ export class GuideScene extends Phaser.Scene {
         ]
       },
       {
+        tab: 'powerups',
         title: 'POWER-UPS',
         lines: [
           'x3 and x2 create extra balls',
@@ -54,6 +82,7 @@ export class GuideScene extends Phaser.Scene {
         ]
       },
       {
+        tab: 'basics',
         title: 'OBJECTIVES',
         lines: [
           'Clear all breakable bricks',
@@ -62,6 +91,7 @@ export class GuideScene extends Phaser.Scene {
         ]
       },
       {
+        tab: 'editor',
         title: 'EDITOR',
         lines: [
           'Creative maps stay local',
@@ -69,37 +99,41 @@ export class GuideScene extends Phaser.Scene {
           'Import/export codes share levels'
         ]
       }
-    ];
+    ].filter((section) => section.tab === selectedTab);
 
-    sections.forEach((section, index) => {
-      const x = WORLD_WIDTH / 2;
-      const y = 338 + index * 292;
-
-      this.add
-        .rectangle(x, y + 156, 690, 2, theme.borderDim, 0.7)
-        .setOrigin(0.5)
-        .setDepth(1);
-      this.add
-        .text(x, y, section.title, {
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '34px',
-          fontStyle: '900',
-          color: `#${theme.primary.toString(16).padStart(6, '0')}`,
-          align: 'center'
-        })
-        .setOrigin(0.5);
-
-      this.add
-        .text(x, y + 54, section.lines.join('\n'), {
-          fontFamily: 'Arial, sans-serif',
-          fontSize: '30px',
-          fontStyle: '800',
-          color: theme.text,
-          align: 'center',
-          fixedWidth: 704,
-          lineSpacing: 8
-        })
-        .setOrigin(0.5, 0);
+    new ScrollPanel(this, { x: WORLD_WIDTH / 2, y: 890, width: 718, height: 980 }, sections, {
+      itemHeight: 256,
+      gap: 24,
+      theme,
+      renderItem: (scene, section) => {
+        const container = scene.add.container(0, 0);
+        const card = drawRoundedRect(scene, 0, 0, 640, 232, TOKENS.radius.md, {
+          fill: { color: theme.surface, alpha: 0.55 },
+          stroke: { color: theme.borderDim, width: 2, alpha: 0.7 }
+        });
+        const title = scene.add
+          .text(0, -76, section.title, {
+            fontFamily: TOKENS.font.family,
+            fontSize: '34px',
+            fontStyle: '900',
+            color: `#${theme.accent.toString(16).padStart(6, '0')}`,
+            align: 'center'
+          })
+          .setOrigin(0.5);
+        const body = scene.add
+          .text(0, -28, section.lines.join('\n'), {
+            fontFamily: TOKENS.font.family,
+            fontSize: '28px',
+            fontStyle: '700',
+            color: theme.text,
+            align: 'center',
+            fixedWidth: 600,
+            lineSpacing: 10
+          })
+          .setOrigin(0.5, 0);
+        container.add([card, title, body]);
+        return container;
+      }
     });
 
     new Button(
@@ -109,8 +143,8 @@ export class GuideScene extends Phaser.Scene {
       540,
       96,
       'BACK',
-      () => this.scene.start('MainMenuScene'),
-      { variant: 'ghost' }
+      () => startSceneWithTransition(this, 'MainMenuScene'),
+      { variant: 'ghost', icon: 'arrow-left', theme }
     );
 
     addCreatorCredit(this, theme);

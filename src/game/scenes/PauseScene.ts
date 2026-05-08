@@ -49,10 +49,19 @@ export class PauseScene extends Phaser.Scene {
       .setDepth(DEPTHS.overlay + 2)
       .setShadow(0, 4, '#000814', 8, false, true);
 
-    new Button(this, WORLD_WIDTH / 2, 640, 620, 104, 'RESUME', () => {
-      this.scene.resume('GameScene');
-      this.scene.stop();
-    }).setDepth(DEPTHS.overlay + 2);
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      640,
+      620,
+      104,
+      'RESUME',
+      () => {
+        this.scene.resume('GameScene');
+        this.scene.stop();
+      },
+      { icon: 'player-play' }
+    ).setDepth(DEPTHS.overlay + 2);
 
     new Button(
       this,
@@ -69,7 +78,7 @@ export class PauseScene extends Phaser.Scene {
           editorReturn: this.editorReturn
         });
       },
-      { variant: 'secondary' }
+      { variant: 'secondary', icon: 'rotate-clockwise' }
     ).setDepth(DEPTHS.overlay + 2);
 
     new Button(
@@ -80,10 +89,16 @@ export class PauseScene extends Phaser.Scene {
       104,
       'OPTIONS',
       () => {
-        this.scene.stop('GameScene');
-        this.scene.start('OptionsScene', { returnTo: 'MainMenuScene' });
+        this.scene.start('OptionsScene', {
+          returnTo: 'PauseScene',
+          pauseData: {
+            levelIndex: this.levelIndex,
+            source: this.source,
+            editorReturn: this.editorReturn
+          }
+        });
       },
-      { variant: 'ghost' }
+      { variant: 'ghost', icon: 'settings' }
     ).setDepth(DEPTHS.overlay + 2);
 
     new Button(
@@ -97,7 +112,7 @@ export class PauseScene extends Phaser.Scene {
         this.scene.stop('GameScene');
         this.scene.start('MainMenuScene');
       },
-      { variant: 'ghost' }
+      { variant: 'ghost', icon: 'home' }
     ).setDepth(DEPTHS.overlay + 2);
   }
 }

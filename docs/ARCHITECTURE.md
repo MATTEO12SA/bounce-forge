@@ -9,7 +9,7 @@ Bounce Forge separates Phaser runtime code, pure gameplay logic, local save stat
 - `game/scenes/*` owns scene lifecycle and routing for boot, preload, menu, level select, gameplay, pause, victory, game over, options, creative editor, and admin screens.
 - `game/entities/*` wraps Phaser game objects for paddle, ball, bricks, and falling power-ups. Balls and power-ups expose `reset(...)` and `disable()` so they can be recycled by Phaser Groups instead of being destroyed.
 - `game/managers/*` holds focused managers extracted from the main scene. `PlayfieldRenderer` owns the procedural background, side rails, and playfield border.
-- `game/ui/*` contains reusable Phaser UI primitives.
+- `game/ui/*` contains reusable Phaser UI primitives (Button, Dialog, Slider, ToggleSwitch, SegmentedControl, ScrollPanel, TabBar, Tooltip, IconButton) plus a shared `roundedShapes.RoundedRect` helper. Visual scale is centralized in `game/config/designTokens.ts` (spacing, radius, shadow, typography). `Button` accepts an optional `theme` so its variant colors can derive from `themeConfig`.
 - Phaser runs on the stable Phaser 4.1.0 release. Bounce Forge does not register custom render nodes, pipelines, shaders, or mandatory external assets in the migration baseline.
 
 ## Gameplay Systems
@@ -25,6 +25,7 @@ Bounce Forge separates Phaser runtime code, pure gameplay logic, local save stat
 - `SettingsSystem` is a thin facade over `SaveSystem.preferences` that exposes effective volumes, FX quality, fullscreen state, and applies fullscreen requests to the Phaser ScaleManager.
 - `FxManager` centralizes camera shake, flash, fade, combo zoom, and FPS auto-degrade. It also offers an `applyEntityFx` hook for future per-object postFX, currently a no-op so shape primitives stay cheap.
 - `AudioSystem` generates short procedural Web Audio effects after user input. It respects the per-session volume from `SettingsSystem` and detunes rapid consecutive hits to avoid forge fatigue.
+- `audioRegistry` is a tiny pub/sub helper that lets `OptionsScene` push live volume and sound-enabled changes into the active `AudioSystem` while `GameScene` is paused under a settings dialog. `GameScene` registers its `AudioSystem` on create and unregisters on shutdown.
 - `ParticleSystem` exposes three reusable Phaser native ParticleEmitters (hit, break, explosion) over procedural textures generated in `BootScene`. Burst counts are scaled by `FxManager` quality.
 
 ## Managers

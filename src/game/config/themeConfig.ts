@@ -37,7 +37,7 @@ export const THEMES: ThemeDefinition[] = [
     backgroundBottom: 0x050505,
     primary: 0xffd31a,
     secondary: 0xff8a3d,
-    accent: 0x737373,
+    accent: 0xf4c95d,
     danger: 0xff4d3d,
     success: 0x61d394,
     warning: 0xffdc35,
@@ -57,7 +57,7 @@ export const THEMES: ThemeDefinition[] = [
     wallHighlight: 0xb0b0b0,
     brickStroke: 0x7d6600,
     text: '#f4f7fb',
-    textMuted: '#f4c95d',
+    textMuted: '#a39a8a',
     textDark: '#111111'
   },
   {

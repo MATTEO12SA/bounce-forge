@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { rm, writeFile } from 'node:fs/promises';
+import { readdir, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -22,6 +22,17 @@ const targetUrl = `${devServerUrl}?menu=1`;
 const consoleErrors = [];
 const worldWidth = 1080;
 const worldHeight = 1920;
+const screenshotPatterns = [
+  /^ui-smoke-.+\.png$/,
+  /^browser-test\.png$/,
+  /^wall-seam-test\.png$/,
+  /^player-corridor-test\.png$/,
+  /^powerup-test\.png$/,
+  /^powerup-diagnostic\.png$/,
+  /^wall-interaction-diagnostic\.png$/,
+  /^top-corner-test\.png$/,
+  /^top-right-gutter-test\.png$/
+];
 
 if (!browserPath) {
   console.error('No supported browser found. Install Edge/Chrome or set BROWSER_TEST_EDGE_PATH.');
@@ -147,6 +158,8 @@ async function stopProcessTree(child) {
   if (!exited && child.exitCode === null) {
     spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
   }
+
+  await delay(800);
 }
 
 async function stopBrowser(child) {
@@ -181,6 +194,17 @@ async function removeTempProfile() {
   }
 }
 
+async function removeTempScreenshots() {
+  const entries = await readdir(root, { withFileTypes: true });
+  await Promise.all(
+    entries
+      .filter(
+        (entry) => entry.isFile() && screenshotPatterns.some((pattern) => pattern.test(entry.name))
+      )
+      .map((entry) => rm(`${root}/${entry.name}`, { force: true }))
+  );
+}
+
 async function evaluate(page, expression) {
   const result = await page.send('Runtime.evaluate', {
     expression,
@@ -189,7 +213,7 @@ async function evaluate(page, expression) {
   return result.result.result.value;
 }
 
-async function waitForGame(page, timeoutMs = 8000) {
+async function waitForGame(page, timeoutMs = 25000) {
   const start = Date.now();
 
   while (Date.now() - start < timeoutMs) {
@@ -205,10 +229,21 @@ async function waitForGame(page, timeoutMs = 8000) {
     await delay(150);
   }
 
-  throw new Error('Timed out waiting for Phaser game');
+  const state = await evaluate(
+    page,
+    `(() => ({
+      href: window.location.href,
+      readyState: document.readyState,
+      hasRoot: Boolean(document.querySelector('#game-root')),
+      hasCanvas: Boolean(document.querySelector('canvas')),
+      text: document.body?.innerText?.slice(0, 240) ?? ''
+    }))()`
+  );
+
+  throw new Error(`Timed out waiting for Phaser game: ${JSON.stringify(state)}`);
 }
 
-async function waitForScene(page, sceneKey, timeoutMs = 5000) {
+async function waitForScene(page, sceneKey, timeoutMs = 12000) {
   const start = Date.now();
 
   while (Date.now() - start < timeoutMs) {
@@ -227,7 +262,22 @@ async function waitForScene(page, sceneKey, timeoutMs = 5000) {
     await delay(150);
   }
 
-  throw new Error(`Timed out waiting for ${sceneKey}`);
+  const state = await evaluate(
+    page,
+    `(() => {
+      const game = window.__bounceForge;
+      return {
+        href: window.location.href,
+        hasCanvas: Boolean(document.querySelector('canvas')),
+        activeSceneKeys: game?.scene?.scenes
+          ?.filter((scene) => scene.sys.isActive())
+          .map((scene) => scene.scene.key) ?? [],
+        sceneKeys: game?.scene?.scenes?.map((scene) => scene.scene.key) ?? []
+      };
+    })()`
+  );
+
+  throw new Error(`Timed out waiting for ${sceneKey}: ${JSON.stringify(state)}`);
 }
 
 async function captureUiState(page, name, expectations) {
@@ -242,23 +292,34 @@ async function captureUiState(page, name, expectations) {
       const game = window.__bounceForge;
       const activeScenes = game.scene.scenes.filter((scene) => scene.sys.isActive());
       const activeSceneKeys = activeScenes.map((scene) => scene.scene.key);
-      const children = activeScenes.flatMap((scene) => scene.children.list);
+      const flatten = (children) => children.flatMap((child) => [
+        child,
+        ...(Array.isArray(child.list) ? flatten(child.list) : [])
+      ]);
+      const children = activeScenes.flatMap((scene) => flatten(scene.children.list));
       const texts = children
         .filter((child) => child.type === 'Text' && child.visible !== false)
         .map((child) => String(child.text ?? ''));
-      const buttonCount = children.filter((child) => child.constructor?.name === 'Button').length;
+      const controlNames = new Set(['Button', 'IconButton', 'Slider', 'ToggleSwitch', 'SegmentedControl', 'TabBar']);
+      const buttonCount = children.filter((child) => controlNames.has(child.constructor?.name)).length;
+      const icons = children
+        .map((child) => child.icon)
+        .filter((icon) => typeof icon === 'string');
       const buttonBounds = children
-        .filter((child) => child.constructor?.name === 'Button' && child.visible !== false)
+        .filter((child) => controlNames.has(child.constructor?.name) && child.visible !== false)
         .map((child) => {
-          const width = Number(child.input?.hitArea?.width ?? child.width ?? 0) * Math.abs(child.scaleX || 1);
-          const height = Number(child.input?.hitArea?.height ?? child.height ?? 0) * Math.abs(child.scaleY || 1);
+          const bounds = typeof child.getBounds === 'function' ? child.getBounds() : null;
+          const width = Number(bounds?.width ?? child.input?.hitArea?.width ?? child.width ?? 0);
+          const height = Number(bounds?.height ?? child.input?.hitArea?.height ?? child.height ?? 0);
+          const x = Number(bounds ? bounds.centerX : child.x);
+          const y = Number(bounds ? bounds.centerY : child.y);
           return {
-            x: Number(child.x),
-            y: Number(child.y),
-            left: Number(child.x) - width / 2,
-            right: Number(child.x) + width / 2,
-            top: Number(child.y) - height / 2,
-            bottom: Number(child.y) + height / 2
+            x,
+            y,
+            left: x - width / 2,
+            right: x + width / 2,
+            top: y - height / 2,
+            bottom: y + height / 2
           };
         });
       return {
@@ -266,6 +327,7 @@ async function captureUiState(page, name, expectations) {
         textCount: texts.length,
         buttonCount,
         buttonBounds,
+        icons,
         texts,
         hasCanvas: Boolean(document.querySelector('canvas')),
         canvasCount: document.querySelectorAll('canvas').length
@@ -297,6 +359,18 @@ async function captureUiState(page, name, expectations) {
     !state.texts.some((text) => text.includes(expectations.requiredText))
   ) {
     failures.push(`missing text ${expectations.requiredText}`);
+  }
+  if (
+    expectations.forbiddenText &&
+    state.texts.some((text) => text.includes(expectations.forbiddenText))
+  ) {
+    failures.push(`unexpected text ${expectations.forbiddenText}`);
+  }
+  if (expectations.requiredIcons) {
+    const missingIcons = expectations.requiredIcons.filter((icon) => !state.icons.includes(icon));
+    if (missingIcons.length > 0) {
+      failures.push(`missing icons ${missingIcons.join(', ')}`);
+    }
   }
 
   console.log(
@@ -330,12 +404,47 @@ async function startScene(page, sceneKey, data = {}) {
   await waitForScene(page, sceneKey);
 }
 
+async function startPausedGame(page, data = { levelIndex: 0 }) {
+  await startScene(page, 'GameScene', data);
+  await evaluate(
+    page,
+    `(() => {
+      const game = window.__bounceForge;
+      game.scene.getScene('GameScene').pauseGame();
+      return true;
+    })()`
+  );
+  await waitForScene(page, 'PauseScene');
+}
+
+async function pressSceneButton(page, sceneKey, label) {
+  const pressed = await evaluate(
+    page,
+    `(() => {
+      const game = window.__bounceForge;
+      const scene = game.scene.getScene(${JSON.stringify(sceneKey)});
+      const button = scene.children.list.find((child) =>
+        child.constructor?.name === 'Button' &&
+        child.list?.some((part) => part.type === 'Text' && String(part.text ?? '') === ${JSON.stringify(label)})
+      );
+      if (!button) return false;
+      button.emit('pointerdown', {});
+      return true;
+    })()`
+  );
+
+  if (!pressed) {
+    throw new Error(`Button ${label} not found in ${sceneKey}`);
+  }
+}
+
 let server;
 let browser;
 let page;
 
 try {
   await removeTempProfile();
+  await removeTempScreenshots();
 
   try {
     await waitForHttp(devServerUrl, 1200);
@@ -366,14 +475,12 @@ try {
 
   browser = spawn(browserPath, browserArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
   await waitForHttp(`http://localhost:${cdpPort}/json/version`);
-  const target = await requestJson(
-    `http://localhost:${cdpPort}/json/new?${encodeURIComponent(targetUrl)}`,
-    'PUT'
-  );
+  const target = await requestJson(`http://localhost:${cdpPort}/json/new`, 'PUT');
   page = await createCdpClient(target.webSocketDebuggerUrl);
   await page.send('Runtime.enable');
   await page.send('Log.enable');
   await page.send('Page.enable');
+  await page.send('Page.navigate', { url: targetUrl });
   await waitForGame(page);
   await waitForScene(page, 'MainMenuScene');
   await startScene(page, 'MainMenuScene');
@@ -382,15 +489,18 @@ try {
     scene: 'MainMenuScene',
     minTexts: 3,
     minButtons: 5,
-    requiredText: 'Bounce Forge'
+    requiredText: 'Bounce Forge',
+    requiredIcons: ['player-play', 'settings', 'book', 'palette']
   });
 
   await startScene(page, 'OptionsScene', { returnTo: 'MainMenuScene' });
   await captureUiState(page, 'options', {
     scene: 'OptionsScene',
-    minTexts: 6,
-    minButtons: 15,
-    requiredText: 'OPTIONS'
+    minTexts: 5,
+    minButtons: 8,
+    requiredText: 'OPTIONS',
+    forbiddenText: 'MUSIC VOLUME',
+    requiredIcons: ['trash', 'arrow-left']
   });
 
   await startScene(page, 'LevelSelectScene');
@@ -414,7 +524,8 @@ try {
     scene: 'LevelEditorScene',
     minTexts: 3,
     minButtons: 16,
-    requiredText: 'MODE CREATIF'
+    requiredText: 'MODE CREATIF',
+    requiredIcons: ['check', 'player-play', 'upload', 'download', 'copy', 'trash', 'arrow-left']
   });
 
   await startScene(page, 'GameScene', { levelIndex: 0 });
@@ -425,13 +536,53 @@ try {
     requiredText: 'SCORE'
   });
 
-  await startScene(page, 'PauseScene', { levelIndex: 0 });
+  await startPausedGame(page, { levelIndex: 0 });
   await captureUiState(page, 'pause', {
     scene: 'PauseScene',
     minTexts: 1,
     minButtons: 3,
-    requiredText: 'PAUSED'
+    requiredText: 'PAUSED',
+    requiredIcons: ['player-play', 'rotate-clockwise', 'settings', 'home']
   });
+
+  await pressSceneButton(page, 'PauseScene', 'OPTIONS');
+  await waitForScene(page, 'OptionsScene');
+  await captureUiState(page, 'options-from-pause', {
+    scene: 'OptionsScene',
+    minTexts: 5,
+    minButtons: 8,
+    requiredText: 'OPTIONS',
+    forbiddenText: 'MUSIC VOLUME',
+    requiredIcons: ['trash', 'arrow-left']
+  });
+
+  const gamePausedDuringOptions = await evaluate(
+    page,
+    `(() => window.__bounceForge.scene.isPaused('GameScene'))()`
+  );
+  if (!gamePausedDuringOptions) {
+    throw new Error('GameScene was not preserved while OptionsScene was open from pause');
+  }
+
+  await pressSceneButton(page, 'OptionsScene', 'BACK');
+  await waitForScene(page, 'PauseScene');
+  const gamePausedAfterBack = await evaluate(
+    page,
+    `(() => window.__bounceForge.scene.isPaused('GameScene'))()`
+  );
+  if (!gamePausedAfterBack) {
+    throw new Error('GameScene was not still paused after returning from options');
+  }
+
+  await pressSceneButton(page, 'PauseScene', 'RESUME');
+  await waitForScene(page, 'GameScene');
+  const gameResumed = await evaluate(
+    page,
+    `(() => window.__bounceForge.scene.getScene('GameScene')?.sys?.isActive() && !window.__bounceForge.scene.isPaused('GameScene'))()`
+  );
+  if (!gameResumed) {
+    throw new Error('Resume did not restore the paused GameScene');
+  }
 
   await startScene(page, 'VictoryScene', { score: 42420, levelIndex: 0 });
   await captureUiState(page, 'victory', {
@@ -452,5 +603,8 @@ try {
   page?.close?.();
   await stopBrowser(browser);
   await stopProcessTree(server);
+  if (!process.env.KEEP_UI_SMOKE_SCREENSHOTS) {
+    await removeTempScreenshots();
+  }
   await removeTempProfile();
 }

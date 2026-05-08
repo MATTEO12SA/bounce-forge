@@ -6,6 +6,7 @@ import { Paddle } from '../entities/Paddle';
 import { PowerUp } from '../entities/PowerUp';
 import type { LevelDefinition } from '../levels/levelTypes';
 import { AudioSystem } from '../systems/AudioSystem';
+import { registerAudioSystem, unregisterAudioSystem } from '../systems/audioRegistry';
 import { CollisionSystem } from '../systems/CollisionSystem';
 import { ComboSystem } from '../systems/ComboSystem';
 import { InputSystem } from '../systems/InputSystem';
@@ -166,6 +167,10 @@ export class GameScene extends Phaser.Scene {
       this.saveSystem.snapshot().preferences.soundEnabled,
       this.settingsSystem.getVolumeSfx()
     );
+    registerAudioSystem(this.audioSystem);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      unregisterAudioSystem(this.audioSystem);
+    });
     this.scoreSystem = new ScoreSystem(this.saveSystem.snapshot().bestScore);
     this.comboSystem = new ComboSystem();
     this.powerUpSystem = new PowerUpSystem();

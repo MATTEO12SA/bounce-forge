@@ -12,7 +12,11 @@ browser-test.png
 wall-seam-test.png
 player-corridor-test.png
 powerup-test.png
+powerup-diagnostic.png
+wall-interaction-diagnostic.png
 top-corner-test.png
 top-right-gutter-test.png
+ui-smoke-*.png
 .edge*/
 .video-debug*/
+vendor/

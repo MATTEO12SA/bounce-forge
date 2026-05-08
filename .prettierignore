@@ -5,3 +5,4 @@ package-lock.json
 .edge*/
 .video-debug*/
 .claude/
+vendor/

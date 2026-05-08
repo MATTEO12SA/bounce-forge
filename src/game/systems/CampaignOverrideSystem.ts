@@ -4,13 +4,33 @@ import type { AdminCampaignOverride, LevelDefinition } from '../levels/levelType
 import { clamp } from '../utils/math';
 import { AdminApiSystem } from './AdminApiSystem';
 
+const REFRESH_TIMEOUT_MS = 2500;
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error('Campaign override refresh timed out')),
+      timeoutMs
+    );
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 export class CampaignOverrideSystem {
   private static readonly overrides = new Map<number, AdminCampaignOverride>();
   private static loaded = false;
 
   public static async refresh(api = new AdminApiSystem()): Promise<void> {
     try {
-      const overrides = await api.getCampaignOverrides();
+      const overrides = await withTimeout(api.getCampaignOverrides(), REFRESH_TIMEOUT_MS);
       this.overrides.clear();
       overrides.forEach((override) => this.setOverride(override));
       this.loaded = true;

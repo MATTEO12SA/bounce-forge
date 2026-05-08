@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyEditorRows } from '../src/game/levels/editorGrid';
+import { MAX_LEVEL_NAME_LENGTH } from '../src/game/levels/levelNames';
 import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../src/game/levels/levelShare';
 
 describe('level share codes', () => {
@@ -20,5 +21,17 @@ describe('level share codes', () => {
     expect(() => encodeCreativeLevelCode(createEmptyEditorRows(), 'Empty')).toThrow(
       /Add at least one breakable block/
     );
+  });
+
+  it('normalizes shared level names', () => {
+    const rows = createEmptyEditorRows();
+    rows[0] = `1${'.'.repeat((rows[0]?.length ?? 1) - 1)}`;
+    const longName = 'B'.repeat(MAX_LEVEL_NAME_LENGTH + 4);
+
+    const decoded = decodeCreativeLevelCode(encodeCreativeLevelCode(rows, `  ${longName}  `));
+    const unnamed = decodeCreativeLevelCode(encodeCreativeLevelCode(rows, '   '));
+
+    expect(decoded.name).toBe('B'.repeat(MAX_LEVEL_NAME_LENGTH));
+    expect(unnamed.name).toBeUndefined();
   });
 });

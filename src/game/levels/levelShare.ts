@@ -1,4 +1,5 @@
 import { normalizeEditorRows, validateEditorRows } from './editorGrid';
+import { sanitizeOptionalLevelName } from './levelNames';
 
 const SHARE_PREFIX = 'BF1:';
 
@@ -34,9 +35,13 @@ export function encodeCreativeLevelCode(rows: readonly string[], name?: string):
 
   const payload: SharedLevelPayload = {
     v: 1,
-    name,
     rows: normalizedRows
   };
+  const safeName = sanitizeOptionalLevelName(name);
+
+  if (safeName) {
+    payload.name = safeName;
+  }
 
   return `${SHARE_PREFIX}${encodeBase64(JSON.stringify(payload))}`;
 }
@@ -64,7 +69,7 @@ export function decodeCreativeLevelCode(code: string): { name?: string; rows: st
   }
 
   return {
-    name: typeof parsed.name === 'string' ? parsed.name : undefined,
+    name: sanitizeOptionalLevelName(parsed.name),
     rows
   };
 }

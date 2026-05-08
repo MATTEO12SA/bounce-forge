@@ -5,6 +5,7 @@ import { LevelSystem } from '../systems/LevelSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { startSceneWithTransition } from '../ui/uiFeedback';
 import { GAME_TITLE, WORLD_WIDTH } from '../utils/constants';
 import { clamp } from '../utils/math';
 
@@ -27,7 +28,7 @@ export class MainMenuScene extends Phaser.Scene {
     drawScreenBackground(this, theme, { panel: false, sideRails: true });
     drawPanel(this, WORLD_WIDTH / 2, 600, 746, 1060, theme, { alpha: 0.76 });
 
-    this.renderAdminButton('ADMIN', () => this.scene.start('AdminLoginScene'));
+    this.renderAdminButton('ADMIN', () => startSceneWithTransition(this, 'AdminLoginScene'));
     void this.refreshAdminButton();
 
     this.add
@@ -58,9 +59,18 @@ export class MainMenuScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    new Button(this, WORLD_WIDTH / 2, 440, 620, 88, 'START', () => {
-      this.scene.start('GameScene', { levelIndex: nextLevel });
-    });
+    new Button(
+      this,
+      WORLD_WIDTH / 2,
+      440,
+      620,
+      88,
+      'START',
+      () => {
+        startSceneWithTransition(this, 'GameScene', { levelIndex: nextLevel });
+      },
+      { icon: 'player-play', theme }
+    );
 
     new Button(
       this,
@@ -70,9 +80,9 @@ export class MainMenuScene extends Phaser.Scene {
       88,
       'LEVEL SELECT',
       () => {
-        this.scene.start('LevelSelectScene');
+        startSceneWithTransition(this, 'LevelSelectScene');
       },
-      { variant: 'secondary' }
+      { variant: 'secondary', icon: 'player-track-next', theme }
     );
 
     new Button(
@@ -83,9 +93,9 @@ export class MainMenuScene extends Phaser.Scene {
       88,
       'MODE CREATIF',
       () => {
-        this.scene.start('LevelEditorScene', { mode: 'creative' });
+        startSceneWithTransition(this, 'LevelEditorScene', { mode: 'creative' });
       },
-      { variant: 'secondary' }
+      { variant: 'secondary', icon: 'palette', theme }
     );
 
     new Button(
@@ -96,9 +106,9 @@ export class MainMenuScene extends Phaser.Scene {
       88,
       'GUIDE',
       () => {
-        this.scene.start('GuideScene');
+        startSceneWithTransition(this, 'GuideScene');
       },
-      { variant: 'secondary' }
+      { variant: 'secondary', icon: 'book', theme }
     );
 
     new Button(
@@ -119,7 +129,7 @@ export class MainMenuScene extends Phaser.Scene {
         save.setTheme(nextTheme.id);
         this.scene.restart();
       },
-      { variant: 'ghost' }
+      { variant: 'ghost', icon: 'palette', theme }
     );
 
     new Button(
@@ -130,9 +140,9 @@ export class MainMenuScene extends Phaser.Scene {
       88,
       'OPTIONS',
       () => {
-        this.scene.start('OptionsScene', { returnTo: 'MainMenuScene' });
+        startSceneWithTransition(this, 'OptionsScene', { returnTo: 'MainMenuScene' });
       },
-      { variant: 'ghost' }
+      { variant: 'ghost', icon: 'settings', theme }
     );
 
     addCreatorCredit(this, theme);
@@ -142,7 +152,8 @@ export class MainMenuScene extends Phaser.Scene {
     this.adminButton?.destroy(true);
     this.adminButton = new Button(this, WORLD_WIDTH - 142, 44, 238, 54, label, onClick, {
       variant: 'ghost',
-      compact: true
+      compact: true,
+      icon: 'settings'
     });
   }
 
@@ -158,7 +169,7 @@ export class MainMenuScene extends Phaser.Scene {
 
       if (session.authenticated) {
         this.renderAdminButton('ADMIN EDITOR', () =>
-          this.scene.start('LevelEditorScene', { mode: 'admin' })
+          startSceneWithTransition(this, 'LevelEditorScene', { mode: 'admin' })
         );
       }
     } catch {

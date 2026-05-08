@@ -4,6 +4,7 @@ import { LevelSystem } from '../systems/LevelSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { startSceneWithTransition } from '../ui/uiFeedback';
 import { GAME_TITLE, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 
 export class LevelSelectScene extends Phaser.Scene {
@@ -78,7 +79,7 @@ export class LevelSelectScene extends Phaser.Scene {
           ? `LOCKED ${index + 1}`
           : `${index + 1}. ${level.name}${adminMark}${medal ? ` ${medal}` : ''}`,
         () => {
-          this.scene.start('GameScene', { levelIndex: index });
+          startSceneWithTransition(this, 'GameScene', { levelIndex: index });
         },
         { disabled: locked, variant: locked ? 'ghost' : 'secondary', compact: true }
       );
@@ -106,9 +107,9 @@ export class LevelSelectScene extends Phaser.Scene {
       96,
       'BACK',
       () => {
-        this.scene.start('MainMenuScene');
+        startSceneWithTransition(this, 'MainMenuScene');
       },
-      { variant: 'ghost' }
+      { variant: 'ghost', icon: 'arrow-left' }
     );
 
     addCreatorCredit(this, theme);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EDITOR_GRID_COLS, createEmptyEditorRows } from '../src/game/levels/editorGrid';
+import { MAX_LEVEL_NAME_LENGTH } from '../src/game/levels/levelNames';
 import { DEFAULT_SAVE_DATA, SaveSystem, type SaveData } from '../src/game/systems/SaveSystem';
 import { SAVE_STORAGE_KEY } from '../src/game/utils/constants';
 import { loadJson, saveJson, type KeyValueStorage } from '../src/game/utils/storage';
@@ -154,6 +155,20 @@ describe('storage helpers and save system', () => {
     reloaded.removeCreativeLevelSlot(1);
 
     expect(new SaveSystem(storage).getCreativeLevelSlot(1)).toBeNull();
+  });
+
+  it('normalizes creative level names before saving', () => {
+    const storage = new MemoryStorage();
+    const save = new SaveSystem(storage);
+    const longName = 'A'.repeat(MAX_LEVEL_NAME_LENGTH + 12);
+
+    save.setCreativeLevelSlot(2, makeOneBrickRows(), `  ${longName}  `, 1234);
+    save.setCreativeLevelSlot(3, makeOneBrickRows(), '   ', 1235);
+
+    const reloaded = new SaveSystem(storage);
+
+    expect(reloaded.getCreativeLevelSlot(2)?.name).toBe('A'.repeat(MAX_LEVEL_NAME_LENGTH));
+    expect(reloaded.getCreativeLevelSlot(3)?.name).toBe('Creative 4');
   });
 
   it('migrates legacy custom overrides into creative slots', () => {

@@ -9,11 +9,19 @@ import {
 
 export { EDITOR_GRID_COLS, EDITOR_GRID_ROWS, normalizeRows, validateRows };
 
+const MAX_LEVEL_NAME_LENGTH = 120;
+
 export class ValidationError extends Error {
   constructor(message) {
     super(message);
     this.name = 'ValidationError';
   }
+}
+
+function sanitizeName(name, fallback) {
+  const trimmed = typeof name === 'string' ? name.trim() : '';
+  const safeName = trimmed.length > 0 ? trimmed : fallback;
+  return safeName.slice(0, MAX_LEVEL_NAME_LENGTH);
 }
 
 function sanitizeOverride(value) {
@@ -31,7 +39,7 @@ function sanitizeOverride(value) {
 
   return {
     levelIndex,
-    name: typeof value.name === 'string' && value.name ? value.name : `Level ${levelIndex + 1}`,
+    name: sanitizeName(value.name, `Level ${levelIndex + 1}`),
     rows,
     updatedAt: Math.max(0, Math.floor(Number(value.updatedAt) || Date.now()))
   };
@@ -76,7 +84,7 @@ export class CampaignOverrideStore {
     const overrides = await this.list();
     const next = {
       levelIndex: safeIndex,
-      name: typeof name === 'string' && name ? name : `Level ${safeIndex + 1}`,
+      name: sanitizeName(name, `Level ${safeIndex + 1}`),
       rows: normalizedRows,
       updatedAt: Date.now()
     };

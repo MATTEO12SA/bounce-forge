@@ -7,7 +7,8 @@
 [![Play Demo](https://img.shields.io/badge/Play-Demo-yellow)](https://matteo12sa.github.io/bounce-forge/)
 
 ![Gameplay](docs/screenshots/gameplay.png)
-> *Screenshot a venir : depose `gameplay.png` dans [docs/screenshots/](docs/screenshots/).*
+
+> _Screenshot a venir : depose `gameplay.png` dans [docs/screenshots/](docs/screenshots/)._
 
 ## Features
 
@@ -141,7 +142,6 @@ L'ecran pause expose quatre actions : `RESUME`, `RESTART`, `OPTIONS`, `MENU`.
 L'ecran `OPTIONS` (accessible aussi depuis le menu principal) regroupe :
 
 - volume effets sonores ;
-- volume musique ;
 - qualite des effets visuels (`LOW` / `MED` / `HIGH`) ;
 - bascule plein ecran ;
 - bascule son global ;
@@ -208,7 +208,6 @@ Elle contient :
   - son active ;
   - theme actif ;
   - volume des effets sonores ;
-  - volume de la musique ;
   - qualite des effets visuels ;
   - plein ecran ;
 - slots creatifs de l'editeur.
@@ -219,10 +218,11 @@ Le schema de sauvegarde migre automatiquement les anciennes sauvegardes (v1 a v4
 
 - `src/game/scenes` : scenes Phaser, dont `OptionsScene` pour les reglages.
 - `src/game/entities` : balle, barre, briques, bonus, avec pooling Phaser Group.
-- `src/game/systems` : sauvegarde, score, combo, niveaux, collisions, audio, bonus, FX manager, settings.
+- `src/game/systems` : sauvegarde, score, combo, niveaux, collisions, audio (`AudioSystem` + `audioRegistry` pour propager le volume au son live), bonus, FX manager, settings.
 - `src/game/managers` : `PlayfieldRenderer` et autres managers extraits de GameScene.
 - `src/game/levels` : patterns de campagne, grille editeur, factory de niveaux.
-- `src/game/ui` : boutons, HUD, barre de progression, chrome d'ecran partage.
+- `src/game/config` : configuration moteur, themes (`themeConfig.ts`), design tokens partages (`designTokens.ts` : spacing, radius, shadow, typography).
+- `src/game/ui` : boutons, slider, toggle, segmented control, scroll panel, tab bar, dialogues, HUD, chrome d'ecran partage, helper `roundedShapes` pour les rectangles arrondis.
 - `scripts` : diagnostics navigateur et helpers locaux.
 - `tests` : tests unitaires Vitest.
 
@@ -241,5 +241,5 @@ Pour rester stable jusqu'a 96 balles :
 - Le jeu utilise de la geometrie Phaser et des visuels proceduraux simples.
 - Aucun asset graphique externe n'est requis.
 - Le runtime cible Phaser 4.1.0 et choisit automatiquement entre WebGL et Canvas via `Phaser.AUTO`.
-- La direction visuelle actuelle est jaune/forge, parce qu'elle est plus lisible et correspond mieux au jeu que l'ancienne passe sci-fi bleue.
+- La direction visuelle actuelle est jaune/forge, parce qu'elle est plus lisible et correspond mieux au jeu que l'ancienne passe sci-fi bleue. Coins arrondis (`TOKENS.radius` 8/12/20 px), echelle typographique partagee et accent dore reserve aux titres et highlights, geres par `src/game/config/designTokens.ts`.
 - Les effets postFX (Bloom, Glow, Shine) sont disponibles dans le code mais desactives par defaut : ils etaient trop couteux a empiler sur 40-96 balles. La forge identity passe par les couleurs du theme, les particules teintees et les camera shakes/flashs.

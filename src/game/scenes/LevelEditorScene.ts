@@ -11,13 +11,16 @@ import {
   type EditorCell
 } from '../levels/editorGrid';
 import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../levels/levelShare';
+import { sanitizeLevelName } from '../levels/levelNames';
 import { AdminApiSystem } from '../systems/AdminApiSystem';
 import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
 import { LevelSystem } from '../systems/LevelSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { ConfirmDialog, TextAreaDialog } from '../ui/Dialog';
+import { IconButton } from '../ui/IconButton';
 import { drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { flashUiError, startSceneWithTransition } from '../ui/uiFeedback';
 import { DEPTHS, GAME_TITLE, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 import { clamp } from '../utils/math';
 
@@ -146,41 +149,44 @@ export class LevelEditorScene extends Phaser.Scene {
     this.renderSlotButtons();
     this.renderPaletteButtons();
 
-    new Button(this, 134, 1644, 150, 62, 'SAVE', () => void this.saveCurrentSlot(), {
-      compact: true
+    new IconButton(this, 182, 1644, 66, 'check', () => void this.saveCurrentSlot(), {
+      tooltip: 'SAVE'
     }).setDepth(DEPTHS.hud);
-    new Button(this, 300, 1644, 150, 62, 'PLAY', () => void this.playCurrentSlot(), {
+    new IconButton(this, 318, 1644, 66, 'player-play', () => void this.playCurrentSlot(), {
       selected: true,
-      compact: true
+      tooltip: 'PLAY'
     }).setDepth(DEPTHS.hud);
-    new Button(this, 466, 1644, 150, 62, 'UNDO', () => this.undoEdit(), {
+    new IconButton(this, 454, 1644, 66, 'arrow-left', () => this.undoEdit(), {
       variant: 'secondary',
-      compact: true
+      tooltip: 'UNDO'
     }).setDepth(DEPTHS.hud);
-    new Button(this, 632, 1644, 150, 62, 'REDO', () => this.redoEdit(), {
+    new IconButton(this, 590, 1644, 66, 'refresh', () => this.redoEdit(), {
       variant: 'secondary',
-      compact: true
+      tooltip: 'REDO'
     }).setDepth(DEPTHS.hud);
-    new Button(this, 798, 1644, 150, 62, 'CLEAR', () => this.clearGrid(), {
+    new IconButton(this, 726, 1644, 66, 'trash', () => this.clearGrid(), {
       variant: 'danger',
-      compact: true
+      tooltip: 'CLEAR'
     }).setDepth(DEPTHS.hud);
-    new Button(this, 964, 1644, 150, 62, 'RESET', () => void this.resetSlot(), {
+    new IconButton(this, 862, 1644, 66, 'rotate-clockwise', () => void this.resetSlot(), {
       variant: 'danger',
-      compact: true
+      tooltip: 'RESET'
     }).setDepth(DEPTHS.hud);
 
     new Button(this, 216, 1724, 260, 62, 'EXPORT CODE', () => void this.exportCurrentSlot(), {
       variant: 'secondary',
-      compact: true
+      compact: true,
+      icon: 'download'
     }).setDepth(DEPTHS.hud);
     new Button(this, 540, 1724, 260, 62, 'IMPORT CODE', () => void this.importLevelCode(), {
       variant: 'secondary',
-      compact: true
+      compact: true,
+      icon: 'upload'
     }).setDepth(DEPTHS.hud);
     new Button(this, 864, 1724, 260, 62, 'COPY LOCAL', () => void this.copyToCreativeSlot(), {
       variant: 'secondary',
-      compact: true
+      compact: true,
+      icon: 'copy'
     }).setDepth(DEPTHS.hud);
 
     new Button(
@@ -193,7 +199,7 @@ export class LevelEditorScene extends Phaser.Scene {
       () => {
         void this.goBack();
       },
-      { variant: 'ghost' }
+      { variant: 'ghost', icon: 'arrow-left' }
     ).setDepth(DEPTHS.hud);
 
     this.statusText = this.add
@@ -506,11 +512,11 @@ export class LevelEditorScene extends Phaser.Scene {
     if (this.mode === 'admin') {
       try {
         this.setStatus('Saving campaign level...', false);
-        const fallback = this.levelSystem.getCampaignLevel(this.slotIndex);
+        const levelName = this.getCurrentLevelName();
         const override = await this.adminApi.saveCampaignOverride(
           this.slotIndex,
           this.rows,
-          fallback.name
+          levelName
         );
         CampaignOverrideSystem.setOverride(override);
         this.currentSlotName = override.name;
@@ -527,12 +533,13 @@ export class LevelEditorScene extends Phaser.Scene {
       }
     }
 
-    this.saveSystem.setCreativeLevelSlot(
+    const saved = this.saveSystem.setCreativeLevelSlot(
       this.slotIndex,
       this.rows,
-      `Creative ${this.slotIndex + 1}`
+      this.getCurrentLevelName()
     );
-    this.currentSlotName = `Creative ${this.slotIndex + 1}`;
+    this.currentSlotName =
+      saved.creativeLevelSlots[String(this.slotIndex)]?.name ?? this.getDefaultSlotName();
     this.currentSavedSuffix = ' *local';
     this.baselineRows = this.cloneRows(this.rows);
     this.isDirty = false;
@@ -547,7 +554,7 @@ export class LevelEditorScene extends Phaser.Scene {
       return;
     }
 
-    this.scene.start('GameScene', {
+    startSceneWithTransition(this, 'GameScene', {
       levelIndex: this.slotIndex,
       source: this.mode === 'admin' ? 'campaign' : 'creative',
       editorReturn: {
@@ -639,11 +646,7 @@ export class LevelEditorScene extends Phaser.Scene {
     }
 
     try {
-      this.saveSystem.setCreativeLevelSlot(
-        this.slotIndex,
-        this.rows,
-        `Creative ${this.slotIndex + 1}`
-      );
+      this.saveSystem.setCreativeLevelSlot(this.slotIndex, this.rows, this.getCurrentLevelName());
       this.setStatus(`Copied to Creative ${this.slotIndex + 1}.`, false);
     } catch (error) {
       this.setStatus(error instanceof Error ? error.message : 'Creative copy failed.', true);
@@ -749,7 +752,7 @@ export class LevelEditorScene extends Phaser.Scene {
       }
     }
 
-    this.scene.start(this.mode === 'admin' ? 'AdminMenuScene' : 'MainMenuScene');
+    startSceneWithTransition(this, this.mode === 'admin' ? 'AdminMenuScene' : 'MainMenuScene');
   }
 
   private pushUndoSnapshot(): void {
@@ -776,6 +779,16 @@ export class LevelEditorScene extends Phaser.Scene {
     return [...rows];
   }
 
+  private getDefaultSlotName(): string {
+    return this.mode === 'admin'
+      ? `Campaign ${this.slotIndex + 1}`
+      : `Creative ${this.slotIndex + 1}`;
+  }
+
+  private getCurrentLevelName(): string {
+    return sanitizeLevelName(this.currentSlotName, this.getDefaultSlotName());
+  }
+
   private rowsEqual(left: readonly string[], right: readonly string[]): boolean {
     return left.length === right.length && left.every((row, index) => row === right[index]);
   }
@@ -785,6 +798,9 @@ export class LevelEditorScene extends Phaser.Scene {
       isError ? '#ff7d92' : `#${this.theme.primary.toString(16).padStart(6, '0')}`
     );
     this.statusText.setText(message);
+    if (isError) {
+      flashUiError(this);
+    }
   }
 
   private async copyTextToClipboard(value: string): Promise<boolean> {

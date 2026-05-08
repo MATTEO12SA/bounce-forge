@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
+import { TOKENS } from '../config/designTokens';
 import { DEPTHS, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 import { Button } from './Button';
+import { drawRoundedRect } from './roundedShapes';
 
 interface ConfirmDialogOptions {
   title: string;
@@ -36,10 +38,27 @@ class DialogFrame {
       .rectangle(0, 0, WORLD_WIDTH, WORLD_HEIGHT, 0x000000, 0.62)
       .setOrigin(0)
       .setInteractive();
-    const shadow = scene.add.rectangle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 10, width, height, 0, 0.36);
-    const panel = scene.add
-      .rectangle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, width, height, 0x120f08, 0.97)
-      .setStrokeStyle(3, 0xffd31a, 0.9);
+    const shadow = drawRoundedRect(
+      scene,
+      WORLD_WIDTH / 2,
+      WORLD_HEIGHT / 2 + 12,
+      width,
+      height,
+      TOKENS.radius.lg,
+      { fill: { color: 0x000000, alpha: 0.42 } }
+    );
+    const panel = drawRoundedRect(
+      scene,
+      WORLD_WIDTH / 2,
+      WORLD_HEIGHT / 2,
+      width,
+      height,
+      TOKENS.radius.lg,
+      {
+        fill: { color: 0x120f08, alpha: 0.97 },
+        stroke: { color: 0xffd31a, width: 3, alpha: 0.9 }
+      }
+    );
     const heading = scene.add
       .text(WORLD_WIDTH / 2, WORLD_HEIGHT / 2 - height / 2 + 54, title, {
         fontFamily: 'Arial, sans-serif',
@@ -108,7 +127,7 @@ export class ConfirmDialog extends DialogFrame {
       66,
       options.cancelLabel ?? 'CANCEL',
       () => close(false),
-      { variant: 'secondary' }
+      { variant: 'secondary', icon: 'x' }
     );
     const confirm = new Button(
       scene,
@@ -118,7 +137,11 @@ export class ConfirmDialog extends DialogFrame {
       66,
       options.confirmLabel ?? 'CONFIRM',
       () => close(true),
-      { variant: options.danger ? 'danger' : 'primary', selected: !options.danger }
+      {
+        variant: options.danger ? 'danger' : 'primary',
+        selected: !options.danger,
+        icon: options.danger ? 'trash' : 'check'
+      }
     );
 
     this.container.add([cancel, confirm]);
@@ -184,9 +207,18 @@ export class TextAreaDialog extends DialogFrame {
     this.value = options.initialValue ?? '';
     this.readOnly = options.readOnly ?? false;
 
-    const box = scene.add
-      .rectangle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2 + 42, 760, 320, 0x070a0d, 0.96)
-      .setStrokeStyle(2, 0xffd31a, 0.58);
+    const box = drawRoundedRect(
+      scene,
+      WORLD_WIDTH / 2,
+      WORLD_HEIGHT / 2 + 42,
+      760,
+      320,
+      TOKENS.radius.md,
+      {
+        fill: { color: 0x070a0d, alpha: 0.96 },
+        stroke: { color: 0xffd31a, width: 2, alpha: 0.58 }
+      }
+    );
     this.text = scene.add
       .text(WORLD_WIDTH / 2 - 356, WORLD_HEIGHT / 2 - 96, '', {
         fontFamily: 'Consolas, monospace',
@@ -227,7 +259,7 @@ export class TextAreaDialog extends DialogFrame {
       66,
       options.cancelLabel ?? 'CANCEL',
       () => close(null),
-      { variant: 'secondary' }
+      { variant: 'secondary', icon: 'x' }
     );
     const confirm = new Button(
       scene,
@@ -237,7 +269,7 @@ export class TextAreaDialog extends DialogFrame {
       66,
       options.confirmLabel ?? 'OK',
       () => close(this.value),
-      { selected: true }
+      { selected: true, icon: this.readOnly ? 'copy' : 'check' }
     );
 
     this.container.add([box, this.text, hint, cancel, confirm]);

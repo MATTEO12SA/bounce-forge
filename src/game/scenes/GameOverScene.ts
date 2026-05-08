@@ -3,6 +3,7 @@ import { getTheme } from '../config/themeConfig';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { startSceneWithTransition } from '../ui/uiFeedback';
 import { WORLD_WIDTH } from '../utils/constants';
 
 interface EndSceneData {
@@ -59,12 +60,13 @@ export class GameOverScene extends Phaser.Scene {
       editorReturn ? 'BACK TO EDITOR' : 'RESTART',
       () => {
         if (editorReturn) {
-          this.scene.start('LevelEditorScene', editorReturn);
+          startSceneWithTransition(this, 'LevelEditorScene', editorReturn);
           return;
         }
 
-        this.scene.start('GameScene', { levelIndex, source });
-      }
+        startSceneWithTransition(this, 'GameScene', { levelIndex, source });
+      },
+      { icon: editorReturn ? 'palette' : 'rotate-clockwise' }
     );
 
     new Button(
@@ -75,9 +77,9 @@ export class GameOverScene extends Phaser.Scene {
       104,
       'LEVEL SELECT',
       () => {
-        this.scene.start('LevelSelectScene');
+        startSceneWithTransition(this, 'LevelSelectScene');
       },
-      { variant: 'secondary' }
+      { variant: 'secondary', icon: 'player-track-next' }
     );
 
     new Button(
@@ -88,9 +90,9 @@ export class GameOverScene extends Phaser.Scene {
       104,
       'MENU',
       () => {
-        this.scene.start('MainMenuScene');
+        startSceneWithTransition(this, 'MainMenuScene');
       },
-      { variant: 'ghost' }
+      { variant: 'ghost', icon: 'home' }
     );
 
     addCreatorCredit(this, theme);

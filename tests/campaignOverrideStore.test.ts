@@ -46,6 +46,25 @@ describe('campaign override store', () => {
     ]);
   });
 
+  it('normalizes admin override names before writing', async () => {
+    const store = await makeStore();
+    const longName = 'C'.repeat(132);
+
+    await store.save(0, makeRows(), `  ${longName}  `);
+    await store.save(1, makeRows(), '   ');
+
+    expect(await store.list()).toMatchObject([
+      {
+        levelIndex: 0,
+        name: 'C'.repeat(120)
+      },
+      {
+        levelIndex: 1,
+        name: 'Level 2'
+      }
+    ]);
+  });
+
   it('removes a stored admin campaign override', async () => {
     const store = await makeStore();
 

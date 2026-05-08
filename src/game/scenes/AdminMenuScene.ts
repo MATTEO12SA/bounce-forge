@@ -5,6 +5,7 @@ import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { startSceneWithTransition } from '../ui/uiFeedback';
 import { GAME_TITLE, WORLD_WIDTH } from '../utils/constants';
 
 export class AdminMenuScene extends Phaser.Scene {
@@ -61,8 +62,8 @@ export class AdminMenuScene extends Phaser.Scene {
         570,
         78,
         'CAMPAIGN EDITOR',
-        () => this.scene.start('LevelEditorScene', { mode: 'admin' }),
-        { selected: true, disabled: true }
+        () => startSceneWithTransition(this, 'LevelEditorScene', { mode: 'admin' }),
+        { selected: true, disabled: true, icon: 'palette' }
       )
     );
     this.adminButtons.push(
@@ -73,8 +74,8 @@ export class AdminMenuScene extends Phaser.Scene {
         570,
         78,
         'LEVEL SELECT',
-        () => this.scene.start('LevelSelectScene'),
-        { variant: 'secondary', disabled: true }
+        () => startSceneWithTransition(this, 'LevelSelectScene'),
+        { variant: 'secondary', disabled: true, icon: 'player-track-next' }
       )
     );
     this.adminButtons.push(
@@ -86,13 +87,14 @@ export class AdminMenuScene extends Phaser.Scene {
         78,
         'REFRESH DATA',
         () => void this.refreshOverrides(),
-        { variant: 'secondary', disabled: true }
+        { variant: 'secondary', disabled: true, icon: 'refresh' }
       )
     );
     this.adminButtons.push(
       new Button(this, WORLD_WIDTH / 2, 768, 570, 78, 'LOGOUT', () => void this.logout(), {
         variant: 'danger',
-        disabled: true
+        disabled: true,
+        icon: 'x'
       })
     );
     new Button(
@@ -102,8 +104,8 @@ export class AdminMenuScene extends Phaser.Scene {
       570,
       78,
       'MAIN MENU',
-      () => this.scene.start('MainMenuScene'),
-      { variant: 'ghost' }
+      () => startSceneWithTransition(this, 'MainMenuScene'),
+      { variant: 'ghost', icon: 'home' }
     );
 
     this.input.keyboard?.on('keydown-ESC', this.goBack, this);
@@ -148,6 +150,6 @@ export class AdminMenuScene extends Phaser.Scene {
   }
 
   private goBack(): void {
-    this.scene.start('MainMenuScene');
+    startSceneWithTransition(this, 'MainMenuScene');
   }
 }

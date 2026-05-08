@@ -1,5 +1,6 @@
 import { getTheme } from '../config/themeConfig';
 import { isValidEditorRows, normalizeEditorRows, validateEditorRows } from '../levels/editorGrid';
+import { sanitizeLevelName } from '../levels/levelNames';
 import type { CreativeLevelSlot } from '../levels/levelTypes';
 import { SAVE_STORAGE_KEY } from '../utils/constants';
 import { getBrowserStorage, saveJson, type KeyValueStorage } from '../utils/storage';
@@ -167,7 +168,7 @@ function sanitizeCreativeLevelSlots(overrides: unknown): Record<string, Creative
     const safeSlotIndex = Math.max(0, Math.floor(candidate.slotIndex));
     sanitized[String(safeSlotIndex)] = {
       slotIndex: safeSlotIndex,
-      name: candidate.name,
+      name: sanitizeLevelName(candidate.name, `Creative ${safeSlotIndex + 1}`),
       rows,
       updatedAt: candidate.updatedAt
     };
@@ -217,11 +218,17 @@ function migratePreferences(prefs: LegacySaveData['preferences']): SavePreferenc
   return {
     soundEnabled: prefs.soundEnabled,
     themeId: getTheme(prefs.themeId).id,
-    volumeSfx: typeof prefs.volumeSfx === 'number' ? clamp01(prefs.volumeSfx) : DEFAULT_PREFERENCES.volumeSfx,
+    volumeSfx:
+      typeof prefs.volumeSfx === 'number'
+        ? clamp01(prefs.volumeSfx)
+        : DEFAULT_PREFERENCES.volumeSfx,
     volumeMusic:
-      typeof prefs.volumeMusic === 'number' ? clamp01(prefs.volumeMusic) : DEFAULT_PREFERENCES.volumeMusic,
+      typeof prefs.volumeMusic === 'number'
+        ? clamp01(prefs.volumeMusic)
+        : DEFAULT_PREFERENCES.volumeMusic,
     fxQuality: normalizeFxQuality(prefs.fxQuality),
-    fullscreen: typeof prefs.fullscreen === 'boolean' ? prefs.fullscreen : DEFAULT_PREFERENCES.fullscreen
+    fullscreen:
+      typeof prefs.fullscreen === 'boolean' ? prefs.fullscreen : DEFAULT_PREFERENCES.fullscreen
   };
 }
 
@@ -350,6 +357,7 @@ export class SaveSystem {
     name = `Custom ${slotIndex + 1}`,
     updatedAt = Date.now()
   ): SaveData {
+    const safeSlotIndex = Math.max(0, Math.floor(slotIndex));
     const normalizedRows = normalizeEditorRows(rows);
     const validation = validateEditorRows(normalizedRows);
 
@@ -357,10 +365,9 @@ export class SaveSystem {
       throw new Error(validation.message);
     }
 
-    const safeSlotIndex = Math.max(0, Math.floor(slotIndex));
     this.data.creativeLevelSlots[String(safeSlotIndex)] = {
       slotIndex: safeSlotIndex,
-      name,
+      name: sanitizeLevelName(name, `Creative ${safeSlotIndex + 1}`),
       rows: normalizedRows,
       updatedAt
     };

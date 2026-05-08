@@ -5,6 +5,7 @@ import type { LevelMedal } from '../systems/SaveSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { startSceneWithTransition } from '../ui/uiFeedback';
 import { WORLD_WIDTH } from '../utils/constants';
 
 interface EndSceneData {
@@ -59,7 +60,7 @@ export class VictoryScene extends Phaser.Scene {
         fontFamily: 'Arial, sans-serif',
         fontSize: '34px',
         fontStyle: '900',
-        color: '#f4c95d'
+        color: `#${theme.accent.toString(16).padStart(6, '0')}`
       })
       .setOrigin(0.5);
 
@@ -72,12 +73,15 @@ export class VictoryScene extends Phaser.Scene {
       editorReturn ? 'BACK TO EDITOR' : hasNext ? 'NEXT LEVEL' : 'RESTART',
       () => {
         if (editorReturn) {
-          this.scene.start('LevelEditorScene', editorReturn);
+          startSceneWithTransition(this, 'LevelEditorScene', editorReturn);
           return;
         }
 
-        this.scene.start('GameScene', { levelIndex: hasNext ? levelIndex + 1 : levelIndex });
-      }
+        startSceneWithTransition(this, 'GameScene', {
+          levelIndex: hasNext ? levelIndex + 1 : levelIndex
+        });
+      },
+      { icon: editorReturn ? 'palette' : hasNext ? 'player-track-next' : 'rotate-clockwise', theme }
     );
 
     new Button(
@@ -88,9 +92,9 @@ export class VictoryScene extends Phaser.Scene {
       104,
       'LEVEL SELECT',
       () => {
-        this.scene.start('LevelSelectScene');
+        startSceneWithTransition(this, 'LevelSelectScene');
       },
-      { variant: 'secondary' }
+      { variant: 'secondary', icon: 'player-track-next', theme }
     );
 
     new Button(
@@ -101,9 +105,9 @@ export class VictoryScene extends Phaser.Scene {
       104,
       'MENU',
       () => {
-        this.scene.start('MainMenuScene');
+        startSceneWithTransition(this, 'MainMenuScene');
       },
-      { variant: 'ghost' }
+      { variant: 'ghost', icon: 'home', theme }
     );
 
     addCreatorCredit(this, theme);

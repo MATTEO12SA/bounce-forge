@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -379,6 +379,42 @@ describe('admin server API', () => {
       expect(payload.overrides[0]?.name).toBe('Reboot Level');
     } finally {
       await new Promise<void>((resolve) => secondServer.close(() => resolve()));
+    }
+  });
+
+  it('falls back to the SPA instead of serving files outside dist', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'bounce-forge-static-'));
+    const distDir = join(tempDir, 'dist');
+
+    await mkdir(distDir, { recursive: true });
+    await writeFile(join(distDir, 'index.html'), '<h1>INDEX</h1>', 'utf8');
+    await writeFile(join(tempDir, 'outside.txt'), 'OUTSIDE', 'utf8');
+
+    const server = createAdminServer({
+      adminPassword: 'test-secret-password',
+      dataFile: join(tempDir, 'campaign-level-overrides.json'),
+      distDir,
+      apiOnly: false
+    });
+
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', resolve);
+    });
+
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Invalid static test server address.');
+    }
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/%2e%2e%2foutside.txt`);
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(body).toContain('INDEX');
+      expect(body).not.toContain('OUTSIDE');
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
 });

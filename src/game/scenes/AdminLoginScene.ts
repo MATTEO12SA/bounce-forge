@@ -4,6 +4,7 @@ import { AdminApiSystem } from '../systems/AdminApiSystem';
 import { SaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
+import { startSceneWithTransition } from '../ui/uiFeedback';
 import { GAME_TITLE, WORLD_WIDTH } from '../utils/constants';
 
 export class AdminLoginScene extends Phaser.Scene {
@@ -67,7 +68,8 @@ export class AdminLoginScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     new Button(this, WORLD_WIDTH / 2, 620, 520, 84, 'LOGIN', () => void this.login(), {
-      selected: true
+      selected: true,
+      icon: 'check'
     });
     new Button(
       this,
@@ -76,8 +78,8 @@ export class AdminLoginScene extends Phaser.Scene {
       520,
       84,
       'BACK',
-      () => this.scene.start('MainMenuScene'),
-      { variant: 'ghost' }
+      () => startSceneWithTransition(this, 'MainMenuScene'),
+      { variant: 'ghost', icon: 'arrow-left' }
     );
 
     this.input.keyboard?.on('keydown', this.handleKeyDown, this);
@@ -92,7 +94,7 @@ export class AdminLoginScene extends Phaser.Scene {
 
   private handleKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      this.scene.start('MainMenuScene');
+      startSceneWithTransition(this, 'MainMenuScene');
       return;
     }
 
@@ -140,7 +142,7 @@ export class AdminLoginScene extends Phaser.Scene {
         return;
       }
 
-      this.scene.start('AdminMenuScene');
+      startSceneWithTransition(this, 'AdminMenuScene');
     } catch (error) {
       this.statusText.setText(error instanceof Error ? error.message : 'Connexion impossible.');
     }

@@ -1,6 +1,6 @@
 import { createReadStream, existsSync } from 'node:fs';
 import http from 'node:http';
-import { extname, join, resolve } from 'node:path';
+import { extname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AdminAuth } from './adminAuth.mjs';
 import { CampaignOverrideStore, ValidationError } from './campaignOverrideStore.mjs';
@@ -175,13 +175,20 @@ function rejectUntrustedOrigin(req, res) {
   return true;
 }
 
+function isPathInside(parentDir, childPath) {
+  const relativePath = relative(parentDir, childPath);
+  return Boolean(relativePath) && !relativePath.startsWith('..') && !isAbsolute(relativePath);
+}
+
 function serveStatic(req, res, distDir) {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const pathname = decodeURIComponent(url.pathname);
-  const safePath = pathname === '/' ? '/index.html' : pathname;
-  const filePath = resolve(join(distDir, safePath));
-  const fallback = resolve(join(distDir, 'index.html'));
-  const target = filePath.startsWith(distDir) && existsSync(filePath) ? filePath : fallback;
+  const resolvedDistDir = resolve(distDir);
+  const safePath = pathname === '/' ? 'index.html' : pathname.replace(/^\/+/, '');
+  const filePath = resolve(resolvedDistDir, safePath);
+  const fallback = resolve(resolvedDistDir, 'index.html');
+  const target =
+    isPathInside(resolvedDistDir, filePath) && existsSync(filePath) ? filePath : fallback;
 
   if (!existsSync(target)) {
     sendJson(res, 404, { message: 'Build output not found. Run npm run build first.' });

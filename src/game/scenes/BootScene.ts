@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { preloadTablerIcons } from '../ui/icons';
 
 const SPARK_TEXTURE = 'forge-spark';
 const EMBER_TEXTURE = 'forge-ember';
@@ -7,6 +8,10 @@ const SHARD_TEXTURE = 'forge-shard';
 export class BootScene extends Phaser.Scene {
   public constructor() {
     super('BootScene');
+  }
+
+  public preload(): void {
+    preloadTablerIcons(this);
   }
 
   public create(): void {
