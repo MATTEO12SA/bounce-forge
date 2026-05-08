@@ -65,7 +65,7 @@ export class Slider extends Phaser.GameObjects.Container {
       .setOrigin(1, 0.5);
 
     this.add([this.track, this.fill, this.knob, this.valueText]);
-    this.setSize(width + 120, this.heightValue);
+    this.setSize(width, this.heightValue);
     this.setInteractive(
       new Phaser.Geom.Rectangle(-width / 2, -this.heightValue / 2, width, this.heightValue),
       Phaser.Geom.Rectangle.Contains
