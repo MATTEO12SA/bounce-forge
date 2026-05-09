@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: ['dist', 'coverage', 'node_modules', 'vendor']
+    ignores: ['dist', 'coverage', 'node_modules', 'vendor', '.edge*', '.video-debug*']
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

@@ -16,6 +16,7 @@ export class Slider extends Phaser.GameObjects.Container {
   private readonly fill: RoundedRect;
   private readonly knob: Phaser.GameObjects.Arc;
   private readonly valueText: Phaser.GameObjects.Text;
+  private readonly hitTarget: Phaser.GameObjects.Zone;
   private readonly widthValue: number;
   private readonly heightValue: number;
   private readonly step?: number;
@@ -64,23 +65,25 @@ export class Slider extends Phaser.GameObjects.Container {
       })
       .setOrigin(1, 0.5);
 
-    this.add([this.track, this.fill, this.knob, this.valueText]);
-    this.setSize(width, this.heightValue);
-    this.setInteractive(
-      new Phaser.Geom.Rectangle(-width / 2, -this.heightValue / 2, width, this.heightValue),
-      Phaser.Geom.Rectangle.Contains
-    );
+    this.hitTarget = scene.add
+      .zone(56, 0, width + 124, this.heightValue + 12)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: !options.disabled });
+
+    this.add([this.track, this.fill, this.knob, this.valueText, this.hitTarget]);
+    this.setSize(width + 124, this.heightValue + 12);
 
     if (!options.disabled) {
-      this.input!.cursor = 'pointer';
-      this.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      const handleDown = (pointer: Phaser.Input.Pointer): void => {
         this.dragging = true;
         this.updateFromPointer(pointer);
-      });
+      };
+      this.hitTarget.on('pointerdown', handleDown);
       scene.input.on('pointermove', this.handlePointerMove, this);
       scene.input.on('pointerup', this.stopDragging, this);
       scene.input.on('pointerupoutside', this.stopDragging, this);
       this.once(Phaser.GameObjects.Events.DESTROY, () => {
+        this.hitTarget.off('pointerdown', handleDown);
         scene.input.off('pointermove', this.handlePointerMove, this);
         scene.input.off('pointerup', this.stopDragging, this);
         scene.input.off('pointerupoutside', this.stopDragging, this);

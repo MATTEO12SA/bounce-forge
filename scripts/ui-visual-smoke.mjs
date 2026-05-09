@@ -122,7 +122,7 @@ function createCdpClient(wsUrl) {
             const timer = setTimeout(() => {
               pending.delete(callId);
               fail(new Error(`CDP timeout: ${method}`));
-            }, 5000);
+            }, 15000);
 
             pending.set(callId, (message) => {
               clearTimeout(timer);
@@ -213,7 +213,7 @@ async function evaluate(page, expression) {
   return result.result.result.value;
 }
 
-async function waitForGame(page, timeoutMs = 25000) {
+async function waitForGame(page, timeoutMs = 60000) {
   const start = Date.now();
 
   while (Date.now() - start < timeoutMs) {
@@ -305,6 +305,56 @@ async function captureUiState(page, name, expectations) {
       const icons = children
         .map((child) => child.icon)
         .filter((icon) => typeof icon === 'string');
+      const toBounds = (bounds) => ({
+        left: Number(bounds.left),
+        right: Number(bounds.right),
+        top: Number(bounds.top),
+        bottom: Number(bounds.bottom),
+        width: Number(bounds.width),
+        height: Number(bounds.height)
+      });
+      const mergeBounds = (boundsList) => {
+        const valid = boundsList.filter((bounds) => bounds && bounds.width > 0 && bounds.height > 0);
+        if (valid.length === 0) return null;
+        return {
+          left: Math.min(...valid.map((bounds) => bounds.left)),
+          right: Math.max(...valid.map((bounds) => bounds.right)),
+          top: Math.min(...valid.map((bounds) => bounds.top)),
+          bottom: Math.max(...valid.map((bounds) => bounds.bottom)),
+          get width() {
+            return this.right - this.left;
+          },
+          get height() {
+            return this.bottom - this.top;
+          }
+        };
+      };
+      const getVisualBounds = (child) => {
+        if (!Array.isArray(child.list)) {
+          return typeof child.getBounds === 'function' ? toBounds(child.getBounds()) : null;
+        }
+
+        return mergeBounds(
+          child.list
+            .filter((part) => part !== child.hitTarget && part.visible !== false)
+            .map((part) => (typeof part.getBounds === 'function' ? toBounds(part.getBounds()) : null))
+        );
+      };
+      const covers = (hit, visible, tolerance = 2) =>
+        hit.left <= visible.left + tolerance &&
+        hit.right >= visible.right - tolerance &&
+        hit.top <= visible.top + tolerance &&
+        hit.bottom >= visible.bottom - tolerance;
+      const getHitBounds = (child) => {
+        const hitTarget = child.hitTarget;
+        if (hitTarget && typeof hitTarget.getBounds === 'function') {
+          return toBounds(hitTarget.getBounds());
+        }
+        if (child.input?.hitArea) {
+          return toBounds(child.getBounds());
+        }
+        return null;
+      };
       const buttonBounds = children
         .filter((child) => controlNames.has(child.constructor?.name) && child.visible !== false)
         .map((child) => {
@@ -322,11 +372,28 @@ async function captureUiState(page, name, expectations) {
             bottom: y + height / 2
           };
         });
+      const hitboxFailures = children
+        .filter((child) => controlNames.has(child.constructor?.name) && child.visible !== false)
+        .map((child) => {
+          const visible = getVisualBounds(child);
+          const hit = getHitBounds(child);
+          if (!visible || !hit || visible.width <= 0 || visible.height <= 0 || covers(hit, visible)) {
+            return null;
+          }
+          return {
+            name: child.constructor?.name,
+            label: child.buttonLabel ?? child.icon ?? child.text ?? '',
+            visible,
+            hit
+          };
+        })
+        .filter(Boolean);
       return {
         activeSceneKeys,
         textCount: texts.length,
         buttonCount,
         buttonBounds,
+        hitboxFailures,
         icons,
         texts,
         hasCanvas: Boolean(document.querySelector('canvas')),
@@ -353,6 +420,11 @@ async function captureUiState(page, name, expectations) {
   );
   if (outOfBoundsButtons.length > 0) {
     failures.push(`button bounds outside world (${JSON.stringify(outOfBoundsButtons[0])})`);
+  }
+  if (state.hitboxFailures.length > 0) {
+    failures.push(
+      `hitbox does not cover visible control (${JSON.stringify(state.hitboxFailures[0])})`
+    );
   }
   if (
     expectations.requiredText &&

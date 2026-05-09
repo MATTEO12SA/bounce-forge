@@ -34,6 +34,7 @@ export class Button extends Phaser.GameObjects.Container {
   private readonly highlight: Phaser.GameObjects.Rectangle;
   private readonly iconImage?: Phaser.GameObjects.Image;
   private readonly labelText: Phaser.GameObjects.Text;
+  private readonly hitTarget: Phaser.GameObjects.Zone;
   private disabled: boolean;
   private readonly fill: number;
   private readonly hoverFill: number;
@@ -81,7 +82,14 @@ export class Button extends Phaser.GameObjects.Container {
     });
 
     this.highlight = scene.add
-      .rectangle(0, -height / 2 + 6, width - 18, Math.min(4, Math.max(2, height - 14)), 0xffffff, 0.16)
+      .rectangle(
+        0,
+        -height / 2 + 6,
+        width - 18,
+        Math.min(4, Math.max(2, height - 14)),
+        0xffffff,
+        0.16
+      )
       .setAlpha(this.disabled ? 0.04 : this.selected ? 0.24 : 0.14);
 
     if (options.icon) {
@@ -119,16 +127,14 @@ export class Button extends Phaser.GameObjects.Container {
       children.splice(3, 0, this.iconImage);
     }
 
+    this.hitTarget = scene.add
+      .zone(0, 4, width + 16, height + 18)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: !this.disabled });
+
+    children.push(this.hitTarget);
     this.add(children);
     this.setSize(width, height);
-    this.setInteractive(
-      new Phaser.Geom.Rectangle(-width / 2, -height / 2, width, height),
-      Phaser.Geom.Rectangle.Contains
-    );
-
-    if (this.input && !this.disabled) {
-      this.input.cursor = 'pointer';
-    }
 
     const handleOver = (): void => {
       if (!this.disabled) {
@@ -166,6 +172,9 @@ export class Button extends Phaser.GameObjects.Container {
     this.on('pointerover', handleOver);
     this.on('pointerout', handleOut);
     this.on('pointerdown', handleDown);
+    this.hitTarget.on('pointerover', handleOver);
+    this.hitTarget.on('pointerout', handleOut);
+    this.hitTarget.on('pointerdown', handleDown);
 
     scene.add.existing(this);
   }
@@ -174,6 +183,9 @@ export class Button extends Phaser.GameObjects.Container {
     this.off('pointerover');
     this.off('pointerout');
     this.off('pointerdown');
+    this.hitTarget.off('pointerover');
+    this.hitTarget.off('pointerout');
+    this.hitTarget.off('pointerdown');
     super.destroy(fromScene);
   }
 
@@ -191,8 +203,8 @@ export class Button extends Phaser.GameObjects.Container {
     this.labelText.setAlpha(disabled ? 0.5 : 1);
     this.iconImage?.setAlpha(disabled ? 0.45 : 0.95);
     this.highlight.setAlpha(disabled ? 0.04 : this.selected ? 0.24 : 0.14);
-    if (this.input) {
-      this.input.cursor = disabled ? 'default' : 'pointer';
+    if (this.hitTarget.input) {
+      this.hitTarget.input.cursor = disabled ? 'default' : 'pointer';
     }
   }
 
@@ -228,9 +240,10 @@ export class Button extends Phaser.GameObjects.Container {
           fill: 0x151515,
           hoverFill: 0x262015,
           stroke: theme?.borderDim ?? 0x7d6600,
-          textColor: theme?.accent !== undefined
-            ? `#${theme.accent.toString(16).padStart(6, '0')}`
-            : '#f4c95d'
+          textColor:
+            theme?.accent !== undefined
+              ? `#${theme.accent.toString(16).padStart(6, '0')}`
+              : '#f4c95d'
         };
       case 'primary':
       default:

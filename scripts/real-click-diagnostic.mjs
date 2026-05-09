@@ -75,7 +75,9 @@ try {
     try {
       tabs = await request('/json/list');
       if (tabs.find((t) => /localhost:5173/.test(t.url))) break;
-    } catch {}
+    } catch {
+      // Browser can take a moment to expose the debugging target.
+    }
     await delay(500);
   }
   const tab = tabs.find((t) => /localhost:5173/.test(t.url));
@@ -129,7 +131,9 @@ try {
   await delay(1500);
 
   // verify we're on OptionsScene
-  const activeScenes = await evalExpr(`window.__bounceForge.scene.getScenes(true).map(s => s.scene.key)`);
+  const activeScenes = await evalExpr(
+    `window.__bounceForge.scene.getScenes(true).map(s => s.scene.key)`
+  );
   console.log('Active scenes after switch:', activeScenes);
 
   // dump viewport / canvas info
@@ -228,7 +232,9 @@ try {
 
   // test each interactive: dispatch real click at its screen center, see what registers
   // SKIP FULLSCREEN toggle (the first one) since clicking it might affect canvas state
-  const orderedInteractives = info.interactives.filter((it, idx) => !(it.kind === 'ToggleSwitch' && it.label === 'OFF'));
+  const orderedInteractives = info.interactives.filter(
+    (it) => !(it.kind === 'ToggleSwitch' && it.label === 'OFF')
+  );
   const results = [];
   for (const it of orderedInteractives) {
     if (!Number.isFinite(it.screenX) || !Number.isFinite(it.screenY)) continue;
@@ -283,7 +289,9 @@ try {
   console.log('\nScene input list:', JSON.stringify(inputList, null, 2));
 
   console.log('\n=== Per-interactive click results ===');
-  results.forEach((r) => console.log(`${r.target}\n   -> ${r.events.length ? r.events.join(', ') : 'NO EVENT'}`));
+  results.forEach((r) =>
+    console.log(`${r.target}\n   -> ${r.events.length ? r.events.join(', ') : 'NO EVENT'}`)
+  );
 
   // For each FAILING click, ask Phaser what it found at that pointer position
   const failing = info.interactives.filter((it, i) => results[i] && results[i].events.length === 0);
@@ -314,7 +322,10 @@ try {
           };
         })();
       `);
-      console.log(`Phaser hit test for ${it.kind}/${it.label} at world (${it.worldX}, ${it.worldY}):`, JSON.stringify(hitTest));
+      console.log(
+        `Phaser hit test for ${it.kind}/${it.label} at world (${it.worldX}, ${it.worldY}):`,
+        JSON.stringify(hitTest)
+      );
 
       const probe = await evalExpr(`
         (() => {

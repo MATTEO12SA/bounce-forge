@@ -12,6 +12,7 @@ export class ToggleSwitch extends Phaser.GameObjects.Container {
   private readonly background: RoundedRect;
   private readonly knob: Phaser.GameObjects.Arc;
   private readonly label: Phaser.GameObjects.Text;
+  private readonly hitTarget: Phaser.GameObjects.Zone;
   private readonly activeColor: number;
   private readonly inactiveColor: number;
   private readonly strokeColor: number;
@@ -63,16 +64,17 @@ export class ToggleSwitch extends Phaser.GameObjects.Container {
       })
       .setOrigin(0.5);
 
-    this.add([this.background, this.knob, this.label]);
+    this.hitTarget = scene.add
+      .zone(0, 0, 190, 84)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: !options.disabled });
+
+    this.add([this.background, this.knob, this.label, this.hitTarget]);
     this.setSize(176, 72);
-    this.setInteractive(
-      new Phaser.Geom.Rectangle(-88, -36, 176, 72),
-      Phaser.Geom.Rectangle.Contains
-    );
 
     if (!options.disabled) {
-      this.input!.cursor = 'pointer';
-      this.on('pointerdown', () => this.setChecked(!this.checked, true));
+      const handleDown = (): void => this.setChecked(!this.checked, true);
+      this.hitTarget.on('pointerdown', handleDown);
     }
 
     scene.add.existing(this);

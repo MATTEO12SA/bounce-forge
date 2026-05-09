@@ -85,6 +85,7 @@ export class IconButton extends Phaser.GameObjects.Container {
   private readonly fill: number;
   private readonly hoverFill: number;
   private readonly stroke: number;
+  private readonly hitTarget: Phaser.GameObjects.Zone;
 
   public constructor(
     scene: Phaser.Scene,
@@ -149,16 +150,16 @@ export class IconButton extends Phaser.GameObjects.Container {
       children.push(label);
     }
 
+    const hitHeight = options.label ? size + 58 : size + 18;
+    const hitY = options.label ? 20 : 4;
+    this.hitTarget = scene.add
+      .zone(0, hitY, size + 18, hitHeight)
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: !this.disabled });
+
+    children.push(this.hitTarget);
     this.add(children);
     this.setSize(size, size);
-    this.setInteractive(
-      new Phaser.Geom.Rectangle(-size / 2, -size / 2, size, size),
-      Phaser.Geom.Rectangle.Contains
-    );
-
-    if (this.input && !this.disabled) {
-      this.input.cursor = 'pointer';
-    }
 
     if (options.tooltip) {
       this.tooltip = new Tooltip(scene);
@@ -200,10 +201,16 @@ export class IconButton extends Phaser.GameObjects.Container {
     this.on('pointerover', handleOver);
     this.on('pointerout', handleOut);
     this.on('pointerdown', handleDown);
+    this.hitTarget.on('pointerover', handleOver);
+    this.hitTarget.on('pointerout', handleOut);
+    this.hitTarget.on('pointerdown', handleDown);
     scene.add.existing(this);
   }
 
   public override destroy(fromScene?: boolean): void {
+    this.hitTarget.off('pointerover');
+    this.hitTarget.off('pointerout');
+    this.hitTarget.off('pointerdown');
     this.tooltip?.destroy();
     super.destroy(fromScene);
   }

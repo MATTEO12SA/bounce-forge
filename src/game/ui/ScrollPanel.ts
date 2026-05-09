@@ -25,7 +25,6 @@ interface ScrollPanelOptions<T> {
 
 export class ScrollPanel<T> extends Phaser.GameObjects.Container {
   private readonly content: Phaser.GameObjects.Container;
-  private readonly maskGraphics: Phaser.GameObjects.Graphics;
   private readonly viewportHeight: number;
   private readonly contentHeight: number;
   private scrollOffset = 0;
@@ -60,17 +59,6 @@ export class ScrollPanel<T> extends Phaser.GameObjects.Container {
       });
     });
 
-    this.maskGraphics = scene.add.graphics();
-    this.maskGraphics.fillStyle(0xffffff, 1);
-    this.maskGraphics.fillRect(
-      bounds.x - bounds.width / 2,
-      bounds.y - bounds.height / 2,
-      bounds.width,
-      bounds.height
-    );
-    this.maskGraphics.setVisible(false);
-    this.content.setMask(this.maskGraphics.createGeometryMask());
-
     this.add([frame, this.content]);
     this.setSize(bounds.width, bounds.height);
     this.setInteractive(
@@ -90,7 +78,6 @@ export class ScrollPanel<T> extends Phaser.GameObjects.Container {
   }
 
   public override destroy(fromScene?: boolean): void {
-    this.maskGraphics.destroy();
     super.destroy(fromScene);
   }
 }
