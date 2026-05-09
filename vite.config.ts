@@ -23,6 +23,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1500
   },
   optimizeDeps: {
+    entries: ['index.html'],
     include: ['phaser']
   },
   test: {

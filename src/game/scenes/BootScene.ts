@@ -10,11 +10,8 @@ export class BootScene extends Phaser.Scene {
     super('BootScene');
   }
 
-  public preload(): void {
-    preloadTablerIcons(this);
-  }
-
   public create(): void {
+    preloadTablerIcons(this);
     this.generateProceduralTextures();
     this.scene.start('PreloadScene');
   }

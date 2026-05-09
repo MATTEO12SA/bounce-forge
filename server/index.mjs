@@ -366,8 +366,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   });
 
   const port = Number(process.env.API_PORT ?? process.env.PORT ?? 8787);
+  const host = process.env.API_HOST ?? '0.0.0.0';
   const server = createAdminServer();
-  server.listen(port, '0.0.0.0', () => {
+  server.listen(port, host, () => {
     console.log(`Bounce Forge server listening on http://localhost:${port}`);
   });
 }

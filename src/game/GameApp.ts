@@ -16,6 +16,11 @@ export class GameApp {
   }
 
   public destroy(): void {
+    const globalWindow = window as unknown as { __bounceForge?: Phaser.Game };
+    if (globalWindow.__bounceForge === this.game) {
+      delete globalWindow.__bounceForge;
+    }
+
     this.game?.destroy(true);
     this.game = null;
   }

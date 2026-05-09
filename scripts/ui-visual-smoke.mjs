@@ -272,12 +272,21 @@ async function waitForScene(page, sceneKey, timeoutMs = 12000) {
         activeSceneKeys: game?.scene?.scenes
           ?.filter((scene) => scene.sys.isActive())
           .map((scene) => scene.scene.key) ?? [],
-        sceneKeys: game?.scene?.scenes?.map((scene) => scene.scene.key) ?? []
+        sceneKeys: game?.scene?.scenes?.map((scene) => scene.scene.key) ?? [],
+        sceneStatus: game?.scene?.scenes?.map((scene) => ({
+          key: scene.scene.key,
+          active: scene.sys.isActive(),
+          paused: scene.sys.isPaused(),
+          visible: scene.sys.isVisible(),
+          status: scene.sys.settings.status
+        })) ?? []
       };
     })()`
   );
 
-  throw new Error(`Timed out waiting for ${sceneKey}: ${JSON.stringify(state)}`);
+  throw new Error(
+    `Timed out waiting for ${sceneKey}: ${JSON.stringify({ ...state, consoleErrors })}`
+  );
 }
 
 async function captureUiState(page, name, expectations) {
