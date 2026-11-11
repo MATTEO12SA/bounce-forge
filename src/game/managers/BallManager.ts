@@ -1,16 +1,14 @@
 import type Phaser from 'phaser';
 import { Ball } from '../entities/Ball';
 import type { Paddle } from '../entities/Paddle';
+import { launchVelocity } from '../physics/gameplayRules';
 import {
   BALL_LIMIT_GROWTH_STEP,
   BALL_LIMIT_STRESS_FRAME_MS,
   BALL_LIMIT_STRESS_FRAMES,
   BALL_MIN_SPEED,
-  BALL_RADIUS,
   INITIAL_ACTIVE_BALL_LIMIT,
-  MAX_ACTIVE_BALLS,
-  PLAYFIELD_LEFT,
-  PLAYFIELD_RIGHT
+  MAX_ACTIVE_BALLS
 } from '../utils/constants';
 
 export interface BallManagerStats {
@@ -24,35 +22,33 @@ export interface BallManagerStats {
 interface BallManagerOptions {
   ballSpeed: number;
   maxBallSpeed: number;
-  applyBallFx: (ball: Ball) => void;
-  onBallActivated: (ball: Ball) => void;
-  onAttachedBallCreated: (ball: Ball) => void;
-  onAttachedBallLaunched: (ball: Ball) => void;
-  onExpansionBlocked?: (reason: string) => void;
+  onBallSpawned?: (ball: Ball) => void;
+  onLaunched?: (ball: Ball) => void;
 }
 
+/** Pool of balls (max 96) with an adaptive limit that backs off when frames get slow. */
 export class BallManager {
-  public readonly group: Phaser.Physics.Arcade.Group;
-
+  private readonly pool: Ball[] = [];
   private maxBallsReached = 1;
   private expansionBlocked = false;
   private activeLimit = INITIAL_ACTIVE_BALL_LIMIT;
   private stressFrames = 0;
   private pendingClones = 0;
-  private readonly ballsWithFx = new WeakSet<Ball>();
-  private readonly ballNearWallFrames = new WeakMap<Ball, number>();
+  /** Aim angle (radians from vertical) for the next launch, or null for a random tilt. */
+  public aim: number | null = null;
 
   public constructor(
     private readonly scene: Phaser.Scene,
     private readonly paddle: Paddle,
     private readonly options: BallManagerOptions
-  ) {
-    this.group = scene.physics.add.group({
-      classType: Ball,
-      maxSize: MAX_ACTIVE_BALLS,
-      allowGravity: false,
-      runChildUpdate: false
-    });
+  ) {}
+
+  public get baseSpeed(): number {
+    return this.options.ballSpeed;
+  }
+
+  public get maxSpeed(): number {
+    return this.options.maxBallSpeed;
   }
 
   public createAttachedBall(): Ball | null {
@@ -60,107 +56,86 @@ export class BallManager {
   }
 
   public createBall(attached: boolean): Ball | null {
-    const startX = this.paddle.x;
-    const startY = this.paddle.y - 56;
-    const ball = this.acquireBall(startX, startY);
-
+    const ball = this.acquireBall();
     if (!ball) {
       return null;
     }
-
-    ball.reset(startX, startY);
-    this.applyBallFxOnce(ball);
-
+    ball.reset(this.paddle.x, this.paddle.top - ball.radius - 1);
+    ball.speed = this.options.ballSpeed;
     if (attached) {
       ball.attachToPaddle(this.paddle);
+    } else {
+      const v = launchVelocity(ball.speed, null, Math.random);
+      ball.launch(v.vx, v.vy);
     }
-
-    this.options.onBallActivated(ball);
-    this.options.onAttachedBallCreated(ball);
+    this.options.onBallSpawned?.(ball);
     this.refreshMaxBallsReached();
     return ball;
   }
 
   public launchAttachedBalls(): void {
-    this.getActiveBalls()
-      .filter((ball) => ball.isAttached)
-      .forEach((ball) => {
-        ball.launch(this.options.ballSpeed);
-        this.options.onAttachedBallLaunched(ball);
-      });
+    const attached = this.getActiveBalls().filter((ball) => ball.isAttached);
+    attached.forEach((ball, index) => {
+      // Several caught balls fan out instead of travelling on top of each other.
+      const spread = attached.length > 1 ? (index / (attached.length - 1) - 0.5) * 0.24 : 0;
+      const aim = this.aim === null ? null : this.aim + spread;
+      const v = launchVelocity(Math.max(ball.speed, this.options.ballSpeed), aim, Math.random);
+      ball.launch(v.vx, v.vy);
+      this.options.onLaunched?.(ball);
+    });
   }
 
+  /** Keeps attached balls glued to the paddle and removes balls that fell out. */
   public update(isRespawning: boolean): boolean {
-    this.getActiveBalls().forEach((ball) => {
+    for (const ball of this.pool) {
+      if (!ball.active) continue;
       if (ball.isAttached) {
         ball.attachToPaddle(this.paddle);
-        this.options.onBallActivated(ball);
-        return;
-      }
-
-      ball.maintainSpeed(BALL_MIN_SPEED, this.options.maxBallSpeed);
-      this.detectWallTunneling(ball);
-      this.options.onBallActivated(ball);
-
-      if (ball.isOutOfPlay()) {
+      } else if (ball.isOutOfPlay()) {
         ball.disable();
-        this.ballNearWallFrames.delete(ball);
       }
-    });
-
+    }
     this.refreshMaxBallsReached();
-    return this.getActiveBalls().length === 0 && !isRespawning;
+    return this.countActive() === 0 && !isRespawning;
   }
 
   public updateAdaptiveLimit(deltaMs: number): void {
-    if (this.expansionBlocked || this.getActiveBalls().length < INITIAL_ACTIVE_BALL_LIMIT) {
+    if (this.expansionBlocked || this.countActive() < INITIAL_ACTIVE_BALL_LIMIT) {
       this.stressFrames = 0;
       return;
     }
-
     if (deltaMs < BALL_LIMIT_STRESS_FRAME_MS) {
       this.stressFrames = 0;
       return;
     }
-
     this.stressFrames += 1;
-
     if (this.stressFrames >= BALL_LIMIT_STRESS_FRAMES) {
-      this.blockExpansion(
-        `frame time stayed above ${BALL_LIMIT_STRESS_FRAME_MS}ms near ${
-          this.getActiveBalls().length
-        } balls`
-      );
+      this.expansionBlocked = true;
     }
   }
 
-  public duplicateBallsOrQueue(source: Ball, angleOffsetsRadians: number[]): void {
-    const reservedSlots = this.reserveCloneSlots(angleOffsetsRadians.length);
-
-    angleOffsetsRadians.forEach((angleOffsetRadians, index) => {
-      if (index < reservedSlots && this.duplicateBall(source, angleOffsetRadians)) {
-        return;
-      }
-
-      if (!this.isCloneLimitBlocked()) {
+  public duplicateBallsOrQueue(source: Ball, angleOffsetsRadians: number[]): Ball[] {
+    const created: Ball[] = [];
+    angleOffsetsRadians.forEach((offset) => {
+      const ball = this.duplicateBall(source, offset);
+      if (ball) {
+        created.push(ball);
+      } else if (!this.isCloneLimitBlocked() && this.countActive() < MAX_ACTIVE_BALLS) {
         this.pendingClones += 1;
       }
     });
+    return created;
   }
 
   public flushPendingClones(sourceBall?: Ball): void {
     if (this.pendingClones <= 0 || this.isCloneLimitBlocked()) {
       return;
     }
-
     const source = this.getPowerUpSourceBall(sourceBall);
-
     if (!source) {
       return;
     }
-
     const offsets = [0.34, -0.34, 0.7, -0.7, 0.18, -0.18];
-
     while (this.pendingClones > 0) {
       const offset = offsets[this.pendingClones % offsets.length] ?? 0.34;
       if (!this.duplicateBall(source, offset)) {
@@ -174,40 +149,25 @@ export class BallManager {
     if (sourceBall && sourceBall.active && !sourceBall.isAttached) {
       return sourceBall;
     }
-
-    const launchedBall = this.getActiveBalls().find((ball) => !ball.isAttached);
-
-    if (launchedBall) {
-      return launchedBall;
+    const launched = this.getActiveBalls().find((ball) => !ball.isAttached);
+    if (launched) {
+      return launched;
     }
-
     if (sourceBall && sourceBall.active) {
       return sourceBall;
     }
-
     return this.getActiveBalls()[0] ?? null;
   }
 
   public getActiveBalls(): Ball[] {
-    // A destroyed physics group (scene shut down) has no children list anymore; callers that
-    // hold a stale reference after a restart must get an empty list, not an exception.
-    if (!this.isGroupAlive()) {
-      return [];
-    }
-
-    return this.group
-      .getChildren()
-      .filter((child): child is Ball => child instanceof Ball && child.active);
+    return this.pool.filter((ball) => ball.active);
   }
 
   public getStats(): BallManagerStats {
-    const activeCount = this.getActiveBalls().length;
-
+    const activeCount = this.countActive();
     return {
       activeCount,
-      activeLimit: this.expansionBlocked
-        ? Math.min(this.activeLimit, INITIAL_ACTIVE_BALL_LIMIT)
-        : this.activeLimit,
+      activeLimit: this.currentLimit(),
       pendingClones: this.pendingClones,
       maxBallsReached: Math.max(this.maxBallsReached, activeCount),
       expansionBlocked: this.expansionBlocked
@@ -219,11 +179,9 @@ export class BallManager {
   }
 
   public setActiveLimit(limit: number): void {
-    if (!Number.isFinite(limit)) {
-      return;
+    if (Number.isFinite(limit)) {
+      this.activeLimit = Math.max(1, Math.min(MAX_ACTIVE_BALLS, Math.floor(limit)));
     }
-
-    this.activeLimit = Math.max(1, Math.min(MAX_ACTIVE_BALLS, Math.floor(limit)));
   }
 
   public getPendingClones(): number {
@@ -231,11 +189,9 @@ export class BallManager {
   }
 
   public setPendingClones(count: number): void {
-    if (!Number.isFinite(count)) {
-      return;
+    if (Number.isFinite(count)) {
+      this.pendingClones = Math.max(0, Math.floor(count));
     }
-
-    this.pendingClones = Math.max(0, Math.floor(count));
   }
 
   public getExpansionBlocked(): boolean {
@@ -251,163 +207,81 @@ export class BallManager {
   }
 
   public setStressFrames(frames: number): void {
-    if (!Number.isFinite(frames)) {
-      return;
+    if (Number.isFinite(frames)) {
+      this.stressFrames = Math.max(0, Math.floor(frames));
     }
-
-    this.stressFrames = Math.max(0, Math.floor(frames));
   }
 
-  private isGroupAlive(): boolean {
-    const group = this.group as unknown as { children?: unknown; scene?: unknown };
-    return Boolean(group.children) && Boolean(group.scene);
+  public destroy(): void {
+    this.pool.length = 0;
   }
 
-  private acquireBall(x: number, y: number): Ball | null {
-    if (!this.isGroupAlive()) {
-      return null;
+  private countActive(): number {
+    let count = 0;
+    for (const ball of this.pool) {
+      if (ball.active) count += 1;
     }
+    return count;
+  }
 
-    const reusable = this.group
-      .getChildren()
-      .find((child): child is Ball => child instanceof Ball && !child.active);
+  private currentLimit(): number {
+    return this.expansionBlocked
+      ? Math.min(this.activeLimit, INITIAL_ACTIVE_BALL_LIMIT)
+      : this.activeLimit;
+  }
 
+  private acquireBall(): Ball | null {
+    const reusable = this.pool.find((ball) => !ball.active);
     if (reusable) {
       return reusable;
     }
-
-    const pooled = this.group.get(x, y) as Ball | null;
-
-    if (pooled) {
-      return pooled;
-    }
-
-    if (this.group.getChildren().length >= MAX_ACTIVE_BALLS) {
+    if (this.pool.length >= MAX_ACTIVE_BALLS) {
       return null;
     }
-
-    const ball = new Ball(this.scene, x, y);
-    this.group.add(ball);
+    const ball = new Ball(this.scene);
+    this.pool.push(ball);
     return ball;
-  }
-
-  private applyBallFxOnce(ball: Ball): void {
-    if (this.ballsWithFx.has(ball)) {
-      return;
-    }
-
-    this.options.applyBallFx(ball);
-    this.ballsWithFx.add(ball);
-  }
-
-  private detectWallTunneling(ball: Ball): void {
-    if (ball.x < PLAYFIELD_LEFT - BALL_RADIUS || ball.x > PLAYFIELD_RIGHT + BALL_RADIUS) {
-      this.blockExpansion('ball tunneled outside playfield');
-      return;
-    }
-
-    this.detectStuckNearWall(ball);
-  }
-
-  private detectStuckNearWall(ball: Ball): void {
-    const nearLeftWall = ball.x <= PLAYFIELD_LEFT + BALL_RADIUS * 3;
-    const nearRightWall = ball.x >= PLAYFIELD_RIGHT - BALL_RADIUS * 3;
-
-    if (!nearLeftWall && !nearRightWall) {
-      this.ballNearWallFrames.delete(ball);
-      return;
-    }
-
-    const frames = (this.ballNearWallFrames.get(ball) ?? 0) + 1;
-    this.ballNearWallFrames.set(ball, frames);
-
-    if (frames >= 90) {
-      this.blockExpansion('ball trapped near wall');
-    }
   }
 
   private duplicateBall(source: Ball, angleOffsetRadians: number): Ball | null {
     if (!this.canCreateMoreBalls()) {
       return null;
     }
-
-    const newBall = this.acquireBall(source.x, source.y);
-    if (!newBall) {
+    const ball = this.acquireBall();
+    if (!ball) {
       return null;
     }
-
-    if (source.isAttached) {
-      newBall.configureAsLaunchedClone(source, angleOffsetRadians, this.options.ballSpeed);
-    } else {
-      newBall.configureAsClone(source, angleOffsetRadians);
-    }
-
-    this.applyBallFxOnce(newBall);
-    this.options.onBallActivated(newBall);
+    ball.reset(source.x, source.y);
+    const speed = Math.max(BALL_MIN_SPEED, source.speed || this.options.ballSpeed);
+    const baseAngle = source.isAttached ? -Math.PI / 2 : Math.atan2(source.vy, source.vx);
+    const angle = baseAngle + angleOffsetRadians;
+    ball.launch(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    ball.speed = speed;
+    this.options.onBallSpawned?.(ball);
     this.refreshMaxBallsReached();
-    return newBall;
-  }
-
-  private reserveCloneSlots(requestedSlots: number): number {
-    const ballCount = this.getActiveBalls().length;
-
-    if (requestedSlots <= 0 || ballCount >= MAX_ACTIVE_BALLS) {
-      return 0;
-    }
-
-    const availableHardSlots = Math.min(requestedSlots, MAX_ACTIVE_BALLS - ballCount);
-    const requiredLimit = ballCount + availableHardSlots;
-    const blockedLimit = this.expansionBlocked ? INITIAL_ACTIVE_BALL_LIMIT : this.activeLimit;
-
-    if (requiredLimit <= blockedLimit) {
-      return availableHardSlots;
-    }
-
-    if (this.expansionBlocked) {
-      return Math.max(0, Math.min(availableHardSlots, INITIAL_ACTIVE_BALL_LIMIT - ballCount));
-    }
-
-    this.activeLimit = Math.min(
-      MAX_ACTIVE_BALLS,
-      Math.max(this.activeLimit + BALL_LIMIT_GROWTH_STEP, requiredLimit)
-    );
-
-    return Math.max(0, Math.min(availableHardSlots, this.activeLimit - ballCount));
+    return ball;
   }
 
   private canCreateMoreBalls(): boolean {
-    const ballCount = this.getActiveBalls().length;
-
-    if (this.expansionBlocked && ballCount >= INITIAL_ACTIVE_BALL_LIMIT) {
+    const count = this.countActive();
+    if (count >= MAX_ACTIVE_BALLS) {
       return false;
     }
-
-    if (ballCount >= MAX_ACTIVE_BALLS) {
+    if (this.expansionBlocked && count >= INITIAL_ACTIVE_BALL_LIMIT) {
       return false;
     }
-
-    if (ballCount < this.activeLimit) {
+    if (count < this.activeLimit) {
       return true;
     }
-
     this.activeLimit = Math.min(MAX_ACTIVE_BALLS, this.activeLimit + BALL_LIMIT_GROWTH_STEP);
-    return ballCount < this.activeLimit;
+    return count < this.activeLimit;
   }
 
   private isCloneLimitBlocked(): boolean {
-    return this.expansionBlocked && this.getActiveBalls().length >= INITIAL_ACTIVE_BALL_LIMIT;
-  }
-
-  private blockExpansion(reason: string): void {
-    if (this.expansionBlocked) {
-      return;
-    }
-
-    this.expansionBlocked = true;
-    this.options.onExpansionBlocked?.(reason);
+    return this.expansionBlocked && this.countActive() >= INITIAL_ACTIVE_BALL_LIMIT;
   }
 
   private refreshMaxBallsReached(): void {
-    this.maxBallsReached = Math.max(this.maxBallsReached, this.getActiveBalls().length);
+    this.maxBallsReached = Math.max(this.maxBallsReached, this.countActive());
   }
 }

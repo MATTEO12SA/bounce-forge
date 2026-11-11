@@ -1,531 +1,534 @@
 import { EDITOR_GRID_COLS, EDITOR_GRID_ROWS } from '../../../shared/editorGridRules.mjs';
 import type { LevelObjective, PatternDefinition } from './levelTypes';
 
-const ROWS = EDITOR_GRID_ROWS;
+/**
+ * The 24 campaign levels, drawn as pixel art.
+ *
+ * Each art character becomes a 2×2 block of bricks, so a level is at most 18 characters wide
+ * (36 editor columns). Legend: `.` empty · `1` standard · `2`/`3` reinforced · `E` explosive ·
+ * `B` bonus (always drops a multiball) · `S` shield · `X` steel (indestructible).
+ *
+ * Design rules: every level leaves room above the bricks (getting the ball over the top is the
+ * most satisfying moment of a breakout), steel never fully encloses breakable bricks, and each
+ * chapter introduces one idea before mixing it with the others.
+ */
+
 const COLS = EDITOR_GRID_COLS;
+const ROWS = EDITOR_GRID_ROWS;
+const ART_SCALE = 2;
+const TOP_MARGIN = 3;
 
-type Grid = string[][];
-
-function createGrid(): Grid {
-  return Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => '.'));
-}
-
-function rowsOf(grid: Grid): string[] {
-  return grid.map((row) => row.join(''));
-}
-
-function setCell(grid: Grid, row: number, col: number, value: string): void {
-  if (grid[row]?.[col] !== undefined) {
-    grid[row][col] = value;
-  }
-}
-
-function rect(
-  grid: Grid,
-  rowStart: number,
-  rowEnd: number,
-  colStart: number,
-  colEnd: number,
-  value: string
-): void {
-  for (let row = rowStart; row <= rowEnd; row += 1) {
-    for (let col = colStart; col <= colEnd; col += 1) {
-      setCell(grid, row, col, value);
-    }
-  }
-}
-
-function line(grid: Grid, row: number, colStart: number, colEnd: number, value: string): void {
-  rect(grid, row, row, colStart, colEnd, value);
-}
-
-function border(grid: Grid, top: number, bottom: number, left: number, right: number): void {
-  line(grid, top, left, right, 'X');
-  line(grid, bottom, left, right, 'X');
-  rect(grid, top, bottom, left, left, 'X');
-  rect(grid, top, bottom, right, right, 'X');
-}
-
-function sprinkle(grid: Grid, value: string, positions: Array<[row: number, col: number]>): void {
-  positions.forEach(([row, col]) => setCell(grid, row, col, value));
-}
+/** Base score per brick symbol, mirrored from the level factory templates. */
+const SYMBOL_SCORE: Record<string, number> = {
+  '1': 100,
+  '2': 170,
+  '3': 240,
+  E: 210,
+  B: 130,
+  S: 280
+};
 
 function objective(type: LevelObjective['type'], target: number, label: string): LevelObjective {
   return { type, target, label };
 }
 
-function makePattern(
-  id: string,
-  name: string,
-  chapter: string,
-  build: (grid: Grid) => void,
-  objectiveValue: LevelObjective,
-  goldScore: number,
-  goldBestCombo: number
-): PatternDefinition {
-  const grid = createGrid();
-  build(grid);
+/** Expands pixel art (≤ 18 wide) into the 36 × 58 editor grid, centred horizontally. */
+export function expandArt(art: readonly string[], topMargin = TOP_MARGIN): string[] {
+  const width = Math.max(...art.map((row) => row.length));
+  const startCol = Math.floor((COLS - width * ART_SCALE) / 2);
+  const rows = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => '.'));
+  art.forEach((artRow, artRowIndex) => {
+    const padded = artRow.padEnd(width, '.');
+    [...padded].forEach((symbol, artCol) => {
+      for (let dy = 0; dy < ART_SCALE; dy += 1) {
+        for (let dx = 0; dx < ART_SCALE; dx += 1) {
+          const row = topMargin + artRowIndex * ART_SCALE + dy;
+          const col = startCol + artCol * ART_SCALE + dx;
+          const target = rows[row];
+          if (target && col >= 0 && col < COLS) {
+            target[col] = symbol;
+          }
+        }
+      }
+    });
+  });
+  return rows.map((row) => row.join(''));
+}
 
+interface ArtLevel {
+  id: string;
+  name: string;
+  chapter: string;
+  art: string[];
+  objective: LevelObjective;
+  /** Best combo that earns gold on its own. */
+  goldCombo: number;
+}
+
+function makeLevel(level: ArtLevel, index: number): PatternDefinition {
+  const rows = expandArt(level.art);
+  const baseScore = rows
+    .join('')
+    .split('')
+    .reduce((sum, symbol) => sum + (SYMBOL_SCORE[symbol] ?? 0), 0);
+  const difficultyMultiplier = 1 + index * 0.08;
+  // Gold needs a clean, combo-rich clear: about 1.6× the raw value of the level.
+  const goldScore = Math.round((baseScore * difficultyMultiplier * 1.6) / 100) * 100;
   return {
-    id,
-    name,
-    chapter,
-    rows: rowsOf(grid),
-    objective: objectiveValue,
-    medalTargets: {
-      silverLives: 2,
-      goldScore,
-      goldBestCombo
-    }
+    id: level.id,
+    name: level.name,
+    chapter: level.chapter,
+    rows,
+    objective: level.objective,
+    medalTargets: { silverLives: 2, goldScore, goldBestCombo: level.goldCombo }
   };
 }
 
-export const LEVEL_PATTERNS: PatternDefinition[] = [
-  makePattern(
-    'warm-ignition',
-    'Warm Ignition',
-    'Forge Basics',
-    (grid) => {
-      for (let row = 3; row <= 12; row += 2) line(grid, row, 5, 30, '1');
-      sprinkle(grid, 'B', [
-        [5, 9],
-        [5, 26],
-        [9, 13],
-        [9, 22]
-      ]);
-    },
-    objective('reachBalls', 6, 'Reach 6 balls'),
-    4200,
-    14
-  ),
-  makePattern(
-    'first-armor',
-    'First Armor',
-    'Forge Basics',
-    (grid) => {
-      for (let row = 3; row <= 15; row += 3) {
-        line(grid, row, 4, 31, row % 2 === 0 ? '1' : '2');
-      }
-      rect(grid, 8, 10, 15, 20, 'S');
-      sprinkle(grid, 'B', [
-        [6, 7],
-        [6, 28],
-        [13, 17]
-      ]);
-    },
-    objective('clearWithLives', 2, 'Clear with 2 lives'),
-    6200,
-    18
-  ),
-  makePattern(
-    'spark-chain',
-    'Spark Chain',
-    'Forge Basics',
-    (grid) => {
-      for (let row = 4; row <= 18; row += 2) line(grid, row, 6, 29, '1');
-      sprinkle(grid, 'E', [
-        [7, 10],
-        [7, 25],
-        [11, 15],
-        [11, 20],
-        [15, 17],
-        [15, 18]
-      ]);
-      sprinkle(grid, 'B', [
-        [5, 17],
-        [17, 17]
-      ]);
-    },
-    objective('triggerExplosions', 4, 'Trigger 4 explosions'),
-    8000,
-    22
-  ),
-  makePattern(
-    'gate-practice',
-    'Gate Practice',
-    'Forge Basics',
-    (grid) => {
-      border(grid, 3, 20, 4, 31);
-      rect(grid, 4, 19, 5, 30, '1');
-      rect(grid, 10, 19, 16, 19, '.');
-      rect(grid, 3, 20, 17, 18, 'X');
-      rect(grid, 15, 20, 17, 18, '.');
-      sprinkle(grid, 'B', [
-        [7, 11],
-        [7, 24],
-        [17, 15],
-        [17, 20]
-      ]);
-    },
-    objective('bestCombo', 20, 'Reach 20 combo'),
-    9400,
-    24
-  ),
-  makePattern(
-    'ball-fountain',
-    'Ball Fountain',
-    'Forge Basics',
-    (grid) => {
-      for (let row = 4; row <= 22; row += 3) line(grid, row, 3, 32, '1');
-      rect(grid, 8, 9, 8, 12, 'B');
-      rect(grid, 8, 9, 23, 27, 'B');
-      rect(grid, 16, 17, 14, 21, 'B');
-      sprinkle(grid, 'S', [
-        [12, 5],
-        [12, 30]
-      ]);
-    },
-    objective('reachBalls', 10, 'Reach 10 balls'),
-    11200,
-    28
-  ),
-  makePattern(
-    'central-lane',
-    'Central Lane',
-    'Forge Basics',
-    (grid) => {
-      rect(grid, 4, 26, 5, 30, '1');
-      rect(grid, 4, 26, 16, 19, '.');
-      rect(grid, 4, 26, 15, 15, 'X');
-      rect(grid, 4, 26, 20, 20, 'X');
-      rect(grid, 4, 7, 16, 19, 'B');
-      sprinkle(grid, 'E', [
-        [12, 10],
-        [12, 25],
-        [20, 10],
-        [20, 25]
-      ]);
-    },
-    objective('bestCombo', 26, 'Reach 26 combo'),
-    12800,
-    30
-  ),
-  makePattern(
-    'left-channel',
-    'Left Channel',
-    'Wall Mazes',
-    (grid) => {
-      rect(grid, 3, 30, 4, 31, '1');
-      rect(grid, 3, 30, 8, 10, 'X');
-      rect(grid, 12, 30, 11, 13, '.');
-      rect(grid, 3, 18, 23, 25, 'X');
-      rect(grid, 3, 9, 8, 10, '.');
-      sprinkle(grid, 'B', [
-        [6, 16],
-        [20, 28]
-      ]);
-    },
-    objective('bestCombo', 30, 'Reach 30 combo'),
-    14600,
-    34
-  ),
-  makePattern(
-    'right-channel',
-    'Right Channel',
-    'Wall Mazes',
-    (grid) => {
-      rect(grid, 3, 32, 4, 31, '1');
-      rect(grid, 3, 28, 25, 27, 'X');
-      rect(grid, 12, 32, 22, 24, '.');
-      rect(grid, 10, 26, 10, 12, 'X');
-      rect(grid, 3, 9, 25, 27, '.');
-      sprinkle(grid, 'E', [
-        [16, 17],
-        [24, 17]
-      ]);
-      sprinkle(grid, 'B', [
-        [7, 20],
-        [28, 7]
-      ]);
-    },
-    objective('clearWithLives', 2, 'Clear with 2 lives'),
-    16400,
-    36
-  ),
-  makePattern(
-    'needle-pass',
-    'Needle Pass',
-    'Wall Mazes',
-    (grid) => {
-      rect(grid, 4, 36, 4, 31, '1');
-      rect(grid, 12, 34, 14, 15, 'X');
-      rect(grid, 12, 34, 20, 21, 'X');
-      rect(grid, 18, 30, 16, 19, '.');
-      rect(grid, 4, 10, 16, 19, 'B');
-      sprinkle(grid, 'S', [
-        [22, 10],
-        [22, 25]
-      ]);
-    },
-    objective('reachBalls', 14, 'Reach 14 balls'),
-    18200,
-    38
-  ),
-  makePattern(
-    'switchbacks',
-    'Switchbacks',
-    'Wall Mazes',
-    (grid) => {
-      rect(grid, 4, 38, 4, 31, '1');
-      rect(grid, 8, 11, 4, 24, 'X');
-      rect(grid, 17, 20, 11, 31, 'X');
-      rect(grid, 26, 29, 4, 24, 'X');
-      rect(grid, 8, 11, 8, 12, '.');
-      rect(grid, 17, 20, 23, 27, '.');
-      rect(grid, 26, 29, 8, 12, '.');
-      sprinkle(grid, 'B', [
-        [5, 28],
-        [22, 7],
-        [34, 28]
-      ]);
-    },
-    objective('bestCombo', 36, 'Reach 36 combo'),
-    20000,
-    42
-  ),
-  makePattern(
-    'twin-pillars',
-    'Twin Pillars',
-    'Wall Mazes',
-    (grid) => {
-      rect(grid, 3, 38, 4, 31, '1');
-      rect(grid, 3, 38, 11, 13, 'X');
-      rect(grid, 3, 38, 22, 24, 'X');
-      rect(grid, 8, 12, 11, 24, '.');
-      rect(grid, 22, 26, 11, 24, '.');
-      rect(grid, 34, 38, 11, 24, '.');
-      sprinkle(grid, 'B', [
-        [16, 17],
-        [30, 17]
-      ]);
-      sprinkle(grid, 'E', [
-        [18, 8],
-        [18, 27]
-      ]);
-    },
-    objective('triggerExplosions', 3, 'Trigger 3 explosions'),
-    21800,
-    44
-  ),
-  makePattern(
-    'maze-crown',
-    'Maze Crown',
-    'Wall Mazes',
-    (grid) => {
-      rect(grid, 3, 40, 4, 31, '1');
-      border(grid, 8, 32, 8, 27);
-      rect(grid, 9, 31, 9, 26, '.');
-      rect(grid, 12, 28, 15, 20, '1');
-      rect(grid, 8, 8, 16, 19, '.');
-      rect(grid, 32, 32, 16, 19, '.');
-      rect(grid, 18, 22, 8, 8, '.');
-      rect(grid, 18, 22, 27, 27, '.');
-      rect(grid, 18, 22, 16, 19, 'B');
-    },
-    objective('reachBalls', 18, 'Reach 18 balls'),
-    23600,
-    46
-  ),
-  makePattern(
-    'fuse-line',
-    'Fuse Line',
-    'Chain Reactor',
-    (grid) => {
-      rect(grid, 4, 26, 5, 30, '1');
-      for (let index = 0; index < 14; index += 1) {
-        setCell(grid, 6 + index, 11 + (index % 14), 'E');
-      }
-      sprinkle(grid, 'B', [
-        [5, 7],
-        [22, 28]
-      ]);
-    },
-    objective('triggerExplosions', 8, 'Trigger 8 explosions'),
-    25400,
-    48
-  ),
-  makePattern(
-    'blast-boxes',
-    'Blast Boxes',
-    'Chain Reactor',
-    (grid) => {
-      rect(grid, 4, 34, 4, 31, '1');
-      const reactorClusters: Array<[number, number]> = [
-        [7, 8],
-        [7, 23],
-        [20, 8],
-        [20, 23]
-      ];
-      reactorClusters.forEach(([row, col]) => {
-        border(grid, row, row + 5, col, col + 5);
-        rect(grid, row + 2, row + 3, col + 2, col + 3, 'E');
-      });
-      rect(grid, 14, 16, 15, 20, 'B');
-    },
-    objective('triggerExplosions', 10, 'Trigger 10 explosions'),
-    27200,
-    50
-  ),
-  makePattern(
-    'reactor-core',
-    'Reactor Core',
-    'Chain Reactor',
-    (grid) => {
-      rect(grid, 3, 36, 4, 31, '1');
-      rect(grid, 12, 24, 13, 22, 'S');
-      rect(grid, 15, 21, 16, 19, 'E');
-      rect(grid, 4, 7, 6, 29, 'B');
-      rect(grid, 28, 31, 6, 29, 'E');
-    },
-    objective('bestCombo', 50, 'Reach 50 combo'),
-    29000,
-    54
-  ),
-  makePattern(
-    'double-detonator',
-    'Double Detonator',
-    'Chain Reactor',
-    (grid) => {
-      rect(grid, 4, 38, 5, 30, '1');
-      rect(grid, 8, 30, 10, 13, 'X');
-      rect(grid, 8, 30, 22, 25, 'X');
-      rect(grid, 15, 23, 14, 21, 'E');
-      rect(grid, 33, 36, 8, 27, 'B');
-    },
-    objective('triggerExplosions', 14, 'Trigger 14 explosions'),
-    30800,
-    56
-  ),
-  makePattern(
-    'chain-cross',
-    'Chain Cross',
-    'Chain Reactor',
-    (grid) => {
-      rect(grid, 5, 40, 4, 31, '1');
-      rect(grid, 10, 34, 17, 18, 'E');
-      rect(grid, 21, 22, 7, 28, 'E');
-      rect(grid, 14, 18, 10, 14, 'S');
-      rect(grid, 25, 29, 21, 25, 'S');
-      sprinkle(grid, 'B', [
-        [7, 17],
-        [38, 17]
-      ]);
-    },
-    objective('bestCombo', 58, 'Reach 58 combo'),
-    32600,
-    60
-  ),
-  makePattern(
-    'total-ignition',
-    'Total Ignition',
-    'Chain Reactor',
-    (grid) => {
-      rect(grid, 4, 42, 3, 32, '1');
-      for (let row = 8; row <= 36; row += 4) {
-        line(grid, row, 6, 29, 'E');
-      }
-      rect(grid, 16, 18, 13, 22, 'B');
-      rect(grid, 28, 30, 13, 22, 'B');
-      rect(grid, 38, 42, 9, 26, 'S');
-    },
-    objective('triggerExplosions', 18, 'Trigger 18 explosions'),
-    34400,
-    64
-  ),
-  makePattern(
-    'ball-rain',
-    'Ball Rain',
-    'Ball Storm',
-    (grid) => {
-      rect(grid, 4, 30, 4, 31, '1');
-      for (let row = 5; row <= 25; row += 4) line(grid, row, 7, 28, 'B');
-      rect(grid, 32, 38, 9, 26, 'S');
-    },
-    objective('reachBalls', 20, 'Reach 20 balls'),
-    36200,
-    66
-  ),
-  makePattern(
-    'storm-basin',
-    'Storm Basin',
-    'Ball Storm',
-    (grid) => {
-      rect(grid, 4, 40, 4, 31, '1');
-      border(grid, 12, 34, 7, 28);
-      rect(grid, 13, 33, 8, 27, 'B');
-      rect(grid, 24, 34, 14, 21, '.');
-      rect(grid, 12, 12, 16, 19, '.');
-      rect(grid, 35, 40, 7, 28, 'S');
-    },
-    objective('reachBalls', 24, 'Reach 24 balls'),
-    38000,
-    68
-  ),
-  makePattern(
-    'pinball-forge',
-    'Pinball Forge',
-    'Ball Storm',
-    (grid) => {
-      rect(grid, 4, 42, 4, 31, '1');
-      rect(grid, 9, 36, 8, 9, 'X');
-      rect(grid, 9, 36, 26, 27, 'X');
-      rect(grid, 16, 18, 10, 25, 'B');
-      rect(grid, 28, 30, 10, 25, 'B');
-      sprinkle(grid, 'E', [
-        [12, 17],
-        [24, 17],
-        [36, 17]
-      ]);
-    },
-    objective('bestCombo', 70, 'Reach 70 combo'),
-    39800,
-    72
-  ),
-  makePattern(
-    'overflow',
-    'Overflow',
-    'Ball Storm',
-    (grid) => {
-      rect(grid, 4, 44, 3, 32, '1');
-      rect(grid, 5, 16, 6, 29, 'B');
-      rect(grid, 22, 28, 8, 27, 'E');
-      rect(grid, 34, 40, 6, 29, 'S');
-      rect(grid, 18, 42, 17, 18, 'X');
-      rect(grid, 28, 34, 17, 18, '.');
-    },
-    objective('reachBalls', 30, 'Reach 30 balls'),
-    41600,
-    74
-  ),
-  makePattern(
-    'gold-storm',
-    'Gold Storm',
-    'Ball Storm',
-    (grid) => {
-      rect(grid, 4, 46, 3, 32, '1');
-      for (let row = 6; row <= 42; row += 6) line(grid, row, 5, 30, 'B');
-      for (let row = 10; row <= 38; row += 7) line(grid, row, 8, 27, 'E');
-      rect(grid, 20, 28, 13, 22, 'S');
-    },
-    objective('reachBalls', 34, 'Reach 34 balls'),
-    43400,
-    78
-  ),
-  makePattern(
-    'forty-ball-finale',
-    'Forty Ball Finale',
-    'Ball Storm',
-    (grid) => {
-      rect(grid, 3, 48, 3, 32, '1');
-      border(grid, 8, 42, 6, 29);
-      rect(grid, 9, 41, 7, 28, 'B');
-      rect(grid, 18, 34, 12, 23, 'E');
-      rect(grid, 25, 42, 16, 19, '.');
-      rect(grid, 8, 8, 16, 19, '.');
-      rect(grid, 43, 48, 6, 29, 'S');
-    },
-    objective('reachBalls', 40, 'Reach 40 balls'),
-    46000,
-    82
-  )
+const FORGE = 'Forge Basics';
+const STEEL = 'Wall Mazes';
+const CHAIN = 'Chain Reactor';
+const STORM = 'Ball Storm';
+
+const LEVELS: ArtLevel[] = [
+  // ------------------------------------------------------------ Chapter 1: Forge Basics
+  {
+    id: 'spark',
+    name: 'Spark',
+    chapter: FORGE,
+    objective: objective('reachBalls', 6, 'Reach 6 balls'),
+    goldCombo: 16,
+    art: [
+      '........11........',
+      '.......1111.......',
+      '......11BB11......',
+      '.....11111111.....',
+      '....111B11B111....',
+      '.....11111111.....',
+      '......111111......',
+      '.......1111.......',
+      '........11........'
+    ]
+  },
+  {
+    id: 'anvil',
+    name: 'Anvil',
+    chapter: FORGE,
+    objective: objective('clearWithLives', 2, 'Clear with 2 lives'),
+    goldCombo: 18,
+    art: [
+      '.22222222222222...',
+      '2222222222222222..',
+      '..11111111111111..',
+      '....1111111111....',
+      '......11B111......',
+      '......111111......',
+      '....1111111111....',
+      '...111111111111...'
+    ]
+  },
+  {
+    id: 'fuse',
+    name: 'Fuse',
+    chapter: FORGE,
+    objective: objective('triggerExplosions', 4, 'Trigger 4 explosions'),
+    goldCombo: 22,
+    art: [
+      '1................1',
+      '11..............11',
+      '1E1............1E1',
+      '.111..........111.',
+      '..1111......1111..',
+      '...11E1.BB.1E11...',
+      '....1111..1111....',
+      '.....111EE111.....',
+      '......11..11......'
+    ]
+  },
+  {
+    id: 'forge-heart',
+    name: 'Forge Heart',
+    chapter: FORGE,
+    objective: objective('bestCombo', 20, 'Reach 20 combo'),
+    goldCombo: 26,
+    art: [
+      '..222.....222..',
+      '.21112...21112.',
+      '2111112.2111112',
+      '211111121111112',
+      '2111111B1111112',
+      '.2111111111112.',
+      '..21111111112..',
+      '...211111112...',
+      '....2111112....',
+      '.....21112.....',
+      '......212......',
+      '.......2.......'
+    ]
+  },
+  {
+    id: 'fountain',
+    name: 'Fountain',
+    chapter: FORGE,
+    objective: objective('reachBalls', 10, 'Reach 10 balls'),
+    goldCombo: 26,
+    art: [
+      'B.1.B.1.B.1.B.1.B.',
+      '111111111111111111',
+      '.1111111111111111.',
+      '..11111111111111..',
+      '...111111111111...',
+      '....1111111111....',
+      '.....11111111.....',
+      '......111111......'
+    ]
+  },
+  {
+    id: 'hammer',
+    name: 'Hammer',
+    chapter: FORGE,
+    objective: objective('bestCombo', 26, 'Reach 26 combo'),
+    goldCombo: 30,
+    art: [
+      '..XXXXXXXXXXXXXX..',
+      '..32222222222223..',
+      '..32222BB2222223..',
+      '..XXXXX....XXXXX..',
+      '.......1111.......',
+      '.......1E11.......',
+      '.......1111.......',
+      '.......11E1.......',
+      '.......1111.......',
+      '......111111......'
+    ]
+  },
+
+  // ------------------------------------------------------------ Chapter 2: Steel Mazes
+  {
+    id: 'gates',
+    name: 'Gates',
+    chapter: STEEL,
+    objective: objective('bestCombo', 30, 'Reach 30 combo'),
+    goldCombo: 34,
+    art: [
+      '222222222222222222',
+      '111B1111111111B111',
+      '111111111111111111',
+      'X..X..X..X..X..X.X',
+      'X..X..X..X..X..X.X',
+      '1..1..1..1..1..1.1'
+    ]
+  },
+  {
+    id: 'battlements',
+    name: 'Battlements',
+    chapter: STEEL,
+    objective: objective('clearWithLives', 2, 'Clear with 2 lives'),
+    goldCombo: 34,
+    art: [
+      '.X.X.X......X.X.X.',
+      '.XXXXX......XXXXX.',
+      '.X222X..11..X222X.',
+      '.X2B2X.1111.X2B2X.',
+      '.X222X.1111.X222X.',
+      '.X111X.1111.X111X.',
+      '.X...X.1111.X...X.',
+      '.......1111.......'
+    ]
+  },
+  {
+    id: 'switchbacks',
+    name: 'Switchbacks',
+    chapter: STEEL,
+    objective: objective('reachBalls', 14, 'Reach 14 balls'),
+    goldCombo: 38,
+    art: [
+      '111111111111111111',
+      'XXXXXXXXXXXXXX....',
+      '1111B1111111111111',
+      '....XXXXXXXXXXXXXX',
+      '111111111111B11111',
+      'XXXXXXXXXXXXXX....',
+      '111111111111111111'
+    ]
+  },
+  {
+    id: 'pachinko',
+    name: 'Pachinko',
+    chapter: STEEL,
+    objective: objective('bestCombo', 36, 'Reach 36 combo'),
+    goldCombo: 42,
+    art: [
+      '2.2.2.2.2.2.2.2.2.',
+      '.X...X...X...X...X',
+      '1.1.1.B.1.1.1.B.1.',
+      '...X...X...X...X..',
+      '2.2.2.2.2.2.2.2.2.',
+      '.X...X...X...X...X',
+      '1.B.1.1.1.B.1.1.1.'
+    ]
+  },
+  {
+    id: 'corridors',
+    name: 'Corridors',
+    chapter: STEEL,
+    objective: objective('triggerExplosions', 3, 'Trigger 3 explosions'),
+    goldCombo: 44,
+    art: [
+      '1X1111X1111X1111X1',
+      '1X1111X1111X1111X1',
+      '1X11E1X1B11X11E1X1',
+      '1X1111X1111X1111X1',
+      '1X1111X1111X1111X1',
+      '1X2222X2222X2222X1'
+    ]
+  },
+  {
+    id: 'vault',
+    name: 'Vault',
+    chapter: STEEL,
+    objective: objective('reachBalls', 18, 'Reach 18 balls'),
+    goldCombo: 48,
+    art: [
+      'XXXXXXXXXXXXXXXX',
+      'XBBBBBBBBBBBBBBX',
+      'X33333333333333X',
+      'X22222222222222X',
+      'X22222222222222X',
+      'X11111111111111X',
+      'X11111111111111X',
+      'XXXXXXX..XXXXXXX'
+    ]
+  },
+
+  // ------------------------------------------------------------ Chapter 3: Chain Reactor
+  {
+    id: 'powder-store',
+    name: 'Powder Store',
+    chapter: CHAIN,
+    objective: objective('triggerExplosions', 8, 'Trigger 8 explosions'),
+    goldCombo: 50,
+    art: [
+      '.111...111...111..',
+      '.1E1...1E1...1E1..',
+      '.111...111...111..',
+      '...111...111...111',
+      '...1E1...1B1...1E1',
+      '...111...111...111',
+      '.111...111...111..',
+      '.1E1...1E1...1E1..',
+      '.111...111...111..'
+    ]
+  },
+  {
+    id: 'fireworks',
+    name: 'Fireworks',
+    chapter: CHAIN,
+    objective: objective('triggerExplosions', 10, 'Trigger 10 explosions'),
+    goldCombo: 54,
+    art: [
+      '...EEE......EEE...',
+      '..E111E....E111E..',
+      '..E1B1E....E1B1E..',
+      '..E111E....E111E..',
+      '...EEE......EEE...',
+      '.......EEEE.......',
+      '......E2222E......',
+      '......E22B2E......',
+      '......E2222E......',
+      '.......EEEE.......'
+    ]
+  },
+  {
+    id: 'dominoes',
+    name: 'Dominoes',
+    chapter: CHAIN,
+    objective: objective('bestCombo', 50, 'Reach 50 combo'),
+    goldCombo: 60,
+    art: [
+      'E1111111111111111E',
+      '1E11111111111111E1',
+      '11E111111111111E11',
+      '111E1111BB1111E111',
+      '1111E11111111E1111',
+      '11111E111111E11111',
+      '222222E2222E222222',
+      '2222222E22E2222222'
+    ]
+  },
+  {
+    id: 'volcano',
+    name: 'Volcano',
+    chapter: CHAIN,
+    objective: objective('triggerExplosions', 14, 'Trigger 14 explosions'),
+    goldCombo: 62,
+    art: [
+      '........EE........',
+      '.......1EE1.......',
+      '......1EEEE1......',
+      '.....12EEEE21.....',
+      '....122EEEE221....',
+      '...1222EBBE2221...',
+      '..122222EE222221..',
+      '.12222222222222221',
+      '333333333333333333'
+    ]
+  },
+  {
+    id: 'chain-cross',
+    name: 'Chain Cross',
+    chapter: CHAIN,
+    objective: objective('bestCombo', 58, 'Reach 58 combo'),
+    goldCombo: 66,
+    art: [
+      '.......1EE1.......',
+      '.......1EE1.......',
+      '.......1EE1.......',
+      '2222222SEES2222222',
+      'EEEEEEEEBBEEEEEEEE',
+      '2222222SEES2222222',
+      '.......1EE1.......',
+      '.......1EE1.......',
+      '.......1EE1.......'
+    ]
+  },
+  {
+    id: 'atomic-core',
+    name: 'Atomic Core',
+    chapter: CHAIN,
+    objective: objective('triggerExplosions', 18, 'Trigger 18 explosions'),
+    goldCombo: 70,
+    art: [
+      '....SSSSSSSSSS....',
+      '..SSEEEEEEEEEESS..',
+      '.SEE2222222222EES.',
+      '.SE222BBBBBB222ES.',
+      '.SE222BBBBBB222ES.',
+      '.SEE2222222222EES.',
+      '..SSEEEEEEEEEESS..',
+      '....SSSSSSSSSS....'
+    ]
+  },
+
+  // ------------------------------------------------------------ Chapter 4: Ball Storm
+  {
+    id: 'rain',
+    name: 'Rain',
+    chapter: STORM,
+    objective: objective('reachBalls', 20, 'Reach 20 balls'),
+    goldCombo: 72,
+    art: [
+      'B.1.1.B.1.1.B.1.1.',
+      '.1.1.1.1.1.1.1.1.1',
+      '1.1.B.1.1.B.1.1.B.',
+      '.1.1.1.1.1.1.1.1.1',
+      '1.B.1.1.B.1.1.B.1.',
+      '.1.1.1.1.1.1.1.1.1',
+      '2.2.2.2.2.2.2.2.2.',
+      '.2.2.2.2.2.2.2.2.2',
+      '3.3.3.3.3.3.3.3.3.'
+    ]
+  },
+  {
+    id: 'target',
+    name: 'Target',
+    chapter: STORM,
+    objective: objective('reachBalls', 24, 'Reach 24 balls'),
+    goldCombo: 76,
+    art: [
+      '....1111111111....',
+      '..111........111..',
+      '.11...222222...11.',
+      '11...2......2...11',
+      '1...2..BBBB..2...1',
+      '1...2..BEEB..2...1',
+      '1...2..BBBB..2...1',
+      '11...2......2...11',
+      '.11...222222...11.',
+      '..111........111..',
+      '....1111111111....'
+    ]
+  },
+  {
+    id: 'hive',
+    name: 'Hive',
+    chapter: STORM,
+    objective: objective('bestCombo', 70, 'Reach 70 combo'),
+    goldCombo: 80,
+    art: [
+      '.222..222..222..22',
+      '21B1221B1221B1221B',
+      '211122111221112211',
+      '.222..222..222..22',
+      '...222..222..222..',
+      '..21112211122111..',
+      '..21B1221B1221B12.',
+      '...222..222..222..',
+      '.222..222..222..22',
+      '211122111221112211'
+    ]
+  },
+  {
+    id: 'tempest',
+    name: 'Tempest',
+    chapter: STORM,
+    objective: objective('reachBalls', 30, 'Reach 30 balls'),
+    goldCombo: 84,
+    art: [
+      '11....111111....11',
+      '.11..11B..B11..11.',
+      '..1111......1111..',
+      '...........,......',
+      '22....222222....22',
+      '.22..22E..E22..22.',
+      '..2222......2222..',
+      '..................',
+      '33....333333....33',
+      '.33..33B..B33..33.',
+      '..3333......3333..'
+    ]
+  },
+  {
+    id: 'fortress',
+    name: 'Fortress',
+    chapter: STORM,
+    objective: objective('reachBalls', 34, 'Reach 34 balls'),
+    goldCombo: 88,
+    art: [
+      'X.X.X.X....X.X.X.X',
+      'XXXXXXX....XXXXXXX',
+      'XSSSSSX....XSSSSSX',
+      'XS222SX.EE.XS222SX',
+      'XS2B2SX.EE.XS2B2SX',
+      'XS222SX....XS222SX',
+      'X.....X1111X.....X',
+      'X.....X1BB1X.....X',
+      'XXX.XXX1111XXX.XXX',
+      '......111111......'
+    ]
+  },
+  {
+    id: 'grand-finale',
+    name: 'Grand Finale',
+    chapter: STORM,
+    objective: objective('reachBalls', 40, 'Reach 40 balls'),
+    goldCombo: 96,
+    art: [
+      '333333333333333333',
+      '3BBBBBBBBBBBBBBBB3',
+      '3B22222222222222B3',
+      '3B2EEEE2SS2EEEE2B3',
+      '3B2E11E2SS2E11E2B3',
+      '3B2EEEE2SS2EEEE2B3',
+      '3B22222222222222B3',
+      '3B11111111111111B3',
+      '.X1111XXXXXX1111X.',
+      '..111111BB111111..',
+      '...111111111111...',
+      '....1111111111....'
+    ]
+  }
 ];
+
+export const LEVEL_PATTERNS: PatternDefinition[] = LEVELS.map((level, index) =>
+  makeLevel({ ...level, art: level.art.map((row) => row.replace(/[^.123EBSX]/g, '.')) }, index)
+);

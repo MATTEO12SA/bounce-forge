@@ -1,56 +1,31 @@
 import Phaser from 'phaser';
+import { ensurePowerUpTexture, POWER_UP_SIZE } from '../render/textures';
+import { getPowerUpDefinition, type PowerUpType } from '../systems/PowerUpSystem';
 import { DEPTHS, POWER_UP_DROP_SPEED } from '../utils/constants';
-import {
-  getPowerUpDefinition,
-  type PowerUpDefinition,
-  type PowerUpType
-} from '../systems/PowerUpSystem';
 import type { Ball } from './Ball';
 
-export const POWER_UP_RADIUS = 30;
+/** Collision half-size of a capsule (smaller than the glowing texture). */
+export const POWER_UP_HALF_WIDTH = (POWER_UP_SIZE.width - 20) / 2;
+export const POWER_UP_HALF_HEIGHT = (POWER_UP_SIZE.height - 16) / 2;
 
-export class PowerUp extends Phaser.GameObjects.Arc {
-  private readonly label: Phaser.GameObjects.Text;
-  private currentDefinition: PowerUpDefinition;
-  private currentType: PowerUpType;
+/** A falling capsule. Motion (fall, sway, separation) is driven by GameScene. */
+export class PowerUp extends Phaser.GameObjects.Image {
+  public vy = POWER_UP_DROP_SPEED;
+  public swayPhase = 0;
+  private currentType: PowerUpType = 'multiBall';
   private currentSourceBall: Ball | undefined;
 
-  public constructor(scene: Phaser.Scene, x = 0, y = 0) {
-    const fallbackDefinition = getPowerUpDefinition('multiBall');
-    super(scene, x, y, POWER_UP_RADIUS, 0, 360, false, fallbackDefinition.color, 1);
-
-    this.currentDefinition = fallbackDefinition;
-    this.currentType = 'multiBall';
-    this.currentSourceBall = undefined;
-
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
+  public constructor(scene: Phaser.Scene) {
+    super(
+      scene,
+      0,
+      0,
+      ensurePowerUpTexture(scene, 'multiBall', getPowerUpDefinition('multiBall').color)
+    );
+    this.setDisplaySize(POWER_UP_SIZE.width, POWER_UP_SIZE.height);
     this.setDepth(DEPTHS.powerUps);
-    this.setStrokeStyle(3, 0xf3fbff, 0.88);
-
-    this.label = scene.add
-      .text(x, y, fallbackDefinition.label, {
-        fontFamily: 'Arial, sans-serif',
-        fontSize: '24px',
-        fontStyle: '900',
-        color: '#061016'
-      })
-      .setOrigin(0.5)
-      .setDepth(DEPTHS.powerUps + 1);
-
-    const body = this.arcadeBody;
-    body.setAllowGravity(false);
-    body.setCircle(POWER_UP_RADIUS);
-    body.setVelocity(0, POWER_UP_DROP_SPEED);
-
-    this.setActive(false);
-    this.setVisible(false);
-    this.label.setActive(false);
-    this.label.setVisible(false);
-  }
-
-  public get arcadeBody(): Phaser.Physics.Arcade.Body {
-    return this.body as Phaser.Physics.Arcade.Body;
+    scene.add.existing(this);
+    this.setActive(false).setVisible(false);
   }
 
   public get powerUpType(): PowerUpType {
@@ -61,55 +36,18 @@ export class PowerUp extends Phaser.GameObjects.Arc {
     return this.currentSourceBall;
   }
 
-  public get definition(): PowerUpDefinition {
-    return this.currentDefinition;
-  }
-
   public reset(x: number, y: number, type: PowerUpType, sourceBall?: Ball): void {
-    const definition = getPowerUpDefinition(type);
-    this.currentDefinition = definition;
     this.currentType = type;
     this.currentSourceBall = sourceBall;
-
-    this.setActive(true);
-    this.setVisible(true);
-    this.setPosition(x, y);
-    this.setFillStyle(definition.color, 1);
-    this.setStrokeStyle(type === 'widePaddle' ? 2 : 3, 0xf3fbff, 0.88);
-    this.setScale(1);
-    this.setAlpha(1);
-
-    this.label.setText(definition.label);
-    this.label.setActive(true);
-    this.label.setVisible(true);
-    this.label.setPosition(x, y);
-    this.label.setScale(1);
-    this.label.setAlpha(1);
-
-    const body = this.arcadeBody;
-    body.enable = true;
-    body.reset(x, y);
-    body.setVelocity(0, POWER_UP_DROP_SPEED);
+    this.setTexture(ensurePowerUpTexture(this.scene, type, getPowerUpDefinition(type).color));
+    this.setDisplaySize(POWER_UP_SIZE.width, POWER_UP_SIZE.height);
+    this.setPosition(x, y).setActive(true).setVisible(true).setAlpha(1).setRotation(0);
+    this.vy = POWER_UP_DROP_SPEED * 0.55;
+    this.swayPhase = Math.random() * Math.PI * 2;
   }
 
   public disable(): void {
-    this.setActive(false);
-    this.setVisible(false);
-    this.label.setActive(false);
-    this.label.setVisible(false);
-    const body = this.arcadeBody;
-    body.setVelocity(0, 0);
-    body.enable = false;
+    this.setActive(false).setVisible(false);
     this.currentSourceBall = undefined;
-  }
-
-  public syncLabel(): void {
-    this.label.setPosition(this.x, this.y);
-    this.label.setScale(this.scaleX, this.scaleY);
-  }
-
-  public override destroy(fromScene?: boolean): void {
-    this.label.destroy(fromScene);
-    super.destroy(fromScene);
   }
 }

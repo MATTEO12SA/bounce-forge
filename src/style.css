@@ -934,7 +934,7 @@ textarea:focus {
 }
 
 .brick-resistant {
-  background: #ffd36b;
+  background: linear-gradient(90deg, #e8577e 0 50%, #9d63f2 50% 100%);
   box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.25);
 }
 

@@ -307,7 +307,7 @@ try {
   if (result.gameplayHasAdmin) {
     throw new Error('ADMIN button leaked into gameplay.');
   }
-  if (result.campaignNameAfterCreativeSave !== 'Warm Ignition') {
+  if (result.campaignNameAfterCreativeSave !== 'Spark') {
     throw new Error('Creative save modified the campaign.');
   }
   if (result.loginStatus !== 200 || !result.adminEditorSaved) {
@@ -332,7 +332,7 @@ try {
   if (result.adminCampaignBreakable !== 1) {
     throw new Error('Admin campaign override did not replace the campaign level in gameplay.');
   }
-  if (result.savedOverrideName !== 'Warm Ignition') {
+  if (result.savedOverrideName !== 'Spark') {
     throw new Error('Admin override was not saved through the API.');
   }
   if (!result.resetRemoved || result.overridesAfterResetCount !== 0) {

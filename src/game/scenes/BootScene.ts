@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { createSharedTextures } from '../render/textures';
 import { preloadTablerIcons } from '../ui/icons';
 
 const SPARK_TEXTURE = 'forge-spark';
@@ -13,6 +14,7 @@ export class BootScene extends Phaser.Scene {
   public create(): void {
     preloadTablerIcons(this);
     this.generateProceduralTextures();
+    createSharedTextures(this);
     this.scene.start('PreloadScene');
   }
 

@@ -25,13 +25,8 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     width: WORLD_WIDTH,
     height: WORLD_HEIGHT,
     backgroundColor: '#0b0a08',
-    physics: {
-      default: 'arcade',
-      arcade: {
-        debug: false,
-        gravity: { x: 0, y: 0 }
-      }
-    },
+    // Ball physics are custom (src/game/physics); Phaser audio is unused (src/game/audio).
+    audio: { noAudio: true },
     fps: {
       target: 60,
       forceSetTimeOut: false

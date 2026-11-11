@@ -53,7 +53,10 @@ export function drawLevelPreview(
 
   ctx.globalAlpha = options.dim ? 0.35 : 1;
   bricks.forEach((brick) => {
-    ctx.fillStyle = KIND_COLORS[brick.kind];
+    ctx.fillStyle =
+      typeof brick.color === 'number'
+        ? `#${brick.color.toString(16).padStart(6, '0')}`
+        : KIND_COLORS[brick.kind];
     const w = Math.max(1, brick.width * scale - 0.6);
     const h = Math.max(1, brick.height * scale - 0.6);
     ctx.fillRect(

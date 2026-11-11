@@ -62,7 +62,7 @@ export const POWER_UP_DEFINITIONS: Record<PowerUpType, PowerUpDefinition> = {
     label: 'AIM',
     color: 0xffd65a,
     durationMs: 9000,
-    weight: 0.55,
+    weight: 0.12,
     positive: true
   },
   extraLife: {

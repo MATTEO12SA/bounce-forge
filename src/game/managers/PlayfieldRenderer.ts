@@ -1,7 +1,11 @@
 import type Phaser from 'phaser';
 import type { ThemeDefinition } from '../config/themeConfig';
+import { TEX } from '../render/textures';
 import {
+  BRICK_GAP,
+  BRICK_HEIGHT,
   DEPTHS,
+  PADDLE_Y,
   PLAYFIELD_BOTTOM,
   PLAYFIELD_LEFT,
   PLAYFIELD_RIGHT,
@@ -11,6 +15,15 @@ import {
   WORLD_WIDTH
 } from '../utils/constants';
 
+const EDITOR_COLS = 36;
+const GRID_ROWS = 58;
+const WALL = 22;
+
+/**
+ * Static "Forge lumineuse" playfield: charcoal floor with a vignette, a faint grid aligned with
+ * the bricks, bevelled metal walls with a glowing amber liner, and a red danger glow where
+ * balls are lost (there is no floor: the bottom is open).
+ */
 export class PlayfieldRenderer {
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -18,161 +31,98 @@ export class PlayfieldRenderer {
   ) {}
 
   public render(): void {
-    const graphics = this.scene.add.graphics().setDepth(DEPTHS.background);
+    const g = this.scene.add.graphics().setDepth(DEPTHS.background);
+    const accent = this.theme.primary;
 
-    this.drawBackgroundGradient(graphics);
-    this.drawBackgroundGrid(graphics);
-    this.drawSideRails(graphics);
-    this.drawSideStripes(graphics);
-    this.drawHorizontalSideRows(graphics);
-    this.drawWallShells(graphics);
-    this.drawPlayfield(graphics);
-    this.drawPlayfieldGrid(graphics);
-    this.drawPlayfieldBorder(graphics);
-    this.drawWallStripes(graphics);
-    this.drawTopHighlight(graphics);
-  }
+    // Outer background.
+    g.fillGradientStyle(0x14110c, 0x14110c, 0x060504, 0x060504, 1);
+    g.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
-  private drawBackgroundGradient(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillGradientStyle(
-      this.theme.backgroundTop,
-      this.theme.backgroundTop,
-      this.theme.backgroundBottom,
-      this.theme.backgroundBottom,
-      1
-    );
-    graphics.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-  }
+    // Floor.
+    g.fillGradientStyle(0x1b1711, 0x1b1711, 0x090807, 0x090807, 1);
+    g.fillRect(PLAYFIELD_LEFT, PLAYFIELD_TOP, PLAYFIELD_WIDTH, WORLD_HEIGHT - PLAYFIELD_TOP);
 
-  private drawBackgroundGrid(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.lineStyle(1, this.theme.playfieldGrid, 0.1);
-    for (let x = 40; x < WORLD_WIDTH; x += 72) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
+    // Faint grid aligned with the brick cells.
+    const pitchX = (PLAYFIELD_WIDTH + BRICK_GAP) / EDITOR_COLS;
+    const pitchY = BRICK_HEIGHT + BRICK_GAP;
+    const gridBottom = PLAYFIELD_TOP + pitchY * GRID_ROWS;
+    g.lineStyle(1, 0xffffff, 0.028);
+    for (let col = 1; col < EDITOR_COLS; col += 1) {
+      const x = PLAYFIELD_LEFT + col * pitchX - BRICK_GAP / 2;
+      g.lineBetween(x, PLAYFIELD_TOP, x, gridBottom);
     }
-    for (let y = 44; y < WORLD_HEIGHT; y += 72) {
-      graphics.lineBetween(0, y, WORLD_WIDTH, y);
+    for (let row = 1; row <= GRID_ROWS; row += 1) {
+      const y = PLAYFIELD_TOP + row * pitchY - BRICK_GAP / 2;
+      g.lineBetween(PLAYFIELD_LEFT, y, PLAYFIELD_RIGHT, y);
     }
+    // Paddle lane: two discreet guide lines.
+    g.lineStyle(2, accent, 0.06);
+    g.lineBetween(PLAYFIELD_LEFT, PADDLE_Y - 60, PLAYFIELD_RIGHT, PADDLE_Y - 60);
+
+    // Metal walls (left, right, top) with bevels.
+    this.wall(g, PLAYFIELD_LEFT - WALL, PLAYFIELD_TOP - WALL, WALL, WORLD_HEIGHT, 'left');
+    this.wall(g, PLAYFIELD_RIGHT, PLAYFIELD_TOP - WALL, WALL, WORLD_HEIGHT, 'right');
+    this.wall(
+      g,
+      PLAYFIELD_LEFT - WALL,
+      PLAYFIELD_TOP - WALL,
+      PLAYFIELD_WIDTH + WALL * 2,
+      WALL,
+      'top'
+    );
+
+    // Glowing amber liner on the inner edge of the walls.
+    [10, 5, 2].forEach((width, index) => {
+      g.lineStyle(width, accent, [0.06, 0.14, 0.75][index] ?? 0.5);
+      g.lineBetween(PLAYFIELD_LEFT, PLAYFIELD_TOP, PLAYFIELD_LEFT, WORLD_HEIGHT);
+      g.lineBetween(PLAYFIELD_RIGHT, PLAYFIELD_TOP, PLAYFIELD_RIGHT, WORLD_HEIGHT);
+      g.lineBetween(PLAYFIELD_LEFT, PLAYFIELD_TOP, PLAYFIELD_RIGHT, PLAYFIELD_TOP);
+    });
+
+    // Vignette over the floor and the danger glow at the bottom.
+    this.scene.add
+      .image(PLAYFIELD_LEFT + PLAYFIELD_WIDTH / 2, (PLAYFIELD_TOP + WORLD_HEIGHT) / 2, TEX.vignette)
+      .setDisplaySize(PLAYFIELD_WIDTH, WORLD_HEIGHT - PLAYFIELD_TOP)
+      .setDepth(DEPTHS.background + 0.5);
+    const dangerTop = PADDLE_Y + 30;
+    this.scene.add
+      .image(
+        PLAYFIELD_LEFT + PLAYFIELD_WIDTH / 2,
+        (dangerTop + PLAYFIELD_BOTTOM) / 2 + 20,
+        TEX.danger
+      )
+      .setDisplaySize(PLAYFIELD_WIDTH, PLAYFIELD_BOTTOM - dangerTop + 40)
+      .setDepth(DEPTHS.background + 0.6);
   }
 
-  private drawSideRails(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillGradientStyle(
-      this.theme.railOuter,
-      this.theme.railInner,
-      this.theme.railOuter,
-      this.theme.railInner,
-      0.95
-    );
-    graphics.fillRect(0, 0, PLAYFIELD_LEFT - 22, WORLD_HEIGHT);
-    graphics.fillGradientStyle(
-      this.theme.railInner,
-      this.theme.railOuter,
-      this.theme.railInner,
-      this.theme.railOuter,
-      0.95
-    );
-    graphics.fillRect(PLAYFIELD_RIGHT + 22, 0, WORLD_WIDTH - PLAYFIELD_RIGHT - 22, WORLD_HEIGHT);
-  }
-
-  private drawSideStripes(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.lineStyle(2, this.theme.borderDim, 0.32);
-    for (let x = 18; x < PLAYFIELD_LEFT - 22; x += 38) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
+  private wall(
+    g: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    side: 'left' | 'right' | 'top'
+  ): void {
+    if (side === 'top') {
+      g.fillGradientStyle(0x6d6559, 0x6d6559, 0x2a2620, 0x2a2620, 1);
+    } else {
+      const light = 0x5c554a;
+      const dark = 0x1f1c17;
+      g.fillGradientStyle(
+        side === 'left' ? dark : light,
+        side === 'left' ? light : dark,
+        side === 'left' ? dark : light,
+        side === 'left' ? light : dark,
+        1
+      );
     }
-    for (let x = PLAYFIELD_RIGHT + 36; x < WORLD_WIDTH; x += 38) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
+    g.fillRect(x, y, width, height);
+    // Rivets every 120 px for a forged look.
+    g.fillStyle(0x15130f, 0.9);
+    if (side === 'top') {
+      for (let rx = x + 40; rx < x + width - 20; rx += 120) g.fillCircle(rx, y + height / 2, 3);
+    } else {
+      for (let ry = y + 60; ry < y + height; ry += 120) g.fillCircle(x + width / 2, ry, 3);
     }
-  }
-
-  private drawHorizontalSideRows(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.lineStyle(2, this.theme.borderDim, 0.32);
-    for (let y = 20; y < WORLD_HEIGHT; y += 38) {
-      graphics.lineBetween(0, y, PLAYFIELD_LEFT - 22, y);
-      graphics.lineBetween(PLAYFIELD_RIGHT + 22, y, WORLD_WIDTH, y);
-    }
-  }
-
-  private drawWallShells(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillGradientStyle(
-      this.theme.railInner,
-      this.theme.wallHighlight,
-      this.theme.railOuter,
-      this.theme.wall,
-      1
-    );
-    graphics.fillRect(PLAYFIELD_LEFT - 22, 0, 22, WORLD_HEIGHT);
-    graphics.fillGradientStyle(
-      this.theme.wallHighlight,
-      this.theme.railInner,
-      this.theme.wall,
-      this.theme.railOuter,
-      1
-    );
-    graphics.fillRect(PLAYFIELD_RIGHT, 0, 22, WORLD_HEIGHT);
-    graphics.fillGradientStyle(
-      this.theme.wallHighlight,
-      this.theme.wallHighlight,
-      this.theme.wall,
-      this.theme.wall,
-      1
-    );
-    graphics.fillRect(PLAYFIELD_LEFT - 22, PLAYFIELD_TOP - 22, PLAYFIELD_WIDTH + 44, 22);
-  }
-
-  private drawPlayfield(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.fillGradientStyle(
-      this.theme.playfieldTop,
-      this.theme.playfieldTop,
-      this.theme.playfieldBottom,
-      this.theme.playfieldBottom,
-      1
-    );
-    graphics.fillRect(
-      PLAYFIELD_LEFT,
-      PLAYFIELD_TOP,
-      PLAYFIELD_WIDTH,
-      PLAYFIELD_BOTTOM - PLAYFIELD_TOP
-    );
-  }
-
-  private drawPlayfieldGrid(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.lineStyle(1, this.theme.playfieldGrid, 0.13);
-    for (let x = PLAYFIELD_LEFT + 40; x < PLAYFIELD_RIGHT; x += 56) {
-      graphics.lineBetween(x, PLAYFIELD_TOP, x, PLAYFIELD_BOTTOM);
-    }
-    for (let y = PLAYFIELD_TOP + 64; y < PLAYFIELD_BOTTOM; y += 64) {
-      graphics.lineBetween(PLAYFIELD_LEFT, y, PLAYFIELD_RIGHT, y);
-    }
-  }
-
-  private drawPlayfieldBorder(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.lineStyle(2, this.theme.borderDim, 0.95);
-    graphics.strokeRect(
-      PLAYFIELD_LEFT - 0.5,
-      PLAYFIELD_TOP - 0.5,
-      PLAYFIELD_WIDTH + 1,
-      PLAYFIELD_BOTTOM - PLAYFIELD_TOP + 1
-    );
-  }
-
-  private drawWallStripes(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.lineStyle(4, this.theme.borderDim, 0.48);
-    for (let x = PLAYFIELD_LEFT - 18; x <= PLAYFIELD_LEFT - 4; x += 5) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-    for (let x = PLAYFIELD_RIGHT + 4; x <= PLAYFIELD_RIGHT + 18; x += 5) {
-      graphics.lineBetween(x, 0, x, WORLD_HEIGHT);
-    }
-  }
-
-  private drawTopHighlight(graphics: Phaser.GameObjects.Graphics): void {
-    graphics.lineStyle(2, this.theme.railEdge, 0.46);
-    graphics.lineBetween(
-      PLAYFIELD_LEFT - 22,
-      PLAYFIELD_TOP - 22,
-      PLAYFIELD_RIGHT + 22,
-      PLAYFIELD_TOP - 22
-    );
-    graphics.fillGradientStyle(0xffffff, 0xffffff, 0xffffff, 0xffffff, 0.05, 0.02, 0, 0);
-    graphics.fillRect(PLAYFIELD_LEFT, PLAYFIELD_TOP, PLAYFIELD_WIDTH, 460);
   }
 }
