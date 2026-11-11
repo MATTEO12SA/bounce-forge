@@ -95,7 +95,7 @@ const fr = {
   'help.controls.restart': 'Recommencer : R',
   'help.bricks': 'Briques',
   'help.brick.standard': 'Standard — un coup suffit.',
-  'help.brick.resistant': 'Renforcée — plusieurs coups, elle pâlit à chaque impact.',
+  'help.brick.resistant': 'Renforcée (rose ×2, violette ×3) — elle se fissure à chaque impact.',
   'help.brick.explosive': 'Explosive — détruit les briques voisines, en chaîne.',
   'help.brick.bonus': 'Bonus — lâche toujours une multiballe.',
   'help.brick.shield': 'Bouclier — très résistante.',
@@ -287,7 +287,7 @@ const en: Record<MessageKey, string> = {
   'help.controls.restart': 'Restart: R',
   'help.bricks': 'Bricks',
   'help.brick.standard': 'Standard — one hit is enough.',
-  'help.brick.resistant': 'Reinforced — several hits, it fades with each impact.',
+  'help.brick.resistant': 'Reinforced (pink ×2, purple ×3) — it cracks with each impact.',
   'help.brick.explosive': 'Explosive — destroys neighbouring bricks, in chains.',
   'help.brick.bonus': 'Bonus — always drops a multiball.',
   'help.brick.shield': 'Shield — very tough.',
@@ -420,6 +420,39 @@ export function formatDate(value: Date | number | string, utc = false): string {
     year: 'numeric',
     timeZone: utc ? 'UTC' : undefined
   }).format(date);
+}
+
+/** French names of the campaign levels, keyed by their English name (also used by wave mode). */
+const FR_LEVEL_NAMES: Record<string, string> = {
+  Spark: 'Étincelle',
+  Anvil: 'Enclume',
+  Fuse: 'Mèche',
+  'Forge Heart': 'Cœur de forge',
+  Fountain: 'Fontaine',
+  Hammer: 'Marteau',
+  Gates: 'Portes',
+  Battlements: 'Créneaux',
+  Switchbacks: 'Lacets',
+  Pachinko: 'Pachinko',
+  Corridors: 'Couloirs',
+  Vault: 'Coffre-fort',
+  'Powder Store': 'Poudrière',
+  Fireworks: "Feu d'artifice",
+  Dominoes: 'Dominos',
+  Volcano: 'Volcan',
+  'Chain Cross': 'Croix en chaîne',
+  'Atomic Core': 'Cœur atomique',
+  Rain: 'Pluie',
+  Target: 'Cible',
+  Hive: 'Ruche',
+  Tempest: 'Tempête',
+  Fortress: 'Forteresse',
+  'Grand Finale': 'Grand final'
+};
+
+/** Display name of a built-in level in the current language; custom names pass through. */
+export function levelDisplayName(name: string): string {
+  return current === 'fr' ? (FR_LEVEL_NAMES[name] ?? name) : name;
 }
 
 export const catalogsForTests = { fr, en };

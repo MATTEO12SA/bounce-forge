@@ -532,7 +532,10 @@ try {
     afterRestarts.canvases === 1 && afterRestarts.active,
     afterRestarts
   );
-  const childrenBaseline = afterRestarts.children;
+  // Measure on the same level as the follow-up restarts: levels have different brick counts.
+  await evaluate(page, `${GAME}.scene.restart({ mode: 'campaign', levelIndex: 0 }); true`);
+  await delay(800);
+  const childrenBaseline = await evaluate(page, `${GAME}.children.list.length`);
   for (let i = 0; i < 5; i += 1) {
     await evaluate(page, `${GAME}.scene.restart({ mode: 'campaign', levelIndex: 0 }); true`);
     await delay(200);

@@ -68,7 +68,7 @@ const WAVE_TRANSITION_MS = 1100;
 const EXPLOSION_STAGGER_MS = 55;
 const MAX_POWER_UPS = 40;
 const MAX_FRAME_MS = 50;
-const TRAIL_BALL_LIMIT = 24;
+const TRAIL_BALL_LIMIT = 10;
 
 interface PendingExplosion {
   x: number;

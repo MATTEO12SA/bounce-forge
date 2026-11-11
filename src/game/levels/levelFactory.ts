@@ -28,14 +28,14 @@ const BRICK_TEMPLATES: Record<string, BrickTemplate | undefined> = {
     kind: 'resistant',
     hitPoints: 2,
     score: 170,
-    color: 0xffcb5c,
+    color: 0xe8577e,
     powerUpChanceMultiplier: 1.1
   },
   '3': {
     kind: 'resistant',
     hitPoints: 3,
     score: 240,
-    color: 0xffe2a0,
+    color: 0x9d63f2,
     powerUpChanceMultiplier: 1.15
   },
   E: {

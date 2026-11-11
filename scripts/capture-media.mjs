@@ -151,13 +151,20 @@ try {
   const page = await connect(target.webSocketDebuggerUrl);
   await page.send('Page.enable');
   await page.send('Runtime.enable');
+  // Headless tabs can report themselves hidden, which auto-pauses the game mid-capture.
+  await page.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `Object.defineProperty(document, 'hidden', { get: () => false });
+      Object.defineProperty(document, 'visibilityState', { get: () => 'visible' });
+      document.addEventListener('visibilitychange', (e) => e.stopImmediatePropagation(), true);`
+  });
+  await page.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => undefined);
 
   // A believable profile: some progress and medals, tutorial already seen.
   await page.send('Page.navigate', { url });
   await waitFor(page, `document.querySelector('.home') !== null`);
   await evaluate(
     page,
-    `localStorage.setItem('bounce-forge.save.v1', JSON.stringify({ version: 6, bestScore: 48210, unlockedLevel: 9, completedLevels: [0,1,2,3,4,5,6,7,8], levelMedals: {'0':'gold','1':'gold','2':'silver','3':'gold','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, preferences: { soundEnabled: true, themeId: 'forge', volumeSfx: 0.6, volumeMusic: 0.5, fxQuality: 'high', fullscreen: false, language: '${process.env.MEDIA_LANG ?? 'fr'}', reducedMotion: false }, creativeLevelSlots: {}, tutorialSeen: true, records: { endless: { bestScore: 61250, bestWave: 14 }, daily: {} } })); true`
+    `localStorage.setItem('bounce-forge.save.v1', JSON.stringify({ version: 6, bestScore: 48210, unlockedLevel: ${process.env.CAPTURE_LEVELS ? 24 : 9}, completedLevels: [0,1,2,3,4,5,6,7,8], levelMedals: {'0':'gold','1':'gold','2':'silver','3':'gold','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, preferences: { soundEnabled: true, themeId: 'forge', volumeSfx: 0.6, volumeMusic: 0.5, fxQuality: 'high', fullscreen: false, language: '${process.env.MEDIA_LANG ?? 'fr'}', reducedMotion: false }, creativeLevelSlots: {}, tutorialSeen: true, records: { endless: { bestScore: 61250, bestWave: 14 }, daily: {} } })); true`
   );
   await page.send('Page.reload', {});
 
@@ -171,6 +178,34 @@ try {
   await shot(page, `${root}/public/social-card.png`);
 
   await viewport(page, 1440, 900);
+  // CAPTURE_LEVELS=<dir>: one screenshot of every campaign level, for design review.
+  if (process.env.CAPTURE_LEVELS) {
+    await mkdir(process.env.CAPTURE_LEVELS, { recursive: true });
+    for (let level = 1; level <= 24; level += 1) {
+      await evaluate(page, `location.hash = '#/play/campaign/${level}'; true`);
+      await waitFor(
+        page,
+        `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === ${level - 1}`
+      );
+      await delay(1200);
+      // Headless frames are slow: finish the brick drop-in so the shot shows the whole level.
+      await evaluate(
+        page,
+        `(() => { ${GAME}.tweens.getTweens().forEach((tw) => tw.complete()); return true; })()`
+      );
+      await delay(600);
+      const stage = await evaluate(
+        page,
+        `(() => { const r = document.querySelector('.play-stage').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, scale: 0.6 }; })()`
+      );
+      await shot(
+        page,
+        `${process.env.CAPTURE_LEVELS}/level-${String(level).padStart(2, '0')}.png`,
+        stage
+      );
+    }
+  }
+
   await evaluate(page, `location.hash = '#/campaign'; true`);
   await delay(800);
   await shot(page, `${shots}/campaign.png`);

@@ -31,6 +31,7 @@ import {
   formatNumber,
   getLanguage,
   hasMessage,
+  levelDisplayName,
   setLanguage,
   t,
   type MessageKey
@@ -393,8 +394,11 @@ export class App {
           'small',
           {},
           hasProgress
-            ? t('home.resumeLevel', { n: resumeIndex + 1, name: resumeLevel?.name ?? '' })
-            : t('home.startLevel', { name: campaignLevels[0]?.name ?? '' })
+            ? t('home.resumeLevel', {
+                n: resumeIndex + 1,
+                name: levelDisplayName(resumeLevel?.name ?? '')
+              })
+            : t('home.startLevel', { name: levelDisplayName(campaignLevels[0]?.name ?? '') })
         )
       )
     );
@@ -608,7 +612,7 @@ export class App {
             h(
               'span',
               { class: 'card-text' },
-              h('span', { class: 'card-title' }, level.name),
+              h('span', { class: 'card-title' }, levelDisplayName(level.name)),
               h(
                 'span',
                 { class: 'card-sub' },
@@ -627,7 +631,10 @@ export class App {
                 {
                   class: `level-card accent-${accent}`,
                   href: playHash('campaign', level.index),
-                  'aria-label': t('campaign.play', { n: level.index + 1, name: level.name })
+                  'aria-label': t('campaign.play', {
+                    n: level.index + 1,
+                    name: levelDisplayName(level.name)
+                  })
                 },
                 ...content
               )
@@ -726,7 +733,7 @@ export class App {
             }),
             t('home.resumeLevel', {
               n: resumeIndex + 1,
-              name: campaignLevels[resumeIndex]?.name ?? ''
+              name: levelDisplayName(campaignLevels[resumeIndex]?.name ?? '')
             })
           ],
           t('modes.campaign.cta'),
@@ -1571,7 +1578,7 @@ export class App {
             ? `${t('mode.endless')} · ${t('hud.wave', { n: hud.wave ?? 1 })}`
             : t('mode.creative');
     setText(r.mode, modeLabel);
-    setText(r.title, hud.levelName);
+    setText(r.title, levelDisplayName(hud.levelName));
     setText(r.chapter, this.chapterName(hud.chapter));
     setText(r.score, formatNumber(hud.score));
     setText(r.cScore, formatNumber(hud.score));

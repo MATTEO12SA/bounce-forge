@@ -49,9 +49,10 @@ export class ParticleSystem {
 
     this.trail = scene.add.particles(0, 0, TEX.glow, {
       speed: 0,
-      lifespan: 190,
-      scale: { start: 0.42, end: 0 },
-      alpha: { start: 0.5, end: 0 },
+      // Kept subtle on purpose: a light wisp, not a comet tail.
+      lifespan: 110,
+      scale: { start: 0.2, end: 0 },
+      alpha: { start: 0.2, end: 0 },
       blendMode: 'ADD',
       emitting: false,
       tint: 0xffb44a
