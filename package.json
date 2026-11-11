@@ -1,9 +1,9 @@
 {
   "name": "bounce-forge",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "A responsive Phaser 4 brick breaker game with procedural visuals and testable gameplay systems.",
+  "description": "Bounce Forge — an arcade brick breaker for desktop and mobile browsers, built with Phaser and TypeScript.",
   "scripts": {
     "start": "node scripts/start-dev.mjs",
     "dev": "node scripts/start-dev.mjs",
@@ -31,7 +31,10 @@
     "test:browser:powerups": "node scripts/powerup-test.mjs",
     "test:browser:powerups:diagnostic": "node scripts/powerup-diagnostic.mjs",
     "test:browser:powerups:diagnostic:visible": "node scripts/powerup-diagnostic.mjs --visible",
-    "test:browser:powerups:visible": "node scripts/powerup-test.mjs --visible"
+    "test:browser:powerups:visible": "node scripts/powerup-test.mjs --visible",
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "test:smoke:visible": "node scripts/smoke-test.mjs --visible",
+    "verify": "npm run lint && npm run test && npm run build"
   },
   "engines": {
     "node": ">=20"
@@ -49,5 +52,11 @@
     "typescript-eslint": "8.59.1",
     "vite": "8.0.10",
     "vitest": "4.1.5"
+  },
+  "license": "MIT",
+  "homepage": "https://matteo12sa.github.io/bounce-forge/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MATTEO12SA/bounce-forge.git"
   }
 }
