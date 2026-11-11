@@ -24,7 +24,8 @@ export function getDifficultyForLevel(levelIndex: number): DifficultyConfig {
     ballSpeed: clamp(BALL_START_SPEED + safeIndex * 12, BALL_START_SPEED, BALL_MAX_SPEED - 70),
     maxBallSpeed: clamp(BALL_MAX_SPEED + safeIndex * 6, BALL_MAX_SPEED, BALL_MAX_SPEED + 180),
     brickHealthBonus: Math.min(2, Math.floor(safeIndex / 10)),
-    powerUpDropChance: clamp(0.35 + safeIndex * 0.004, 0.35, 0.47),
+    // Pixel-art levels have many small bricks: a fifth of them dropping a capsule is plenty.
+    powerUpDropChance: clamp(0.16 + safeIndex * 0.002, 0.16, 0.22),
     scoreMultiplier: 1 + safeIndex * 0.08,
     initialLives: STARTING_LIVES
   };

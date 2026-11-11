@@ -549,6 +549,30 @@ try {
   );
 
   // ---------------------------------------------------------------- sharing with Unicode
+  // ---------------------------------------------------------------- whole campaign
+  console.log('Campaign levels');
+  const stuck = [];
+  for (let index = 0; index < 30; index += 1) {
+    await evaluate(
+      page,
+      `(() => { ${GAME}.scene.restart({ mode: 'campaign', levelIndex: ${index} }); return true; })()`
+    );
+    await delay(350);
+    const before = await evaluate(
+      page,
+      `(() => { const s = ${GAME}; s.setAutopilot(true); s.launchAttachedBalls(); for (let i = 0; i < 12; i += 1) s.createBall(false); s.ballManager.getActiveBalls().forEach((b, i) => { b.y = 900; b.x = 180 + ((i * 61) % 720); }); return s.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0); })()`
+    );
+    await delay(2600);
+    const after = await evaluate(
+      page,
+      `({ left: ${GAME}.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0), active: window.__bounceForge.scene.isActive('GameScene'), level: ${GAME}.getSession().levelIndex })`
+    );
+    if (!after.active || after.level !== index || !(after.left < before)) {
+      stuck.push({ ...after, level: index + 1, before });
+    }
+  }
+  check('all 30 campaign levels load, play and make progress', stuck.length === 0, stuck);
+
   // ---------------------------------------------------------------- power-ups
   console.log('Power-ups');
   await goto(page, baseUrl, '#/play/campaign/2');

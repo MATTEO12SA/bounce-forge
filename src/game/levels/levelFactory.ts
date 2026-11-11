@@ -78,7 +78,8 @@ const BRICK_TEMPLATES: Record<string, BrickTemplate | undefined> = {
   F: { kind: 'fuse', hitPoints: 1, score: 140, color: 0xffa94d, powerUpChanceMultiplier: 0.5 }
 };
 
-const HEALTH_BONUS_KINDS = new Set<BrickKind>(['resistant', 'explosive', 'shield']);
+/** Only shields get tougher in later levels: reinforced bricks keep exactly 2 or 3 hits. */
+const HEALTH_BONUS_KINDS = new Set<BrickKind>(['shield']);
 
 /** Kind and colour a level symbol turns into (used by the HTML editor to draw real bricks). */
 export function brickLookForSymbol(symbol: string): { kind: BrickKind; color: number } | null {
