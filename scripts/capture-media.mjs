@@ -244,8 +244,24 @@ try {
   console.log(ffmpeg.status === 0 ? 'GIF written.' : 'ffmpeg unavailable: GIF skipped.');
   console.log(`Media written to ${shots} and public/social-card.png`);
 } finally {
-  browser?.kill();
-  preview?.kill();
+  for (const child of [browser, preview]) {
+    if (!child) continue;
+    if (process.platform === 'win32') {
+      // Kill the whole tree: Chromium helpers otherwise keep the profile locked.
+      spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      spawnSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-Command',
+          `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*media-browser-profile*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`
+        ],
+        { stdio: 'ignore' }
+      );
+    } else {
+      child.kill();
+    }
+  }
   await delay(800);
   await rm(frames, { recursive: true, force: true }).catch(() => undefined);
   await rm(profile, { recursive: true, force: true }).catch(() => undefined);

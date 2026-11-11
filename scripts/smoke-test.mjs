@@ -10,7 +10,7 @@
 //
 // Usage: npm run build && npm run test:smoke   (options: --visible, --url=http://host/base/)
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import http from 'node:http';
@@ -23,7 +23,7 @@ const basePath = process.env.VITE_BASE_PATH ?? '/bounce-forge/';
 const previewPort = Number(process.env.SMOKE_PORT ?? 4319);
 const cdpPort = Number(process.env.BROWSER_TEST_CDP_PORT ?? 9241);
 const outDir = `${root}/artifacts/smoke`;
-const userDataDir = `${root}/.smoke-browser-profile`;
+const userDataDir = `${root}/.smoke-browser-profile/${process.pid}`;
 const browserPath = [
   process.env.BROWSER_PATH,
   process.env.BROWSER_TEST_EDGE_PATH,
@@ -205,16 +205,31 @@ function oneBrickRows() {
 }
 
 async function stopProcess(child) {
-  if (!child || child.exitCode !== null) return;
+  if (!child) return;
+  if (process.platform === 'win32') {
+    // Chromium spawns helper processes that survive the parent on Windows and keep the
+    // profile locked: always kill the whole tree.
+    spawnSync('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+    // Edge may relaunch itself outside that tree: also stop anything using our test profile.
+    spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*${userDataDir.replace(/\//g, '\\')}*' -or $_.CommandLine -like '*${userDataDir}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`
+      ],
+      { stdio: 'ignore' }
+    );
+    await delay(600);
+    return;
+  }
+  if (child.exitCode !== null) return;
   child.kill('SIGTERM');
-  const exited = await Promise.race([
+  await Promise.race([
     new Promise((resolve) => child.once('exit', () => resolve(true))),
     delay(2500).then(() => false)
   ]);
-  if (!exited && child.exitCode === null && process.platform === 'win32') {
-    spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
-    await delay(600);
-  }
+  if (child.exitCode === null) child.kill('SIGKILL');
 }
 
 let preview;
