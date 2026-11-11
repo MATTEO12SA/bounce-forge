@@ -8,12 +8,12 @@ import {
 } from '../game/bridge';
 import { audio } from '../game/audio/AudioEngine';
 import { ADMIN_ENABLED } from '../game/config/features';
-import { getPowerUpDefinition, POWER_UP_TYPES } from '../game/config/powerUps';
+import { getPowerUpDefinition, introducedInChapter, POWER_UP_TYPES } from '../game/config/powerUps';
 import { campaignLevels } from '../game/levels/campaignLevels';
 import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../game/levels/levelShare';
 import { createLevelFromPattern } from '../game/levels/levelFactory';
 import { estimateDifficulty } from '../game/levels/levelChecks';
-import { LEVEL_PATTERNS } from '../game/levels/levelPatterns';
+import { CAMPAIGN_CHAPTERS, LEVEL_PATTERNS } from '../game/levels/levelPatterns';
 import type { LevelOptions } from '../game/levels/levelOptions';
 import type { LevelDefinition } from '../game/levels/levelTypes';
 import {
@@ -48,13 +48,34 @@ import {
 import { drawLevelPreview } from './preview';
 
 const REPO_URL = 'https://github.com/MATTEO12SA/bounce-forge';
-const CHAPTERS = ['Forge Basics', 'Wall Mazes', 'Chain Reactor', 'Ball Storm'] as const;
+const CHAPTERS = CAMPAIGN_CHAPTERS;
 const CHAPTER_SLUG: Record<string, string> = {
   'Forge Basics': 'forge',
   'Wall Mazes': 'steel',
   'Chain Reactor': 'chain',
-  'Ball Storm': 'storm'
+  'Ball Storm': 'storm',
+  Mechanisms: 'mech'
 };
+/** Brick symbols worth a "New" badge on the level that introduces them. */
+const INTRODUCED_SYMBOLS: Array<[string, MessageKey]> = [
+  ['B', 'editor.brick.B'],
+  ['2', 'editor.brick.2'],
+  ['E', 'editor.brick.E'],
+  ['C', 'editor.brick.C'],
+  ['X', 'editor.brick.X'],
+  ['K', 'editor.brick.K'],
+  ['O', 'editor.brick.O'],
+  ['T', 'editor.brick.T'],
+  ['F', 'editor.brick.F'],
+  ['R', 'editor.brick.R'],
+  ['M', 'editor.brick.M'],
+  ['I', 'editor.brick.I']
+];
+const INTRODUCED_AT = new Map<number, MessageKey[]>();
+INTRODUCED_SYMBOLS.forEach(([symbol, key]) => {
+  const index = LEVEL_PATTERNS.findIndex((level) => level.rows.some((row) => row.includes(symbol)));
+  if (index >= 0) INTRODUCED_AT.set(index, [...(INTRODUCED_AT.get(index) ?? []), key]);
+});
 const SLOT_COUNT = campaignLevels.length;
 
 type View = 'home' | 'menu' | 'play' | 'tool' | 'editor';
@@ -639,6 +660,9 @@ export class App {
                 'span',
                 { class: 'card-sub' },
                 this.objectiveText(level.objective.type, level.objective.target)
+              ),
+              ...(INTRODUCED_AT.get(level.index) ?? []).map((key) =>
+                h('span', { class: 'new-badge' }, t('campaign.new', { name: t(key) }))
               )
             ),
             this.medalBadge(medal)
@@ -684,7 +708,39 @@ export class App {
         )
       ),
       filters,
+      activeChapter ? this.chapterIntro(activeChapter) : null,
       h('ul', { class: 'card-grid', role: 'list' }, ...cards)
+    );
+  }
+
+  /** Chapter header: theme and the power-ups that start dropping in it. */
+  private chapterIntro(chapter: string): HTMLElement {
+    const index = CHAPTERS.indexOf(chapter as (typeof CHAPTERS)[number]);
+    const fresh = POWER_UP_TYPES.filter((type) => introducedInChapter(type) === index);
+    return h(
+      'div',
+      { class: `chapter-intro accent-${CHAPTER_SLUG[chapter] ?? 'forge'}` },
+      h('p', {}, t(`chapter.about.${CHAPTER_SLUG[chapter] ?? 'forge'}` as MessageKey)),
+      fresh.length > 0
+        ? h(
+            'p',
+            { class: 'chapter-powers' },
+            t('campaign.newPowers'),
+            ' ',
+            ...fresh.map((type) => {
+              const definition = getPowerUpDefinition(type);
+              return h(
+                'span',
+                {
+                  class: `power-chip effect-chip${definition.risk ? ' is-risk' : ''}`,
+                  style: `--chip: #${definition.color.toString(16).padStart(6, '0')}; --ratio: 1`,
+                  title: t(`power.${type}` as MessageKey)
+                },
+                definition.icon
+              );
+            })
+          )
+        : null
     );
   }
 

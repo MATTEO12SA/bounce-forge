@@ -1,4 +1,5 @@
 import { EDITOR_GRID_COLS } from '../../../shared/editorGridRules.mjs';
+import type { LevelOptions } from './levelOptions';
 
 /** Symbols the ball can break. */
 export const BREAKABLE_SYMBOL_PATTERN = /[123EBSCKGRIMF]/;
@@ -68,7 +69,7 @@ export function sealedBricks(rows: readonly string[]): Array<{ col: number; row:
 }
 
 /** Rough difficulty from 1 to 5 stars: hit points, steel and how few bonus bricks there are. */
-export function estimateDifficulty(rows: readonly string[]): number {
+export function estimateDifficulty(rows: readonly string[], options?: LevelOptions): number {
   let breakable = 0;
   let hitPoints = 0;
   let steel = 0;
@@ -102,7 +103,13 @@ export function estimateDifficulty(rows: readonly string[]): number {
     })
   );
   if (breakable === 0) return 1;
+  // A descending wall adds pressure; fewer lives or a faster pace too.
+  const events =
+    (options?.descendEverySec ? 1 : 0) +
+    (options?.pace === 'fast' ? 0.6 : options?.pace === 'slow' ? -0.6 : 0) +
+    (options?.lives !== undefined ? (3 - options.lives) * 0.4 : 0);
   const score =
+    events +
     hitPoints / 260 +
     steel / 160 +
     (hitPoints / breakable - 1) * 1.2 -

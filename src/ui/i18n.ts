@@ -20,7 +20,7 @@ const fr = {
   'home.stats.medals': 'médailles',
   'home.stats.best': 'meilleur score',
   'home.feature.campaign.title': 'Campagne',
-  'home.feature.campaign.body': '24 niveaux, 4 chapitres, une médaille à décrocher par niveau.',
+  'home.feature.campaign.body': '30 niveaux, 5 chapitres, une médaille à décrocher par niveau.',
   'home.feature.endless.title': 'Infini',
   'home.feature.endless.body': 'Des vagues sans fin, trois vies. Jusqu’où tiendrez-vous ?',
   'home.feature.daily.title': 'Défi du jour',
@@ -40,6 +40,7 @@ const fr = {
   'chapter.Wall Mazes': 'Labyrinthes d’acier',
   'chapter.Chain Reactor': 'Réaction en chaîne',
   'chapter.Ball Storm': 'Tempête de balles',
+  'chapter.Mechanisms': 'Mécanismes',
   'chapter.Creative': 'Création',
   'medal.gold': 'Or',
   'medal.silver': 'Argent',
@@ -190,7 +191,7 @@ const fr = {
   'workshop.blank.title': 'Page blanche',
   'workshop.blank.body': 'Une grille vide et tous les outils.',
   'workshop.campaign.title': 'Depuis la campagne',
-  'workshop.campaign.body': 'Reprenez un des 24 niveaux et faites-le vôtre.',
+  'workshop.campaign.body': 'Reprenez un des 30 niveaux et faites-le vôtre.',
   'workshop.surprise.title': 'Surprise !',
   'workshop.surprise.body': 'Un niveau symétrique généré au hasard, prêt à jouer.',
   'workshop.mine': 'Mes niveaux',
@@ -322,6 +323,14 @@ const fr = {
   'brickinfo.teleporter': 'Téléporteur — la balle ressort par le téléporteur jumeau.',
   'brickinfo.fuse': 'Mèche — allume les mèches voisines, puis explose au bout.',
   'help.mechanisms': 'Mécanismes',
+  'campaign.new': 'Nouveau : {name}',
+  'campaign.newPowers': 'Nouveaux bonus :',
+  'chapter.about.forge':
+    'Les bases : rebonds, briques renforcées, explosives, cristaux et premier acier.',
+  'chapter.about.steel': 'Murs et angles : clés et portes, bumpers et téléporteurs.',
+  'chapter.about.chain': 'Réactions en chaîne : explosifs, mèches et briques phénix.',
+  'chapter.about.storm': 'Tempêtes de balles : briques mobiles, fantômes, pluie de bonus et orage.',
+  'chapter.about.mech': 'Maîtrise : tous les mécanismes réunis, et un mur qui descend.',
   'tool.back': 'Retour au menu'
 } as const;
 
@@ -346,7 +355,7 @@ const en: Record<MessageKey, string> = {
   'home.stats.medals': 'medals',
   'home.stats.best': 'best score',
   'home.feature.campaign.title': 'Campaign',
-  'home.feature.campaign.body': '24 levels, 4 chapters, a medal to earn on every level.',
+  'home.feature.campaign.body': '30 levels, 5 chapters, a medal to earn on every level.',
   'home.feature.endless.title': 'Endless',
   'home.feature.endless.body': 'Never-ending waves, three lives. How far can you go?',
   'home.feature.daily.title': 'Daily challenge',
@@ -366,6 +375,7 @@ const en: Record<MessageKey, string> = {
   'chapter.Wall Mazes': 'Steel Mazes',
   'chapter.Chain Reactor': 'Chain Reactor',
   'chapter.Ball Storm': 'Ball Storm',
+  'chapter.Mechanisms': 'Mechanisms',
   'chapter.Creative': 'Creative',
   'medal.gold': 'Gold',
   'medal.silver': 'Silver',
@@ -392,7 +402,8 @@ const en: Record<MessageKey, string> = {
   'create.import.placeholder': 'BF2:…',
   'create.import.submit': 'Import',
   'create.import.success': '“{name}” imported into slot {n}.',
-  'create.import.invalid': 'This is not a Bounce Forge code. It must start with BF3:, BF2: or BF1:.',
+  'create.import.invalid':
+    'This is not a Bounce Forge code. It must start with BF3:, BF2: or BF1:.',
   'create.import.corrupted': 'This code is incomplete or damaged. Copy it again in full.',
   'create.import.unsupported': 'This code comes from a newer version of the game.',
   'create.import.empty': 'The level has no breakable brick.',
@@ -514,7 +525,7 @@ const en: Record<MessageKey, string> = {
   'workshop.blank.title': 'Blank page',
   'workshop.blank.body': 'An empty grid and every tool.',
   'workshop.campaign.title': 'From the campaign',
-  'workshop.campaign.body': 'Take one of the 24 levels and make it yours.',
+  'workshop.campaign.body': 'Take one of the 30 levels and make it yours.',
   'workshop.surprise.title': 'Surprise!',
   'workshop.surprise.body': 'A random symmetric level, ready to play.',
   'workshop.mine': 'My levels',
@@ -644,6 +655,14 @@ const en: Record<MessageKey, string> = {
   'brickinfo.teleporter': 'Teleporter — the ball comes out of its twin teleporter.',
   'brickinfo.fuse': 'Fuse — lights the neighbouring fuses, then explodes at the end.',
   'help.mechanisms': 'Mechanisms',
+  'campaign.new': 'New: {name}',
+  'campaign.newPowers': 'New power-ups:',
+  'chapter.about.forge':
+    'The basics: bounces, reinforced and explosive bricks, crystals and the first steel.',
+  'chapter.about.steel': 'Walls and angles: keys and gates, bumpers and teleporters.',
+  'chapter.about.chain': 'Chain reactions: explosives, fuses and phoenix bricks.',
+  'chapter.about.storm': 'Ball storms: moving and ghost bricks, power-up rain and lightning.',
+  'chapter.about.mech': 'Mastery: every mechanism together, and a wall that comes down.',
   'tool.back': 'Back to menu'
 };
 
@@ -690,15 +709,15 @@ export function formatDate(value: Date | number | string, utc = false): string {
 const FR_LEVEL_NAMES: Record<string, string> = {
   Spark: 'Étincelle',
   Anvil: 'Enclume',
-  Fuse: 'Mèche',
+  'Powder Keg': 'Baril de poudre',
   'Forge Heart': 'Cœur de forge',
   Fountain: 'Fontaine',
   Hammer: 'Marteau',
-  Gates: 'Portes',
+  Lock: 'Serrure',
   Battlements: 'Créneaux',
   Switchbacks: 'Lacets',
   Pachinko: 'Pachinko',
-  Corridors: 'Couloirs',
+  Passages: 'Passages',
   Vault: 'Coffre-fort',
   'Powder Store': 'Poudrière',
   Fireworks: "Feu d'artifice",
@@ -711,7 +730,13 @@ const FR_LEVEL_NAMES: Record<string, string> = {
   Hive: 'Ruche',
   Tempest: 'Tempête',
   Fortress: 'Forteresse',
-  'Grand Finale': 'Grand final'
+  'Eye of the Storm': 'Œil du cyclone',
+  Clockwork: 'Horlogerie',
+  Portals: 'Portails',
+  Phoenix: 'Phénix',
+  'The Descent': 'La Descente',
+  'Ghost Ship': 'Vaisseau fantôme',
+  'The Grand Forge': 'La Grande Forge'
 };
 
 /** Display name of a built-in level in the current language; custom names pass through. */

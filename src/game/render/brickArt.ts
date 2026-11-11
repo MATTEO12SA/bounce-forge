@@ -246,8 +246,9 @@ function paintSymbol(
       break;
     }
     case 'key': {
-      ctx.strokeStyle = shade(color, -0.6);
-      ctx.fillStyle = shade(color, -0.6);
+      // Gold key on an ivory brick: it must stand out from the amber standard bricks.
+      ctx.strokeStyle = '#c8901a';
+      ctx.fillStyle = '#c8901a';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(cx - 8, cy, 5, 0, Math.PI * 2);

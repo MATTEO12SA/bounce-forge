@@ -56,3 +56,46 @@
     transition: none;
   }
 }
+
+/* Chapter 5 accent, "New" badges and chapter introductions on the campaign screen. */
+
+:root {
+  --accent-mech: #c6a8ff;
+}
+
+.accent-mech {
+  --accent: var(--accent-mech);
+}
+
+.new-badge {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #ffb423) 18%, transparent);
+  color: var(--accent, #ffb423);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.chapter-intro {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-raised));
+}
+
+.chapter-intro p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.chapter-powers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}

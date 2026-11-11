@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { createEmptyRows, validateRows } from '../shared/editorGridRules.mjs';
 import { createLevelFromPattern } from '../src/game/levels/levelFactory';
 import { sealedBricks } from '../src/game/levels/levelChecks';
-import { moverStep, pairTeleporters, teleportExit } from '../src/game/mechanics/mechanics';
+import {
+  groupCells,
+  moveGroup,
+  moverStep,
+  pairTeleporters,
+  teleportExit
+} from '../src/game/mechanics/mechanics';
 import { stepBall, type BallBody } from '../src/game/physics/ballStep';
 import { BrickGrid, type GridItem } from '../src/game/physics/BrickGrid';
 
@@ -67,14 +73,36 @@ describe('special bricks in levels', () => {
 });
 
 describe('mechanism rules', () => {
-  it('pairs teleporters in reading order', () => {
-    const a = { col: 5, row: 2 };
-    const b = { col: 1, row: 9 };
-    const c = { col: 30, row: 2 };
-    const pairs = pairTeleporters([b, c, a]);
-    expect(pairs.get(a)).toBe(c);
-    expect(pairs.get(c)).toBe(a);
-    expect(pairs.has(b)).toBe(false);
+  it('pairs teleporter portals (2 × 2 blocks) in reading order', () => {
+    const block = (col: number, row: number) => [
+      { col, row },
+      { col: col + 1, row },
+      { col, row: row + 1 },
+      { col: col + 1, row: row + 1 }
+    ];
+    const a = block(4, 2);
+    const b = block(30, 2);
+    const lone = block(10, 20);
+    const pairs = pairTeleporters([...lone, ...b, ...a]);
+    expect(pairs.get(a[0]!)).toEqual(b);
+    expect(pairs.get(b[3]!)).toEqual(a);
+    expect(pairs.has(lone[0]!)).toBe(false);
+    expect(groupCells([...a, ...b])).toHaveLength(2);
+  });
+
+  it('moves a 2 × 2 block as one piece', () => {
+    const cells = [
+      { col: 4, row: 6 },
+      { col: 5, row: 6 },
+      { col: 4, row: 7 },
+      { col: 5, row: 7 }
+    ];
+    expect(moveGroup(cells, 1, 36, () => true)).toEqual({ dx: 1, dir: 1 });
+    // A brick in front of one row only still blocks the whole block.
+    expect(moveGroup(cells, 1, 36, (col, row) => !(col === 6 && row === 7))).toEqual({
+      dx: -1,
+      dir: -1
+    });
   });
 
   it('moves a sliding brick and bounces it off walls and bricks', () => {
@@ -124,9 +152,8 @@ describe('fire ball physics', () => {
 
 describe('BF3 share codes', () => {
   it('carries level settings and stays BF2 without them', async () => {
-    const { encodeCreativeLevelCode, decodeCreativeLevelCode } = await import(
-      '../src/game/levels/levelShare'
-    );
+    const { encodeCreativeLevelCode, decodeCreativeLevelCode } =
+      await import('../src/game/levels/levelShare');
     const rows = rowsWith([[3, '111K']]);
     expect(encodeCreativeLevelCode(rows, 'Plain').startsWith('BF2:')).toBe(true);
     const code = encodeCreativeLevelCode(rows, 'Orage', {

@@ -68,7 +68,7 @@ const BRICK_TEMPLATES: Record<string, BrickTemplate | undefined> = {
     powerUpChanceMultiplier: 0
   },
   C: { kind: 'crystal', hitPoints: 1, score: 160, color: 0x7fe8ff, powerUpChanceMultiplier: 0.6 },
-  K: { kind: 'key', hitPoints: 1, score: 150, color: 0xffd23f, powerUpChanceMultiplier: 0.5 },
+  K: { kind: 'key', hitPoints: 1, score: 150, color: 0xf4efe0, powerUpChanceMultiplier: 0.5 },
   G: { kind: 'gate', hitPoints: 1, score: 120, color: 0x9a7444, powerUpChanceMultiplier: 0.4 },
   R: { kind: 'phoenix', hitPoints: 1, score: 60, color: 0xff7a3a, powerUpChanceMultiplier: 0.3 },
   I: { kind: 'invisible', hitPoints: 1, score: 150, color: 0xd6e6ff, powerUpChanceMultiplier: 1 },

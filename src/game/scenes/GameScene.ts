@@ -14,7 +14,7 @@ import { EffectState, type ComboId } from '../effects/EffectState';
 import type { Ball } from '../entities/Ball';
 import { Brick } from '../entities/Brick';
 import { Lasers } from '../entities/Lasers';
-import { moverStep, pairTeleporters, teleportExit } from '../mechanics/mechanics';
+import { groupCells, moveGroup, pairTeleporters, teleportExit } from '../mechanics/mechanics';
 import { Paddle } from '../entities/Paddle';
 import { POWER_UP_HALF_HEIGHT, POWER_UP_HALF_WIDTH, PowerUp } from '../entities/PowerUp';
 import { createPatternFromEditorRows } from '../levels/editorGrid';
@@ -170,7 +170,8 @@ export class GameScene extends Phaser.Scene {
   private laserCooldownMs = 0;
   private shieldBar!: Phaser.GameObjects.Rectangle;
   private language: 'fr' | 'en' = 'fr';
-  private teleportPairs = new Map<Brick, Brick>();
+  private teleportPairs = new Map<Brick, Brick[]>();
+  private readonly obstacleOverlays = new Map<Brick, Phaser.GameObjects.Image>();
   private keysLeft = 0;
   private moverClockMs = 0;
   private readonly phoenixQueue: Array<{ spec: BrickSpec; at: number }> = [];
@@ -466,7 +467,6 @@ export class GameScene extends Phaser.Scene {
       this.bricks.add(brick);
       this.grid.set(brick);
       if (spec.kind === 'gate') brick.locked = this.keysLeft > 0;
-      if (spec.kind === 'mover') brick.moveDir = spec.row % 2 === 0 ? 1 : -1;
       const targetAlpha = spec.kind === 'invisible' ? GHOST_ALPHA : 1;
       if (spec.kind === 'invisible') brick.revealed = false;
       if (!this.reducedMotion && this.mode !== 'demo') {
@@ -487,6 +487,11 @@ export class GameScene extends Phaser.Scene {
     });
     this.teleportPairs = pairTeleporters(
       this.getBricks().filter((brick) => brick.kind === 'teleporter')
+    );
+    this.createObstacleOverlays();
+    // Neighbouring moving groups start in opposite directions, like gears.
+    groupCells(this.getBricks().filter((brick) => brick.kind === 'mover')).forEach((group, index) =>
+      group.forEach((brick) => (brick.moveDir = index % 2 === 0 ? 1 : -1))
     );
     this.bricksTotal = this.getBricks().filter((brick) => brick.isRequired).length;
     this.breakableLeft = this.bricksTotal;
@@ -847,11 +852,47 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Bumpers and teleporters drawn in pixel art cover 2 × 2 cells: show one large sprite per
+   * group (physics still uses the cells) so they read as one round bumper or one portal.
+   */
+  private createObstacleOverlays(): void {
+    this.obstacleOverlays.clear();
+    (['bumper', 'teleporter'] as const).forEach((kind) => {
+      groupCells(this.getBricks().filter((brick) => brick.kind === kind)).forEach((group) => {
+        if (group.length < 2) return;
+        const left = Math.min(...group.map((brick) => brick.box.left));
+        const right = Math.max(...group.map((brick) => brick.box.right));
+        const top = Math.min(...group.map((brick) => brick.box.top));
+        const bottom = Math.max(...group.map((brick) => brick.box.bottom));
+        const size = Math.min(right - left, bottom - top) + 6;
+        const first = group[0]!;
+        const overlay = this.add
+          .image((left + right) / 2, (top + bottom) / 2, first.texture.key)
+          .setDisplaySize(size, size)
+          .setDepth(DEPTHS.bricks + 1);
+        group.forEach((brick) => {
+          brick.setVisible(false);
+          this.obstacleOverlays.set(brick, overlay);
+        });
+        if (kind === 'teleporter' && !this.reducedMotion) {
+          this.tweens.add({ targets: overlay, angle: 360, duration: 4000, repeat: -1 });
+        }
+      });
+    });
+  }
+
   private teleport(ball: Ball, entry: Brick): void {
-    const exit = this.teleportPairs.get(entry);
-    if (!exit) return;
+    const portal = this.teleportPairs.get(entry);
+    if (!portal || portal.length === 0) return;
+    const left = Math.min(...portal.map((brick) => brick.box.left));
+    const right = Math.max(...portal.map((brick) => brick.box.right));
+    const top = Math.min(...portal.map((brick) => brick.box.top));
+    const bottom = Math.max(...portal.map((brick) => brick.box.bottom));
+    const exitX = (left + right) / 2;
+    const exitY = (top + bottom) / 2;
     const target = teleportExit(
-      { x: exit.x, y: exit.y, halfWidth: exit.spec.width / 2, halfHeight: exit.spec.height / 2 },
+      { x: exitX, y: exitY, halfWidth: (right - left) / 2, halfHeight: (bottom - top) / 2 },
       ball.vx,
       ball.vy,
       ball.radius
@@ -861,10 +902,10 @@ export class GameScene extends Phaser.Scene {
       Math.max(PLAYFIELD_TOP + ball.radius, target.y)
     );
     ball.teleportReadyAt = this.gameTime + 220;
-    this.sfx('teleport', { x: exit.x });
+    this.sfx('teleport', { x: exitX });
     this.juice.ring(entry.x, entry.y, entry.spec.color, 0.8, 260);
-    this.juice.ring(exit.x, exit.y, exit.spec.color, 1.1, 320);
-    this.particleSystem.sparkBurst(exit.x, exit.y, entry.spec.color, 8);
+    this.juice.ring(exitX, exitY, entry.spec.color, 1.1, 320);
+    this.particleSystem.sparkBurst(exitX, exitY, entry.spec.color, 8);
   }
 
   private bump(ball: Ball, bumper: Brick): void {
@@ -877,7 +918,15 @@ export class GameScene extends Phaser.Scene {
     this.juice.popup(bumper.x, bumper.y - 12, `+${points}`, '#ff9ad5', 24);
     this.juice.ring(bumper.x, bumper.y, bumper.spec.color, 0.9, 240);
     this.sfx('bumper', { x: bumper.x });
-    this.punch(bumper);
+    const overlay = this.obstacleOverlays.get(bumper);
+    if (overlay) {
+      this.tweens.killTweensOf(overlay);
+      const scale = overlay.scaleX;
+      overlay.setScale(scale * 1.25);
+      this.tweens.add({ targets: overlay, scale, duration: 180, ease: 'Back.easeOut' });
+    } else {
+      this.punch(bumper);
+    }
   }
 
   // ------------------------------------------------------------------ level events
@@ -933,6 +982,14 @@ export class GameScene extends Phaser.Scene {
         this.grid.set(brick);
         this.tweens.add({ targets: brick, y, duration: 260, ease: 'Back.easeOut' });
       });
+    new Set(this.obstacleOverlays.values()).forEach((overlay) =>
+      this.tweens.add({
+        targets: overlay,
+        y: overlay.y + pitchY,
+        duration: 260,
+        ease: 'Back.easeOut'
+      })
+    );
     this.sfx('mechanism', { x: 540 });
     this.juice.shake(0.12);
   }
@@ -1047,22 +1104,21 @@ export class GameScene extends Phaser.Scene {
     this.moverClockMs += deltaMs;
     if (this.moverClockMs >= MOVER_STEP_MS) {
       this.moverClockMs = 0;
-      const movers = this.getBricks().filter((brick) => brick.kind === 'mover');
-      for (const mover of movers) {
-        const step = moverStep(
-          mover.col,
-          mover.moveDir,
-          this.grid.cols,
-          (col) => !this.grid.get(col, mover.row)
-        );
+      const groups = groupCells(this.getBricks().filter((brick) => brick.kind === 'mover'));
+      for (const group of groups) {
+        const dir = group[0]?.moveDir ?? 1;
+        const step = moveGroup(group, dir, this.grid.cols, (col, row) => !this.grid.get(col, row));
         if (!step) continue;
-        this.grid.remove(mover);
-        const x = PLAYFIELD_LEFT + mover.spec.width / 2 + step.col * (mover.spec.width + BRICK_GAP);
-        const y = (mover.box.top + mover.box.bottom) / 2;
-        mover.moveToCell(step.col, mover.row, x, y);
-        mover.moveDir = step.dir;
-        this.grid.set(mover);
-        this.tweens.add({ targets: mover, x, duration: 220, ease: 'Sine.easeInOut' });
+        group.forEach((mover) => this.grid.remove(mover));
+        group.forEach((mover) => {
+          const col = mover.col + step.dx;
+          const x = PLAYFIELD_LEFT + mover.spec.width / 2 + col * (mover.spec.width + BRICK_GAP);
+          const y = (mover.box.top + mover.box.bottom) / 2;
+          mover.moveToCell(col, mover.row, x, y);
+          mover.moveDir = step.dir;
+          this.grid.set(mover);
+          this.tweens.add({ targets: mover, x, duration: 220, ease: 'Sine.easeInOut' });
+        });
       }
     }
   }

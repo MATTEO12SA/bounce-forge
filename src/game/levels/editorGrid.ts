@@ -77,7 +77,7 @@ export const EDITOR_CELL_DEFINITIONS: Record<EditorCell, EditorCellDefinition> =
     breakable: EDITOR_CELL_RULES.X.breakable
   },
   C: { symbol: 'C', label: 'Crystal', color: 0x7fe8ff, breakable: true },
-  K: { symbol: 'K', label: 'Key', color: 0xffd23f, breakable: true },
+  K: { symbol: 'K', label: 'Key', color: 0xf4efe0, breakable: true },
   G: { symbol: 'G', label: 'Gate', color: 0x9a7444, breakable: true },
   R: { symbol: 'R', label: 'Phoenix', color: 0xff7a3a, breakable: true },
   I: { symbol: 'I', label: 'Ghost', color: 0xd6e6ff, breakable: true },

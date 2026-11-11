@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { EDITOR_GRID_COLS, EDITOR_GRID_ROWS } from '../shared/editorGridRules.mjs';
 import { estimateDifficulty, reachableCells, sealedBricks } from '../src/game/levels/levelChecks';
-import { LEVEL_PATTERNS } from '../src/game/levels/levelPatterns';
+import { CAMPAIGN_ART, CAMPAIGN_CHAPTERS, LEVEL_PATTERNS } from '../src/game/levels/levelPatterns';
 
 const BREAKABLE = /[123EBS]/;
 
 describe('campaign level design', () => {
-  it('has 24 distinct levels in 4 chapters of 6', () => {
-    expect(LEVEL_PATTERNS).toHaveLength(24);
-    expect(new Set(LEVEL_PATTERNS.map((level) => level.id)).size).toBe(24);
+  it('has 30 distinct levels in 5 chapters of 6', () => {
+    expect(LEVEL_PATTERNS).toHaveLength(30);
+    expect(new Set(LEVEL_PATTERNS.map((level) => level.id)).size).toBe(30);
     const chapters = LEVEL_PATTERNS.map((level) => level.chapter);
-    expect(new Set(chapters).size).toBe(4);
-    for (let i = 0; i < 24; i += 6) {
+    expect(new Set(chapters).size).toBe(5);
+    expect([...new Set(chapters)]).toEqual([...CAMPAIGN_CHAPTERS]);
+    for (let i = 0; i < 30; i += 6) {
       expect(new Set(chapters.slice(i, i + 6)).size).toBe(1);
     }
   });
@@ -41,4 +42,41 @@ describe('campaign level design', () => {
       expect(estimateDifficulty(level.rows)).toBeGreaterThanOrEqual(1);
     }
   );
+
+  it('draws every level within 18 pixels and pairs every teleporter', () => {
+    CAMPAIGN_ART.forEach((level) => {
+      level.art.forEach((row) => expect(row.length, level.id).toBeLessThanOrEqual(18));
+      const portals = level.art.join('').split('T').length - 1;
+      expect(portals % 2, level.id).toBe(0);
+    });
+  });
+
+  it('introduces every mechanism in the campaign, one chapter at a time', () => {
+    const firstLevel = (symbol: string) =>
+      LEVEL_PATTERNS.findIndex((level) => level.rows.some((row) => row.includes(symbol)));
+    const intro = Object.fromEntries(
+      [...'CKGRIMOTF'].map((symbol) => [symbol, firstLevel(symbol)])
+    );
+    Object.values(intro).forEach((index) => expect(index).toBeGreaterThanOrEqual(0));
+    // Keys/gates, bumpers and teleporters in chapter 2, fuses and phoenix in 3, movers and ghosts in 4.
+    expect(Math.floor(intro.K! / 6)).toBe(1);
+    expect(Math.floor(intro.O! / 6)).toBe(1);
+    expect(Math.floor(intro.T! / 6)).toBe(1);
+    expect(Math.floor(intro.F! / 6)).toBe(2);
+    expect(Math.floor(intro.R! / 6)).toBe(2);
+    expect(Math.floor(intro.M! / 6)).toBe(3);
+    expect(Math.floor(intro.I! / 6)).toBe(3);
+  });
+
+  it('gets harder from one chapter to the next', () => {
+    const average = (chapter: number) =>
+      LEVEL_PATTERNS.slice(chapter * 6, chapter * 6 + 6).reduce(
+        (sum, level) => sum + estimateDifficulty(level.rows, level.options),
+        0
+      ) / 6;
+    for (let chapter = 1; chapter < 5; chapter += 1) {
+      expect(average(chapter)).toBeGreaterThanOrEqual(average(chapter - 1) - 0.2);
+    }
+    expect(average(4)).toBeGreaterThan(average(0));
+  });
 });
