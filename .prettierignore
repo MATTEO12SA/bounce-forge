@@ -6,3 +6,8 @@ package-lock.json
 .video-debug*/
 .claude/
 vendor/
+artifacts/
+.smoke-browser-profile/
+.media-browser-profile/
+.media-frames/
+data/

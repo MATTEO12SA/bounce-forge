@@ -8,10 +8,11 @@ export interface ScoreState {
 export class ScoreSystem {
   private readonly state: ScoreState;
 
-  public constructor(initialBestScore = 0) {
+  public constructor(initialBestScore = 0, initialScore = 0) {
+    const startScore = Math.max(0, Math.floor(initialScore));
     this.state = {
-      score: 0,
-      bestScore: initialBestScore,
+      score: startScore,
+      bestScore: Math.max(initialBestScore, startScore),
       bricksBroken: 0,
       comboBonusTotal: 0
     };

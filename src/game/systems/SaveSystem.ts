@@ -3,9 +3,15 @@ import { isValidEditorRows, normalizeEditorRows, validateEditorRows } from '../l
 import { sanitizeLevelName } from '../levels/levelNames';
 import type { CreativeLevelSlot } from '../levels/levelTypes';
 import { SAVE_STORAGE_KEY } from '../utils/constants';
-import { getBrowserStorage, saveJson, type KeyValueStorage } from '../utils/storage';
+import {
+  createMemoryStorage,
+  getBrowserStorage,
+  saveJson,
+  type KeyValueStorage
+} from '../utils/storage';
 
 export type FxQuality = 'low' | 'med' | 'high';
+export type Language = 'fr' | 'en';
 
 export interface SavePreferences {
   soundEnabled: boolean;
@@ -14,22 +20,42 @@ export interface SavePreferences {
   volumeMusic: number;
   fxQuality: FxQuality;
   fullscreen: boolean;
+  language: Language;
+  reducedMotion: boolean;
+}
+
+export interface EndlessRecord {
+  bestScore: number;
+  bestWave: number;
+}
+
+export interface DailyRecord {
+  bestScore: number;
+  wavesCleared: number;
+  attempts: number;
+}
+
+export interface ModeRecords {
+  endless: EndlessRecord;
+  daily: Record<string, DailyRecord>;
 }
 
 export type LevelMedal = 'bronze' | 'silver' | 'gold';
 
 export interface SaveData {
-  version: 5;
+  version: 6;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
   levelMedals: Record<string, LevelMedal>;
   preferences: SavePreferences;
   creativeLevelSlots: Record<string, CreativeLevelSlot>;
+  tutorialSeen: boolean;
+  records: ModeRecords;
 }
 
 interface LegacySaveData {
-  version: 1 | 2 | 3 | 4;
+  version: 1 | 2 | 3 | 4 | 5;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
@@ -40,10 +66,36 @@ interface LegacySaveData {
     volumeMusic?: number;
     fxQuality?: string;
     fullscreen?: boolean;
+    language?: string;
+    reducedMotion?: boolean;
   };
   levelMedals?: Record<string, LevelMedal>;
   customLevelOverrides?: Record<string, CreativeLevelSlot>;
   creativeLevelSlots?: Record<string, CreativeLevelSlot>;
+  tutorialSeen?: boolean;
+  records?: unknown;
+}
+
+const MAX_DAILY_RECORDS = 60;
+
+function detectDefaultLanguage(): Language {
+  if (typeof navigator === 'undefined') {
+    return 'fr';
+  }
+  const lang = (navigator.language || '').toLowerCase();
+  return lang.startsWith('en') ? 'en' : 'fr';
+}
+
+function detectReducedMotion(): boolean {
+  try {
+    return (
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+  } catch {
+    return false;
+  }
 }
 
 const DEFAULT_PREFERENCES: SavePreferences = {
@@ -52,18 +104,37 @@ const DEFAULT_PREFERENCES: SavePreferences = {
   volumeSfx: 0.7,
   volumeMusic: 0.5,
   fxQuality: 'med',
-  fullscreen: false
+  fullscreen: false,
+  language: 'fr',
+  reducedMotion: false
 };
 
 export const DEFAULT_SAVE_DATA: SaveData = {
-  version: 5,
+  version: 6,
   bestScore: 0,
   unlockedLevel: 0,
   completedLevels: [],
   levelMedals: {},
   preferences: { ...DEFAULT_PREFERENCES },
-  creativeLevelSlots: {}
+  creativeLevelSlots: {},
+  tutorialSeen: false,
+  records: { endless: { bestScore: 0, bestWave: 0 }, daily: {} }
 };
+
+function createDefaultSaveData(): SaveData {
+  return {
+    ...DEFAULT_SAVE_DATA,
+    completedLevels: [],
+    levelMedals: {},
+    preferences: {
+      ...DEFAULT_PREFERENCES,
+      language: detectDefaultLanguage(),
+      reducedMotion: detectReducedMotion()
+    },
+    creativeLevelSlots: {},
+    records: { endless: { bestScore: 0, bestWave: 0 }, daily: {} }
+  };
+}
 
 type PersistedSaveData = SaveData | LegacySaveData;
 
@@ -91,19 +162,8 @@ function isPersistedSaveData(value: unknown): value is PersistedSaveData {
     return true;
   }
 
-  if (value.version === 4) {
-    return (
-      Boolean(value.levelMedals) &&
-      typeof value.levelMedals === 'object' &&
-      !Array.isArray(value.levelMedals) &&
-      Boolean(value.creativeLevelSlots) &&
-      typeof value.creativeLevelSlots === 'object' &&
-      !Array.isArray(value.creativeLevelSlots)
-    );
-  }
-
   return (
-    value.version === 5 &&
+    (value.version === 4 || value.version === 5 || value.version === 6) &&
     Boolean(value.levelMedals) &&
     typeof value.levelMedals === 'object' &&
     !Array.isArray(value.levelMedals) &&
@@ -115,24 +175,23 @@ function isPersistedSaveData(value: unknown): value is PersistedSaveData {
 
 function loadPersistedSaveData(
   storage: KeyValueStorage | null,
-  key: string,
-  fallback: SaveData
-): PersistedSaveData {
+  key: string
+): PersistedSaveData | null {
   if (!storage) {
-    return fallback;
+    return null;
   }
 
   try {
     const raw = storage.getItem(key);
 
     if (!raw) {
-      return fallback;
+      return null;
     }
 
     const parsed: unknown = JSON.parse(raw);
-    return isPersistedSaveData(parsed) ? parsed : fallback;
+    return isPersistedSaveData(parsed) ? parsed : null;
   } catch {
-    return fallback;
+    return null;
   }
 }
 
@@ -143,7 +202,7 @@ function sanitizeCreativeLevelSlots(overrides: unknown): Record<string, Creative
 
   const sanitized: Record<string, CreativeLevelSlot> = {};
 
-  Object.entries(overrides).forEach(([key, value]) => {
+  Object.values(overrides).forEach((value) => {
     if (!value || typeof value !== 'object') {
       return;
     }
@@ -172,10 +231,6 @@ function sanitizeCreativeLevelSlots(overrides: unknown): Record<string, Creative
       rows,
       updatedAt: candidate.updatedAt
     };
-
-    if (key !== String(safeSlotIndex)) {
-      delete sanitized[key];
-    }
   });
 
   return sanitized;
@@ -214,6 +269,43 @@ function normalizeFxQuality(value: unknown): FxQuality {
   return value === 'low' || value === 'high' ? value : 'med';
 }
 
+function nonNegativeInt(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+}
+
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function sanitizeRecords(value: unknown): ModeRecords {
+  const records: ModeRecords = { endless: { bestScore: 0, bestWave: 0 }, daily: {} };
+  if (!value || typeof value !== 'object') {
+    return records;
+  }
+
+  const candidate = value as { endless?: Partial<EndlessRecord>; daily?: unknown };
+  if (candidate.endless && typeof candidate.endless === 'object') {
+    records.endless = {
+      bestScore: nonNegativeInt(candidate.endless.bestScore),
+      bestWave: nonNegativeInt(candidate.endless.bestWave)
+    };
+  }
+
+  if (candidate.daily && typeof candidate.daily === 'object' && !Array.isArray(candidate.daily)) {
+    Object.entries(candidate.daily as Record<string, Partial<DailyRecord> | null>).forEach(
+      ([key, entry]) => {
+        if (DATE_KEY_PATTERN.test(key) && entry && typeof entry === 'object') {
+          records.daily[key] = {
+            bestScore: nonNegativeInt(entry.bestScore),
+            wavesCleared: Math.min(3, nonNegativeInt(entry.wavesCleared)),
+            attempts: nonNegativeInt(entry.attempts)
+          };
+        }
+      }
+    );
+  }
+
+  return records;
+}
+
 function migratePreferences(prefs: LegacySaveData['preferences']): SavePreferences {
   return {
     soundEnabled: prefs.soundEnabled,
@@ -228,11 +320,15 @@ function migratePreferences(prefs: LegacySaveData['preferences']): SavePreferenc
         : DEFAULT_PREFERENCES.volumeMusic,
     fxQuality: normalizeFxQuality(prefs.fxQuality),
     fullscreen:
-      typeof prefs.fullscreen === 'boolean' ? prefs.fullscreen : DEFAULT_PREFERENCES.fullscreen
+      typeof prefs.fullscreen === 'boolean' ? prefs.fullscreen : DEFAULT_PREFERENCES.fullscreen,
+    language:
+      prefs.language === 'en' || prefs.language === 'fr' ? prefs.language : detectDefaultLanguage(),
+    reducedMotion:
+      typeof prefs.reducedMotion === 'boolean' ? prefs.reducedMotion : detectReducedMotion()
   };
 }
 
-function migrateSaveData(value: PersistedSaveData): SaveData {
+export function migrateSaveData(value: PersistedSaveData): SaveData {
   const legacyOverrides = 'customLevelOverrides' in value ? value.customLevelOverrides : undefined;
   const persistedCreativeSlots =
     'creativeLevelSlots' in value ? value.creativeLevelSlots : undefined;
@@ -249,7 +345,7 @@ function migrateSaveData(value: PersistedSaveData): SaveData {
   });
 
   return {
-    version: 5,
+    version: 6,
     bestScore: Math.max(0, Math.floor(value.bestScore)),
     unlockedLevel: Math.max(0, Math.floor(value.unlockedLevel)),
     completedLevels: value.completedLevels
@@ -258,20 +354,31 @@ function migrateSaveData(value: PersistedSaveData): SaveData {
       .sort((a, b) => a - b),
     levelMedals,
     preferences: migratePreferences(value.preferences),
-    creativeLevelSlots
+    creativeLevelSlots,
+    tutorialSeen: 'tutorialSeen' in value && value.tutorialSeen === true,
+    records: sanitizeRecords('records' in value ? value.records : undefined)
   };
 }
 
+type SaveListener = (data: SaveData) => void;
+
 export class SaveSystem {
   private data: SaveData;
+  private readonly listeners = new Set<SaveListener>();
 
   public constructor(private readonly storage: KeyValueStorage | null = getBrowserStorage()) {
-    const persisted = loadPersistedSaveData(this.storage, SAVE_STORAGE_KEY, DEFAULT_SAVE_DATA);
-    this.data = migrateSaveData(persisted);
+    const persisted = loadPersistedSaveData(this.storage, SAVE_STORAGE_KEY);
+    this.data = persisted ? migrateSaveData(persisted) : createDefaultSaveData();
 
-    if (persisted.version !== this.data.version) {
+    if (persisted && persisted.version !== this.data.version) {
       this.persist();
     }
+  }
+
+  /** Subscribes to every persisted change. Returns an unsubscribe callback. */
+  public subscribe(listener: SaveListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   public snapshot(): SaveData {
@@ -280,7 +387,13 @@ export class SaveSystem {
       completedLevels: [...this.data.completedLevels],
       levelMedals: { ...this.data.levelMedals },
       preferences: { ...this.data.preferences },
-      creativeLevelSlots: this.cloneCreativeLevelSlots()
+      creativeLevelSlots: this.cloneCreativeLevelSlots(),
+      records: {
+        endless: { ...this.data.records.endless },
+        daily: Object.fromEntries(
+          Object.entries(this.data.records.daily).map(([key, value]) => [key, { ...value }])
+        )
+      }
     };
   }
 
@@ -347,6 +460,66 @@ export class SaveSystem {
     return this.snapshot();
   }
 
+  public setLanguage(language: Language): SaveData {
+    this.data.preferences.language = language === 'en' ? 'en' : 'fr';
+    this.persist();
+    return this.snapshot();
+  }
+
+  public setReducedMotion(enabled: boolean): SaveData {
+    this.data.preferences.reducedMotion = enabled;
+    this.persist();
+    return this.snapshot();
+  }
+
+  public setTutorialSeen(seen = true): SaveData {
+    this.data.tutorialSeen = seen;
+    this.persist();
+    return this.snapshot();
+  }
+
+  /** Records an endless run. Returns true when the score is a new personal best. */
+  public recordEndlessRun(score: number, wave: number): boolean {
+    const record = this.data.records.endless;
+    const safeScore = Math.max(0, Math.floor(score));
+    const isNewBest = safeScore > record.bestScore;
+    record.bestScore = Math.max(record.bestScore, safeScore);
+    record.bestWave = Math.max(record.bestWave, Math.max(0, Math.floor(wave)));
+    this.persist();
+    return isNewBest;
+  }
+
+  /** Records a daily challenge attempt. Returns true when it beats the stored best. */
+  public recordDailyRun(dateKey: string, score: number, wavesCleared: number): boolean {
+    if (!DATE_KEY_PATTERN.test(dateKey)) {
+      return false;
+    }
+
+    const current = this.data.records.daily[dateKey] ?? {
+      bestScore: 0,
+      wavesCleared: 0,
+      attempts: 0
+    };
+    const safeScore = Math.max(0, Math.floor(score));
+    const isNewBest = safeScore > current.bestScore;
+    this.data.records.daily[dateKey] = {
+      bestScore: Math.max(current.bestScore, safeScore),
+      wavesCleared: Math.max(
+        current.wavesCleared,
+        Math.min(3, Math.max(0, Math.floor(wavesCleared)))
+      ),
+      attempts: current.attempts + 1
+    };
+
+    const keys = Object.keys(this.data.records.daily).sort();
+    keys.slice(0, Math.max(0, keys.length - MAX_DAILY_RECORDS)).forEach((key) => {
+      delete this.data.records.daily[key];
+    });
+
+    this.persist();
+    return isNewBest;
+  }
+
   public getCreativeLevelSlot(slotIndex: number): CreativeLevelSlot | null {
     return this.cloneCreativeLevelSlot(this.data.creativeLevelSlots[String(slotIndex)]);
   }
@@ -399,13 +572,9 @@ export class SaveSystem {
   }
 
   public reset(): SaveData {
-    this.data = {
-      ...DEFAULT_SAVE_DATA,
-      completedLevels: [],
-      levelMedals: {},
-      preferences: { ...DEFAULT_SAVE_DATA.preferences },
-      creativeLevelSlots: {}
-    };
+    const language = this.data.preferences.language;
+    this.data = createDefaultSaveData();
+    this.data.preferences.language = language;
     this.persist();
     return this.snapshot();
   }
@@ -437,5 +606,25 @@ export class SaveSystem {
 
   private persist(): void {
     saveJson(this.storage, SAVE_STORAGE_KEY, this.data);
+    if (this.listeners.size > 0) {
+      const snapshot = this.snapshot();
+      this.listeners.forEach((listener) => listener(snapshot));
+    }
   }
+}
+
+let sharedSaveSystem: SaveSystem | null = null;
+
+/**
+ * Single save instance shared by the HTML interface, the game scenes and the editor so that
+ * concurrent writers never overwrite each other's progress. Falls back to in-memory storage
+ * when the browser blocks localStorage (private mode, blocked site data...).
+ */
+export function getSharedSaveSystem(): SaveSystem {
+  sharedSaveSystem ??= new SaveSystem(getBrowserStorage() ?? createMemoryStorage());
+  return sharedSaveSystem;
+}
+
+export function isPersistentStorageAvailable(): boolean {
+  return getBrowserStorage() !== null;
 }

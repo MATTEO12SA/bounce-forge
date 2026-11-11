@@ -1,26 +1,30 @@
 import Phaser from 'phaser';
 import { WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
+import { ADMIN_ENABLED } from './features';
 import { AdminLoginScene } from '../scenes/AdminLoginScene';
 import { AdminMenuScene } from '../scenes/AdminMenuScene';
 import { BootScene } from '../scenes/BootScene';
-import { GameOverScene } from '../scenes/GameOverScene';
 import { GameScene } from '../scenes/GameScene';
-import { GuideScene } from '../scenes/GuideScene';
 import { LevelEditorScene } from '../scenes/LevelEditorScene';
-import { LevelSelectScene } from '../scenes/LevelSelectScene';
-import { MainMenuScene } from '../scenes/MainMenuScene';
-import { OptionsScene } from '../scenes/OptionsScene';
-import { PauseScene } from '../scenes/PauseScene';
 import { PreloadScene } from '../scenes/PreloadScene';
-import { VictoryScene } from '../scenes/VictoryScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
+  const scenes: Phaser.Types.Scenes.SceneType[] = [
+    BootScene,
+    PreloadScene,
+    GameScene,
+    LevelEditorScene
+  ];
+  if (ADMIN_ENABLED) {
+    scenes.push(AdminLoginScene, AdminMenuScene);
+  }
+
   return {
     type: Phaser.AUTO,
     parent,
     width: WORLD_WIDTH,
     height: WORLD_HEIGHT,
-    backgroundColor: '#071016',
+    backgroundColor: '#0b0a08',
     physics: {
       default: 'arcade',
       arcade: {
@@ -48,20 +52,6 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
       width: WORLD_WIDTH,
       height: WORLD_HEIGHT
     },
-    scene: [
-      BootScene,
-      PreloadScene,
-      MainMenuScene,
-      AdminLoginScene,
-      AdminMenuScene,
-      GuideScene,
-      LevelSelectScene,
-      LevelEditorScene,
-      GameScene,
-      PauseScene,
-      OptionsScene,
-      GameOverScene,
-      VictoryScene
-    ]
+    scene: scenes
   };
 }

@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
+import { bridge } from '../bridge';
 import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
 
+/** Waits for the interface: the HTML shell decides what to start (demo, campaign, editor...). */
 export class PreloadScene extends Phaser.Scene {
   public constructor() {
     super('PreloadScene');
@@ -8,7 +10,6 @@ export class PreloadScene extends Phaser.Scene {
 
   public create(): void {
     void CampaignOverrideSystem.refresh();
-    const showMenu = new URLSearchParams(window.location.search).get('menu') === '1';
-    this.scene.start(showMenu ? 'MainMenuScene' : 'GameScene', { levelIndex: 0 });
+    bridge.emit('ready', undefined);
   }
 }

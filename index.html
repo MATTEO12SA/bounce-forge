@@ -1,17 +1,30 @@
 <!doctype html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0e0d0b" />
+    <meta name="color-scheme" content="dark" />
     <meta
       name="description"
-      content="Bounce Forge, an original browser brick breaker built with Phaser and TypeScript."
+      content="Bounce Forge — casse-briques d'arcade gratuit dans le navigateur : 24 niveaux, mode Infini, défi du jour et éditeur de niveaux."
     />
+    <meta property="og:title" content="Bounce Forge" />
+    <meta
+      property="og:description"
+      content="Casse-briques d'arcade : multiballes, explosions en chaîne, murs d'acier. Jouable sur ordinateur et mobile."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="social-card.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>Bounce Forge</title>
+    <title>Bounce Forge — casse-briques d'arcade</title>
   </head>
   <body>
-    <div id="game-root"></div>
+    <div id="app" class="app" data-view="home">
+      <noscript>
+        <p class="noscript">Bounce Forge a besoin de JavaScript pour fonctionner.</p>
+      </noscript>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

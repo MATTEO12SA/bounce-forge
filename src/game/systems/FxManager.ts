@@ -12,7 +12,6 @@ export type FxEntityKind =
   | 'brick-shield'
   | 'brick-indestructible';
 
-
 export interface FxQualityProfile {
   postFx: boolean;
   particleScale: number;

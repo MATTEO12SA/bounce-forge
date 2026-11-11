@@ -2,10 +2,10 @@ import Phaser from 'phaser';
 import { getTheme } from '../config/themeConfig';
 import { AdminApiSystem } from '../systems/AdminApiSystem';
 import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
-import { SaveSystem } from '../systems/SaveSystem';
+import { getSharedSaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
-import { startSceneWithTransition } from '../ui/uiFeedback';
+import { returnToShell, startSceneWithTransition } from '../ui/uiFeedback';
 import { GAME_TITLE, WORLD_WIDTH } from '../utils/constants';
 
 export class AdminMenuScene extends Phaser.Scene {
@@ -18,7 +18,7 @@ export class AdminMenuScene extends Phaser.Scene {
   }
 
   public create(): void {
-    const save = new SaveSystem();
+    const save = getSharedSaveSystem();
     const theme = getTheme(save.snapshot().preferences.themeId);
 
     drawScreenBackground(this, theme, { panel: false, sideRails: true });
@@ -67,16 +67,11 @@ export class AdminMenuScene extends Phaser.Scene {
       )
     );
     this.adminButtons.push(
-      new Button(
-        this,
-        WORLD_WIDTH / 2,
-        556,
-        570,
-        78,
-        'LEVEL SELECT',
-        () => startSceneWithTransition(this, 'LevelSelectScene'),
-        { variant: 'secondary', disabled: true, icon: 'player-track-next' }
-      )
+      new Button(this, WORLD_WIDTH / 2, 556, 570, 78, 'PLAY', () => returnToShell(this, 'admin'), {
+        variant: 'secondary',
+        disabled: true,
+        icon: 'player-track-next'
+      })
     );
     this.adminButtons.push(
       new Button(
@@ -103,8 +98,8 @@ export class AdminMenuScene extends Phaser.Scene {
       874,
       570,
       78,
-      'MAIN MENU',
-      () => startSceneWithTransition(this, 'MainMenuScene'),
+      'BACK TO GAME',
+      () => returnToShell(this, 'admin'),
       { variant: 'ghost', icon: 'home' }
     );
 
@@ -146,10 +141,10 @@ export class AdminMenuScene extends Phaser.Scene {
 
   private async logout(): Promise<void> {
     await this.api.logout().catch(() => undefined);
-    this.scene.start('MainMenuScene');
+    returnToShell(this, 'admin');
   }
 
   private goBack(): void {
-    startSceneWithTransition(this, 'MainMenuScene');
+    returnToShell(this, 'admin');
   }
 }

@@ -189,6 +189,12 @@ export class BallManager {
   }
 
   public getActiveBalls(): Ball[] {
+    // A destroyed physics group (scene shut down) has no children list anymore; callers that
+    // hold a stale reference after a restart must get an empty list, not an exception.
+    if (!this.isGroupAlive()) {
+      return [];
+    }
+
     return this.group
       .getChildren()
       .filter((child): child is Ball => child instanceof Ball && child.active);
@@ -252,7 +258,16 @@ export class BallManager {
     this.stressFrames = Math.max(0, Math.floor(frames));
   }
 
+  private isGroupAlive(): boolean {
+    const group = this.group as unknown as { children?: unknown; scene?: unknown };
+    return Boolean(group.children) && Boolean(group.scene);
+  }
+
   private acquireBall(x: number, y: number): Ball | null {
+    if (!this.isGroupAlive()) {
+      return null;
+    }
+
     const reusable = this.group
       .getChildren()
       .find((child): child is Ball => child instanceof Ball && !child.active);

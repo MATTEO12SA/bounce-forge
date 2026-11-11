@@ -27,7 +27,7 @@ export class Ball extends Phaser.GameObjects.Arc {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setDepth(DEPTHS.ball);
-    this.setStrokeStyle(2, 0x82e9ff, 0.95);
+    this.setStrokeStyle(2, 0xffd36b, 0.95);
 
     const body = this.arcadeBody;
     body.setAllowGravity(false);

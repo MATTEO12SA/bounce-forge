@@ -63,9 +63,7 @@ describe('power up system', () => {
   });
 
   it('accepts an injected weighted drop table', () => {
-    const system = new PowerUpSystem(new FixedRandom([0.1, 0]), [
-      { type: 'extraLife', weight: 1 }
-    ]);
+    const system = new PowerUpSystem(new FixedRandom([0.1, 0]), [{ type: 'extraLife', weight: 1 }]);
 
     expect(system.roll(1)).toBe('extraLife');
   });

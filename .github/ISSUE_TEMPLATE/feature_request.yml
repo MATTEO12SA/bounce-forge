@@ -1,0 +1,14 @@
+name: Idea
+description: Suggest an improvement / Proposer une amélioration
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea / Votre idée
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it make the game better? / En quoi le jeu serait-il meilleur ?

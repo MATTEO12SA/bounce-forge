@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import { getTheme } from '../config/themeConfig';
 import { AdminApiSystem } from '../systems/AdminApiSystem';
-import { SaveSystem } from '../systems/SaveSystem';
+import { getSharedSaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { addCreatorCredit, drawPanel, drawScreenBackground } from '../ui/sceneChrome';
-import { startSceneWithTransition } from '../ui/uiFeedback';
+import { returnToShell, startSceneWithTransition } from '../ui/uiFeedback';
 import { GAME_TITLE, WORLD_WIDTH } from '../utils/constants';
 
 export class AdminLoginScene extends Phaser.Scene {
@@ -18,7 +18,7 @@ export class AdminLoginScene extends Phaser.Scene {
   }
 
   public create(): void {
-    const save = new SaveSystem();
+    const save = getSharedSaveSystem();
     const theme = getTheme(save.snapshot().preferences.themeId);
 
     drawScreenBackground(this, theme, { panel: false, sideRails: true });
@@ -71,16 +71,10 @@ export class AdminLoginScene extends Phaser.Scene {
       selected: true,
       icon: 'check'
     });
-    new Button(
-      this,
-      WORLD_WIDTH / 2,
-      742,
-      520,
-      84,
-      'BACK',
-      () => startSceneWithTransition(this, 'MainMenuScene'),
-      { variant: 'ghost', icon: 'arrow-left' }
-    );
+    new Button(this, WORLD_WIDTH / 2, 742, 520, 84, 'BACK', () => returnToShell(this, 'admin'), {
+      variant: 'ghost',
+      icon: 'arrow-left'
+    });
 
     this.input.keyboard?.on('keydown', this.handleKeyDown, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -94,7 +88,7 @@ export class AdminLoginScene extends Phaser.Scene {
 
   private handleKeyDown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
-      startSceneWithTransition(this, 'MainMenuScene');
+      returnToShell(this, 'admin');
       return;
     }
 

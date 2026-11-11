@@ -16,12 +16,12 @@ export class Paddle extends Phaser.GameObjects.Rectangle {
   private currentWidth = PADDLE_WIDTH;
 
   public constructor(scene: Phaser.Scene) {
-    super(scene, WORLD_WIDTH / 2, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT, 0x65d7ff, 1);
+    super(scene, WORLD_WIDTH / 2, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT, 0xf4efe4, 1);
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setDepth(DEPTHS.paddle);
-    this.setStrokeStyle(3, 0xe5fbff, 0.94);
+    this.setStrokeStyle(3, 0xffb423, 0.95);
 
     const body = this.arcadeBody;
     body.setAllowGravity(false);
