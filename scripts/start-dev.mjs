@@ -10,12 +10,14 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const viteBin = resolve(root, 'node_modules', 'vite', 'bin', 'vite.js');
 const port = process.env.PORT ?? '5173';
 const apiPort = process.env.API_PORT ?? '8787';
-const host =
-  process.env.HOST ?? (process.env.EXPOSE_NETWORK === '1' ? '0.0.0.0' : 'localhost');
+const host = process.env.HOST ?? (process.env.EXPOSE_NETWORK === '1' ? '0.0.0.0' : 'localhost');
 const appUrl = `http://localhost:${port}`;
 const apiUrl = `http://localhost:${apiPort}`;
 const appProbeUrls = [appUrl, `http://127.0.0.1:${port}`];
-const apiProbeUrls = [`${apiUrl}/api/admin/session`, `http://127.0.0.1:${apiPort}/api/admin/session`];
+const apiProbeUrls = [
+  `${apiUrl}/api/admin/session`,
+  `http://127.0.0.1:${apiPort}/api/admin/session`
+];
 const localHosts = ['localhost', '127.0.0.1', '::1'];
 const startupStartedAt = Date.now();
 
@@ -88,7 +90,9 @@ async function canReachAnyHttp(urls) {
 }
 
 async function canConnectAnyLocal(targetPort) {
-  const results = await Promise.all(localHosts.map((hostname) => canConnectTcp(hostname, targetPort)));
+  const results = await Promise.all(
+    localHosts.map((hostname) => canConnectTcp(hostname, targetPort))
+  );
   return results.some(Boolean);
 }
 

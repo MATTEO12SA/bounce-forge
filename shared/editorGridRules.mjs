@@ -3,9 +3,9 @@ export const EDITOR_GRID_ROWS = 58;
 
 export const EDITOR_CELL_RULES = Object.freeze({
   '.': Object.freeze({ breakable: false }),
-  '1': Object.freeze({ breakable: true }),
-  '2': Object.freeze({ breakable: true }),
-  '3': Object.freeze({ breakable: true }),
+  1: Object.freeze({ breakable: true }),
+  2: Object.freeze({ breakable: true }),
+  3: Object.freeze({ breakable: true }),
   E: Object.freeze({ breakable: true }),
   B: Object.freeze({ breakable: true }),
   S: Object.freeze({ breakable: true }),

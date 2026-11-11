@@ -5,7 +5,10 @@ export class AudioSystem {
   private lastHitAt = 0;
   private detuneCents = 0;
 
-  public constructor(private enabled: boolean, volumeSfx = 1) {
+  public constructor(
+    private enabled: boolean,
+    volumeSfx = 1
+  ) {
     this.volumeSfx = clamp01(volumeSfx);
   }
 

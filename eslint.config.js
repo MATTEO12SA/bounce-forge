@@ -4,7 +4,17 @@ import tseslint from 'typescript-eslint';
 
 export default [
   {
-    ignores: ['dist', 'coverage', 'node_modules', 'vendor', '.edge*', '.video-debug*']
+    ignores: [
+      'dist',
+      'coverage',
+      'node_modules',
+      'vendor',
+      'artifacts',
+      '.edge*',
+      '.video-debug*',
+      '.smoke-browser-profile',
+      '.media-*'
+    ]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
