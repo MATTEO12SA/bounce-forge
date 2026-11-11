@@ -3,6 +3,19 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.2.1] — 2026-11-12
+
+### Changed
+
+- Power-ups live in a **Bonus panel** on the left of the game: one row per active effect (colour,
+  icon, name, time gauge, charges). An info card there announces each pickup, new mechanism,
+  combo and event; the white notification at the bottom of the screen is gone during play.
+- **Hover (or focus) a power-up** in the panel to read what it does.
+- On phones, the info card floats at the top of the stage and active power-ups show as chips in
+  the compact bar.
+- At most 6 capsules fall at once (extra drops turn into points) and bricks destroyed by chain
+  reactions drop half as often, so the screen stays readable.
+
 ## [1.2.0] — 2026-11-11
 
 ### Added

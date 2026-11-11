@@ -48,6 +48,8 @@ export interface HudEffect {
 /** One-off messages from the game that the interface shows as toasts. */
 export type GameNotice =
   | { kind: 'discovery'; id: string }
+  /** A capsule was caught; `first` the very first time this power-up is met. */
+  | { kind: 'pickup'; id: string; first: boolean }
   | { kind: 'combo'; id: 'meteor' | 'explosiveLasers' | 'sun' }
   | { kind: 'event'; id: 'descend' | 'storm' | 'bonusRain' | 'gatesOpen' };
 
