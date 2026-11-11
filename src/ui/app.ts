@@ -5,6 +5,7 @@ import {
   type GameSession,
   type HudSnapshot
 } from '../game/bridge';
+import { audio } from '../game/audio/AudioEngine';
 import { ADMIN_ENABLED } from '../game/config/features';
 import { campaignLevels } from '../game/levels/campaignLevels';
 import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../game/levels/levelShare';
@@ -127,6 +128,7 @@ export class App {
     this.root = root;
     setLanguage(this.save.snapshot().preferences.language);
     this.applyMotionPreference();
+    this.applySound();
 
     this.stage = h('div', { class: 'stage', id: 'stage', 'aria-hidden': 'true' });
     this.engine = new EngineLoader(this.stage);
@@ -172,6 +174,16 @@ export class App {
     window.addEventListener('hashchange', onHashChange);
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('resize', onResize);
+    // Browsers only allow sound after a user gesture: any tap, click or key unlocks it.
+    const unlockAudio = (): void => audio.unlock();
+    ['pointerdown', 'touchend', 'keydown'].forEach((type) =>
+      document.addEventListener(type, unlockAudio, { capture: true, passive: true })
+    );
+    this.cleanups.push(() =>
+      ['pointerdown', 'touchend', 'keydown'].forEach((type) =>
+        document.removeEventListener(type, unlockAudio, { capture: true })
+      )
+    );
     this.cleanups.push(
       () => window.removeEventListener('hashchange', onHashChange),
       () => window.removeEventListener('keydown', onKeyDown),
@@ -1146,7 +1158,8 @@ export class App {
       oninput: (event: Event) => {
         const value = Number((event.target as HTMLInputElement).value) / 100;
         this.save.setVolumeSfx(value);
-        this.engine.controller?.setSound(this.save.snapshot().preferences.soundEnabled, value);
+        this.applySound();
+        audio.play('brickBreak', { combo: 3 });
       }
     });
 
@@ -1174,7 +1187,7 @@ export class App {
         ),
         toggle('sound', t('settings.sound'), prefs.soundEnabled, (value) => {
           this.save.setSoundEnabled(value);
-          this.engine.controller?.setSound(value, this.save.snapshot().preferences.volumeSfx);
+          this.applySound();
         }),
         h(
           'div',
@@ -1280,8 +1293,14 @@ export class App {
   private toggleSound(): void {
     const prefs = this.save.snapshot().preferences;
     this.save.setSoundEnabled(!prefs.soundEnabled);
-    this.engine.controller?.setSound(!prefs.soundEnabled, prefs.volumeSfx);
+    this.applySound();
     this.rerender();
+  }
+
+  private applySound(): void {
+    const prefs = this.save.snapshot().preferences;
+    audio.setEnabled(prefs.soundEnabled);
+    audio.setVolume(prefs.volumeSfx);
   }
 
   private applyMotionPreference(): void {
@@ -1666,7 +1685,7 @@ export class App {
             onchange: (event: Event) => {
               const enabled = (event.target as HTMLInputElement).checked;
               this.save.setSoundEnabled(enabled);
-              this.engine.controller?.setSound(enabled, prefs.volumeSfx);
+              this.applySound();
             }
           }),
           h('span', { class: 'switch-track', 'aria-hidden': 'true' })

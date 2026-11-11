@@ -1,42 +1,28 @@
 import Phaser from 'phaser';
-import {
-  BALL_AXIS_LOCK_MIN_SPEED,
-  BALL_MAX_SPEED,
-  BALL_MIN_SPEED,
-  BALL_RADIUS,
-  DEPTHS,
-  PLAYFIELD_LEFT,
-  PLAYFIELD_RIGHT,
-  PLAYFIELD_TOP,
-  WORLD_HEIGHT
-} from '../utils/constants';
-import {
-  avoidAxisLock,
-  clampVelocitySpeed,
-  normalizeVelocity,
-  type Vector2Like
-} from '../utils/math';
+import type { BallBody } from '../physics/ballStep';
+import { TEX } from '../render/textures';
+import { BALL_RADIUS, DEPTHS, WORLD_HEIGHT } from '../utils/constants';
 import type { Paddle } from './Paddle';
 
-export class Ball extends Phaser.GameObjects.Arc {
+/** A ball sprite carrying its own velocity; moved by the custom physics in GameScene. */
+export class Ball extends Phaser.GameObjects.Image implements BallBody {
+  public vx = 0;
+  public vy = 0;
+  public readonly radius = BALL_RADIUS;
+  /** Current travel speed (ramps up with paddle hits). */
+  public speed = 0;
+  /** 0..1 squash impulse set on impact, decays every frame. */
+  public impact = 0;
+  /** Horizontal offset from the paddle centre while attached. */
+  public attachOffset = 0;
   private attached = false;
 
   public constructor(scene: Phaser.Scene, x = 0, y = 0) {
-    super(scene, x, y, BALL_RADIUS, 0, 360, false, 0xf8fdff, 1);
-
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
+    super(scene, x, y, TEX.ball);
+    this.setDisplaySize(BALL_RADIUS * 4, BALL_RADIUS * 4);
     this.setDepth(DEPTHS.ball);
-    this.setStrokeStyle(2, 0xffd36b, 0.95);
-
-    const body = this.arcadeBody;
-    body.setAllowGravity(false);
-    body.setCircle(BALL_RADIUS);
-    body.setBounce(1, 1);
-  }
-
-  public get arcadeBody(): Phaser.Physics.Arcade.Body {
-    return this.body as Phaser.Physics.Arcade.Body;
+    scene.add.existing(this);
+    this.setActive(false).setVisible(false);
   }
 
   public get isAttached(): boolean {
@@ -45,130 +31,52 @@ export class Ball extends Phaser.GameObjects.Arc {
 
   public reset(x: number, y: number): void {
     this.attached = false;
-    this.setActive(true);
-    this.setVisible(true);
-    this.setScale(1);
-    this.setAlpha(1);
+    this.impact = 0;
+    this.vx = 0;
+    this.vy = 0;
+    this.attachOffset = 0;
+    this.setActive(true).setVisible(true).setAlpha(1).setRotation(0);
+    this.setDisplaySize(BALL_RADIUS * 4, BALL_RADIUS * 4);
     this.setPosition(x, y);
-    const body = this.arcadeBody;
-    body.enable = true;
-    body.reset(x, y);
-    body.setVelocity(0, 0);
   }
 
   public disable(): void {
     this.attached = false;
-    this.setActive(false);
-    this.setVisible(false);
-    const body = this.arcadeBody;
-    body.setVelocity(0, 0);
-    body.enable = false;
+    this.vx = 0;
+    this.vy = 0;
+    this.setActive(false).setVisible(false);
   }
 
+  /** Rests the ball on the paddle surface (no floating gap). */
   public attachToPaddle(paddle: Paddle): void {
     this.attached = true;
-    this.setPosition(paddle.x, paddle.y - 56);
-    this.arcadeBody.setVelocity(0, 0);
-    this.arcadeBody.updateFromGameObject();
+    this.vx = 0;
+    this.vy = 0;
+    this.setPosition(paddle.x + this.attachOffset, paddle.top - this.radius - 1);
   }
 
-  public launch(speed: number): void {
+  public launch(vx: number, vy: number): void {
     this.attached = false;
-    this.setVelocity({ x: speed * 0.28, y: -speed });
-  }
-
-  public setVelocity(vector: Vector2Like): void {
-    this.arcadeBody.setVelocity(vector.x, vector.y);
-  }
-
-  public configureAsClone(source: Ball, angleOffsetRadians: number): void {
-    this.attached = false;
-    this.setActive(true);
-    this.setVisible(true);
-    this.setPosition(source.x, source.y);
-
-    const velocity = source.arcadeBody.velocity;
-    const speed = Math.max(BALL_MIN_SPEED, velocity.length());
-    const angle = Math.atan2(velocity.y, velocity.x) + angleOffsetRadians;
-    const body = this.arcadeBody;
-    body.enable = true;
-    body.reset(source.x, source.y);
-    this.setVelocity({
-      x: Math.cos(angle) * speed,
-      y: Math.sin(angle) * speed
-    });
-  }
-
-  public configureAsLaunchedClone(
-    source: Ball,
-    angleOffsetRadians: number,
-    ballSpeed: number
-  ): void {
-    this.attached = false;
-    this.setActive(true);
-    this.setVisible(true);
-    this.setPosition(source.x, source.y);
-
-    const speed = Math.max(BALL_MIN_SPEED, ballSpeed);
-    const angle = -Math.PI / 2 + angleOffsetRadians;
-    const body = this.arcadeBody;
-    body.enable = true;
-    body.reset(source.x, source.y);
-    this.setVelocity({
-      x: Math.cos(angle) * speed,
-      y: Math.sin(angle) * speed
-    });
-  }
-
-  public maintainSpeed(minSpeed = BALL_MIN_SPEED, maxSpeed = BALL_MAX_SPEED): void {
-    if (this.attached) {
-      return;
-    }
-
-    const body = this.arcadeBody;
-    const clamped = clampVelocitySpeed(
-      avoidAxisLock({ x: body.velocity.x, y: body.velocity.y }, BALL_AXIS_LOCK_MIN_SPEED),
-      minSpeed,
-      maxSpeed
-    );
-    body.setVelocity(clamped.x, clamped.y);
-    this.clampToPlayfield();
-  }
-
-  public clampToPlayfield(): void {
-    const body = this.arcadeBody;
-    let positionChanged = false;
-
-    if (this.x < PLAYFIELD_LEFT + BALL_RADIUS) {
-      this.x = PLAYFIELD_LEFT + BALL_RADIUS;
-      if (body.velocity.x < 0) body.setVelocityX(Math.abs(body.velocity.x));
-      positionChanged = true;
-    } else if (this.x > PLAYFIELD_RIGHT - BALL_RADIUS) {
-      this.x = PLAYFIELD_RIGHT - BALL_RADIUS;
-      if (body.velocity.x > 0) body.setVelocityX(-Math.abs(body.velocity.x));
-      positionChanged = true;
-    }
-
-    if (this.y < PLAYFIELD_TOP + BALL_RADIUS) {
-      this.y = PLAYFIELD_TOP + BALL_RADIUS;
-      if (body.velocity.y < 0) body.setVelocityY(Math.abs(body.velocity.y));
-      positionChanged = true;
-    }
-
-    if (positionChanged) {
-      body.updateFromGameObject();
-    }
+    this.vx = vx;
+    this.vy = vy;
+    this.speed = Math.hypot(vx, vy);
   }
 
   public isOutOfPlay(): boolean {
-    return this.y > WORLD_HEIGHT + BALL_RADIUS * 3;
+    return this.y > WORLD_HEIGHT + this.radius * 2;
   }
 
-  public scaleVelocity(multiplier: number): void {
-    const body = this.arcadeBody;
-    const current = { x: body.velocity.x, y: body.velocity.y };
-    const targetSpeed = Math.max(1, body.velocity.length() * multiplier);
-    const next = normalizeVelocity(current, targetSpeed);
-    body.setVelocity(next.x, next.y);
+  /** Squash and stretch along the direction of travel. */
+  public updateLook(deltaMs: number): void {
+    this.impact = Math.max(0, this.impact - deltaMs / 140);
+    const base = BALL_RADIUS * 4;
+    if (this.attached) {
+      this.setDisplaySize(base, base).setRotation(0);
+      return;
+    }
+    const stretch = Math.min(0.22, Math.hypot(this.vx, this.vy) / 5200);
+    const squash = this.impact * 0.35;
+    this.setRotation(Math.atan2(this.vy, this.vx));
+    this.setDisplaySize(base * (1 + stretch - squash), base * (1 - stretch * 0.6 + squash * 0.6));
   }
 }

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { TEX } from '../render/textures';
 import {
   DEPTHS,
   PADDLE_HEIGHT,
@@ -12,46 +13,84 @@ import {
 } from '../utils/constants';
 import { clamp } from '../utils/math';
 
-export class Paddle extends Phaser.GameObjects.Rectangle {
+const VISUAL_MARGIN = 6;
+const TEXTURE_HEIGHT = 34;
+
+/** The paddle: a nine-slice sprite so it can widen without stretching its glowing ends. */
+export class Paddle extends Phaser.GameObjects.NineSlice {
+  /** Horizontal speed in px/s, measured every frame (used for spin on bounces). */
+  public vx = 0;
   private currentWidth = PADDLE_WIDTH;
+  private lastX = WORLD_WIDTH / 2;
+  private tilt = 0;
 
   public constructor(scene: Phaser.Scene) {
-    super(scene, WORLD_WIDTH / 2, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT, 0xf4efe4, 1);
-
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
+    super(
+      scene,
+      WORLD_WIDTH / 2,
+      PADDLE_Y,
+      TEX.paddle,
+      undefined,
+      PADDLE_WIDTH + VISUAL_MARGIN,
+      TEXTURE_HEIGHT,
+      26,
+      26,
+      0,
+      0
+    );
     this.setDepth(DEPTHS.paddle);
-    this.setStrokeStyle(3, 0xffb423, 0.95);
-
-    const body = this.arcadeBody;
-    body.setAllowGravity(false);
-    body.setImmovable(true);
-    body.setSize(PADDLE_WIDTH, PADDLE_HEIGHT);
-  }
-
-  public get arcadeBody(): Phaser.Physics.Arcade.Body {
-    return this.body as Phaser.Physics.Arcade.Body;
+    scene.add.existing(this);
   }
 
   public get activeWidth(): number {
     return this.currentWidth;
   }
 
+  /** Y of the paddle top surface. */
+  public get top(): number {
+    return this.y - PADDLE_HEIGHT / 2;
+  }
+
   public setCenterX(x: number): void {
     const halfWidth = this.currentWidth / 2;
-    this.x = clamp(x, PLAYFIELD_LEFT + halfWidth + 6, PLAYFIELD_RIGHT - halfWidth - 6);
-    this.arcadeBody.updateFromGameObject();
+    this.x = clamp(x, PLAYFIELD_LEFT + halfWidth + 4, PLAYFIELD_RIGHT - halfWidth - 4);
+  }
+
+  /** Call once per frame after moving: measures speed and leans the paddle a little. */
+  public afterMove(deltaMs: number, reducedMotion: boolean): void {
+    const dt = Math.max(1, deltaMs) / 1000;
+    const instant = (this.x - this.lastX) / dt;
+    this.vx = this.vx * 0.5 + instant * 0.5;
+    this.lastX = this.x;
+    const targetTilt = reducedMotion ? 0 : clamp(this.vx / 9000, -0.06, 0.06);
+    this.tilt += (targetTilt - this.tilt) * Math.min(1, dt * 14);
+    this.setRotation(this.tilt);
   }
 
   public setWidthScale(scale: number): void {
-    this.currentWidth = clamp(PADDLE_WIDTH * scale, PADDLE_MIN_WIDTH, PADDLE_MAX_WIDTH);
-    this.setSize(this.currentWidth, PADDLE_HEIGHT);
-    this.setDisplaySize(this.currentWidth, PADDLE_HEIGHT);
-    this.arcadeBody.setSize(this.currentWidth, PADDLE_HEIGHT, true);
+    const target = clamp(PADDLE_WIDTH * scale, PADDLE_MIN_WIDTH, PADDLE_MAX_WIDTH);
+    this.currentWidth = target;
+    this.scene.tweens.add({
+      targets: this,
+      width: target + VISUAL_MARGIN,
+      duration: 220,
+      ease: 'Back.easeOut'
+    });
     this.setCenterX(this.x);
   }
 
   public resetWidth(): void {
     this.setWidthScale(1);
+  }
+
+  /** Squash on impact. */
+  public bump(strength = 1): void {
+    this.scene.tweens.add({
+      targets: this,
+      scaleY: { from: 1 - 0.32 * strength, to: 1 },
+      scaleX: { from: 1 + 0.06 * strength, to: 1 },
+      duration: 220,
+      ease: 'Back.easeOut'
+    });
   }
 }

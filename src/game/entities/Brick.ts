@@ -1,41 +1,37 @@
 import Phaser from 'phaser';
+import type { BrickSpec } from '../levels/levelTypes';
+import type { GridItem } from '../physics/BrickGrid';
+import type { Box } from '../physics/geometry';
+import { ensureBrickTexture } from '../render/textures';
 import { DEPTHS } from '../utils/constants';
-import type { BrickKind, BrickSpec } from '../levels/levelTypes';
 
-/** Each kind gets a distinct outline so bricks stay recognisable without relying on colour. */
-const BRICK_OUTLINES: Record<BrickKind, { width: number; color: number; alpha: number }> = {
-  standard: { width: 2, color: 0x3a2706, alpha: 0.55 },
-  resistant: { width: 3, color: 0x8a5a00, alpha: 0.9 },
-  explosive: { width: 3, color: 0xffe0b8, alpha: 0.95 },
-  bonus: { width: 2, color: 0xe4fff4, alpha: 0.9 },
-  shield: { width: 4, color: 0xe6f3ff, alpha: 0.95 },
-  indestructible: { width: 3, color: 0xa8a092, alpha: 0.9 }
-};
-
-export class Brick extends Phaser.GameObjects.Rectangle {
+/** A brick sprite. Collisions are handled by the grid-based physics, not by Arcade bodies. */
+export class Brick extends Phaser.GameObjects.Image implements GridItem {
+  public readonly col: number;
+  public readonly row: number;
+  public readonly box: Box;
+  public readonly solid: boolean;
   private hitPoints: number;
+  private damageStage = 0;
 
   public constructor(
     scene: Phaser.Scene,
     public readonly spec: BrickSpec
   ) {
-    super(scene, spec.x, spec.y, spec.width, spec.height, spec.color, 1);
-
+    super(scene, spec.x, spec.y, ensureBrickTexture(scene, spec.kind, spec.color, 0));
+    this.col = spec.col;
+    this.row = spec.row;
+    this.solid = spec.kind === 'indestructible';
+    this.box = {
+      left: spec.x - spec.width / 2,
+      right: spec.x + spec.width / 2,
+      top: spec.y - spec.height / 2,
+      bottom: spec.y + spec.height / 2
+    };
     this.hitPoints = spec.hitPoints;
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
+    this.setDisplaySize(spec.width + 1, spec.height + 1);
     this.setDepth(DEPTHS.bricks);
-    const outline = BRICK_OUTLINES[spec.kind];
-    this.setStrokeStyle(outline.width, outline.color, outline.alpha);
-
-    const body = this.arcadeBody;
-    body.setAllowGravity(false);
-    body.setImmovable(true);
-    body.setSize(spec.width, spec.height);
-  }
-
-  public get arcadeBody(): Phaser.Physics.Arcade.Body {
-    return this.body as Phaser.Physics.Arcade.Body;
+    scene.add.existing(this);
   }
 
   public get remainingHitPoints(): number {
@@ -43,26 +39,34 @@ export class Brick extends Phaser.GameObjects.Rectangle {
   }
 
   public get isBreakable(): boolean {
-    return this.spec.kind !== 'indestructible';
+    return !this.solid;
   }
 
+  /** Applies damage and returns true when the brick is destroyed. */
   public damage(amount: number): boolean {
     if (!this.isBreakable || this.hitPoints <= 0) {
       return false;
     }
-
     this.hitPoints = Math.max(0, this.hitPoints - amount);
-    this.refreshDamageState();
+    if (this.hitPoints > 0 && this.spec.maxHitPoints > 1) {
+      const ratio = this.hitPoints / this.spec.maxHitPoints;
+      const stage = ratio > 0.66 ? 0 : ratio > 0.33 ? 1 : 2;
+      if (stage !== this.damageStage) {
+        this.damageStage = stage;
+        this.setTexture(ensureBrickTexture(this.scene, this.spec.kind, this.spec.color, stage));
+      }
+    }
     return this.hitPoints === 0;
   }
 
-  private refreshDamageState(): void {
-    if (this.spec.maxHitPoints <= 1) {
-      return;
-    }
-
-    const ratio = this.hitPoints / this.spec.maxHitPoints;
-    this.setAlpha(0.52 + ratio * 0.48);
-    this.setScale(0.94 + ratio * 0.06, 1);
+  /** Brief white flash used on every impact. */
+  public flash(durationMs = 60): void {
+    this.setTint(0xffffff).setTintMode(Phaser.TintModes.FILL);
+    this.scene.time.delayedCall(durationMs, () => {
+      if (this.scene) {
+        this.clearTint();
+        this.setTintMode(Phaser.TintModes.MULTIPLY);
+      }
+    });
   }
 }
