@@ -568,7 +568,8 @@ try {
       page,
       `(() => { const s = ${GAME}; s.setAutopilot(true); s.launchAttachedBalls(); for (let i = 0; i < 12; i += 1) s.createBall(false); s.ballManager.getActiveBalls().forEach((b, i) => { b.y = 900; b.x = 180 + ((i * 61) % 720); }); return s.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0); })()`
     );
-    await delay(2600);
+    // Give every level the same amount of game time, whatever the runner's frame rate.
+    await waitFor(page, `${GAME}.gameTime > 3200`, 20000);
     const after = await evaluate(
       page,
       `({ left: ${GAME}.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0), active: window.__bounceForge.scene.isActive('GameScene'), level: ${GAME}.getSession().levelIndex })`
@@ -668,14 +669,18 @@ try {
     page,
     `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'key'), 1); return true; })()`
   );
-  await delay(700);
+  await waitFor(page, `${B}.filter((b) => b.kind === 'gate').length === 0`, 8000);
   const gatesLeft = await evaluate(page, `${B}.filter((b) => b.kind === 'gate').length`);
   check('breaking the last key opens every gate', gatesLeft === 0, gatesLeft);
   await evaluate(
     page,
     `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'fuse'), 99); return true; })()`
   );
-  await delay(1200);
+  await waitFor(
+    page,
+    `${B}.filter((b) => b.kind === 'fuse').length === 0 && ${GAME}.explosionsTriggered >= 1`,
+    10000
+  );
   const fuses = await evaluate(
     page,
     `({ left: ${B}.filter((b) => b.kind === 'fuse').length, explosions: ${GAME}.explosionsTriggered })`
@@ -689,17 +694,17 @@ try {
     page,
     `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'phoenix'), 1); s.gameTime += 9000; return true; })()`
   );
-  await delay(600);
+  await waitFor(page, `${B}.filter((b) => b.kind === 'phoenix').length === 1`, 8000);
   const phoenix = await evaluate(page, `${B}.filter((b) => b.kind === 'phoenix').length`);
   check('a phoenix brick comes back', phoenix === 1, phoenix);
   const moverCols = await evaluate(
     page,
-    `new Promise((resolve) => { const seen = new Set(); const id = setInterval(() => { const m = ${B}.find((b) => b.kind === 'mover'); if (m) seen.add(m.col); }, 150); setTimeout(() => { clearInterval(id); resolve([...seen]); }, 2000); })`
+    `new Promise((resolve) => { const seen = new Set(); const started = Date.now(); const id = setInterval(() => { const m = ${B}.find((b) => b.kind === 'mover'); if (m) seen.add(m.col); if (seen.size >= 2 || Date.now() - started > 8000) { clearInterval(id); resolve([...seen]); } }, 100); })`
   );
   check('a moving brick slides along its row', moverCols.length >= 2, moverCols);
   const teleported = await evaluate(
     page,
-    `(() => new Promise((resolve) => { const s = ${GAME}; s.launchAttachedBalls(); const [a, b] = s.getBricks().filter((x) => x.kind === 'teleporter').sort((p, q) => p.col - q.col); const ball = s.ballManager.getActiveBalls()[0]; ball.setPosition(a.x, a.y + 70); ball.vx = 0; ball.vy = -700; ball.speed = 700; setTimeout(() => resolve({ x: ball.x, exitX: b.x, entryX: a.x }), 250); }))()`
+    `(() => new Promise((resolve) => { const s = ${GAME}; s.launchAttachedBalls(); const [a, b] = s.getBricks().filter((x) => x.kind === 'teleporter').sort((p, q) => p.col - q.col); const ball = s.ballManager.getActiveBalls()[0]; ball.setPosition(a.x, a.y + 70); ball.vx = 0; ball.vy = -700; ball.speed = 700; const started = Date.now(); const id = setInterval(() => { if (Math.abs(ball.x - b.x) < 60 || Date.now() - started > 4000) { clearInterval(id); resolve({ x: ball.x, exitX: b.x, entryX: a.x }); } }, 50); }))()`
   );
   check(
     'a teleporter sends the ball out of its twin',
