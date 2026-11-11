@@ -1,5 +1,6 @@
 import { getTheme } from '../config/themeConfig';
 import { isValidEditorRows, normalizeEditorRows, validateEditorRows } from '../levels/editorGrid';
+import { sanitizeLevelOptions, type LevelOptions } from '../levels/levelOptions';
 import { sanitizeLevelName } from '../levels/levelNames';
 import type { CreativeLevelSlot } from '../levels/levelTypes';
 import { SAVE_STORAGE_KEY } from '../utils/constants';
@@ -43,7 +44,7 @@ export interface ModeRecords {
 export type LevelMedal = 'bronze' | 'silver' | 'gold';
 
 export interface SaveData {
-  version: 6;
+  version: 7;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
@@ -52,10 +53,12 @@ export interface SaveData {
   creativeLevelSlots: Record<string, CreativeLevelSlot>;
   tutorialSeen: boolean;
   records: ModeRecords;
+  /** Power-ups and brick kinds the player has met (first-time hints are shown once). */
+  discovered: string[];
 }
 
 interface LegacySaveData {
-  version: 1 | 2 | 3 | 4 | 5;
+  version: 1 | 2 | 3 | 4 | 5 | 6;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
@@ -74,6 +77,7 @@ interface LegacySaveData {
   creativeLevelSlots?: Record<string, CreativeLevelSlot>;
   tutorialSeen?: boolean;
   records?: unknown;
+  discovered?: unknown;
 }
 
 const MAX_DAILY_RECORDS = 60;
@@ -110,7 +114,7 @@ const DEFAULT_PREFERENCES: SavePreferences = {
 };
 
 export const DEFAULT_SAVE_DATA: SaveData = {
-  version: 6,
+  version: 7,
   bestScore: 0,
   unlockedLevel: 0,
   completedLevels: [],
@@ -118,7 +122,8 @@ export const DEFAULT_SAVE_DATA: SaveData = {
   preferences: { ...DEFAULT_PREFERENCES },
   creativeLevelSlots: {},
   tutorialSeen: false,
-  records: { endless: { bestScore: 0, bestWave: 0 }, daily: {} }
+  records: { endless: { bestScore: 0, bestWave: 0 }, daily: {} },
+  discovered: []
 };
 
 function createDefaultSaveData(): SaveData {
@@ -163,7 +168,7 @@ function isPersistedSaveData(value: unknown): value is PersistedSaveData {
   }
 
   return (
-    (value.version === 4 || value.version === 5 || value.version === 6) &&
+    (value.version === 4 || value.version === 5 || value.version === 6 || value.version === 7) &&
     Boolean(value.levelMedals) &&
     typeof value.levelMedals === 'object' &&
     !Array.isArray(value.levelMedals) &&
@@ -225,11 +230,13 @@ function sanitizeCreativeLevelSlots(overrides: unknown): Record<string, Creative
     }
 
     const safeSlotIndex = Math.max(0, Math.floor(candidate.slotIndex));
+    const options = sanitizeLevelOptions(candidate.options);
     sanitized[String(safeSlotIndex)] = {
       slotIndex: safeSlotIndex,
       name: sanitizeLevelName(candidate.name, `Creative ${safeSlotIndex + 1}`),
       rows,
-      updatedAt: candidate.updatedAt
+      updatedAt: candidate.updatedAt,
+      ...(options ? { options } : {})
     };
   });
 
@@ -345,7 +352,7 @@ export function migrateSaveData(value: PersistedSaveData): SaveData {
   });
 
   return {
-    version: 6,
+    version: 7,
     bestScore: Math.max(0, Math.floor(value.bestScore)),
     unlockedLevel: Math.max(0, Math.floor(value.unlockedLevel)),
     completedLevels: value.completedLevels
@@ -356,8 +363,16 @@ export function migrateSaveData(value: PersistedSaveData): SaveData {
     preferences: migratePreferences(value.preferences),
     creativeLevelSlots,
     tutorialSeen: 'tutorialSeen' in value && value.tutorialSeen === true,
-    records: sanitizeRecords('records' in value ? value.records : undefined)
+    records: sanitizeRecords('records' in value ? value.records : undefined),
+    discovered: sanitizeDiscovered('discovered' in value ? value.discovered : undefined)
   };
+}
+
+function sanitizeDiscovered(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [
+    ...new Set(value.filter((item): item is string => typeof item === 'string' && item.length < 40))
+  ].slice(0, 128);
 }
 
 type SaveListener = (data: SaveData) => void;
@@ -388,6 +403,7 @@ export class SaveSystem {
       levelMedals: { ...this.data.levelMedals },
       preferences: { ...this.data.preferences },
       creativeLevelSlots: this.cloneCreativeLevelSlots(),
+      discovered: [...this.data.discovered],
       records: {
         endless: { ...this.data.records.endless },
         daily: Object.fromEntries(
@@ -472,6 +488,14 @@ export class SaveSystem {
     return this.snapshot();
   }
 
+  /** Records a first encounter; returns true the first time only. */
+  public discover(id: string): boolean {
+    if (this.data.discovered.includes(id)) return false;
+    this.data.discovered.push(id);
+    this.persist();
+    return true;
+  }
+
   public setTutorialSeen(seen = true): SaveData {
     this.data.tutorialSeen = seen;
     this.persist();
@@ -528,9 +552,11 @@ export class SaveSystem {
     slotIndex: number,
     rows: readonly string[],
     name = `Custom ${slotIndex + 1}`,
-    updatedAt = Date.now()
+    updatedAt = Date.now(),
+    options?: LevelOptions
   ): SaveData {
     const safeSlotIndex = Math.max(0, Math.floor(slotIndex));
+    const cleanOptions = sanitizeLevelOptions(options);
     const normalizedRows = normalizeEditorRows(rows);
     const validation = validateEditorRows(normalizedRows);
 
@@ -542,7 +568,8 @@ export class SaveSystem {
       slotIndex: safeSlotIndex,
       name: sanitizeLevelName(name, `Creative ${safeSlotIndex + 1}`),
       rows: normalizedRows,
-      updatedAt
+      updatedAt,
+      ...(cleanOptions ? { options: cleanOptions } : {})
     };
     this.persist();
     return this.snapshot();

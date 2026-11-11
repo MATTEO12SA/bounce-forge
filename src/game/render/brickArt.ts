@@ -50,7 +50,18 @@ export function paintBrick(
   const w = BRICK_W;
   const h = BRICK_H;
   const r = 7;
-  const steel = kind === 'indestructible';
+  if (kind === 'bumper') {
+    paintBumper(ctx, color, w, h);
+    return;
+  }
+  if (kind === 'teleporter') {
+    paintPortal(ctx, color, w, h);
+    return;
+  }
+  const steel = kind === 'indestructible' || kind === 'gate';
+  // Ghost bricks are glassy: the game hides them until the first touch.
+  ctx.save();
+  if (kind === 'invisible') ctx.globalAlpha = 0.55;
 
   // Body gradient.
   const body = ctx.createLinearGradient(0, 0, 0, h);
@@ -97,7 +108,13 @@ export function paintBrick(
   roundRect(ctx, 1, 1, w - 2, h - 2, r);
   ctx.lineWidth = 2;
   ctx.strokeStyle = steel ? 'rgba(20, 18, 15, 0.9)' : css(0x1a1206, 0.7);
+  if (kind === 'invisible') {
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  }
   ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
 
   paintSymbol(ctx, kind, color, w, h);
   if (damage > 0) {
@@ -207,6 +224,107 @@ function paintSymbol(
       });
       break;
     }
+    case 'crystal': {
+      // Faceted gem.
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.strokeStyle = shade(color, -0.5);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 11);
+      ctx.lineTo(cx + 9, cy - 3);
+      ctx.lineTo(cx, cy + 11);
+      ctx.lineTo(cx - 9, cy - 3);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, cy - 3);
+      ctx.lineTo(cx + 9, cy - 3);
+      ctx.moveTo(cx, cy - 11);
+      ctx.lineTo(cx, cy + 11);
+      ctx.stroke();
+      break;
+    }
+    case 'key': {
+      // Gold key on an ivory brick: it must stand out from the amber standard bricks.
+      ctx.strokeStyle = '#c8901a';
+      ctx.fillStyle = '#c8901a';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(cx - 8, cy, 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillRect(cx - 3, cy - 1.5, 15, 3);
+      ctx.fillRect(cx + 6, cy, 3, 6);
+      ctx.fillRect(cx + 10, cy, 2.5, 4);
+      break;
+    }
+    case 'gate': {
+      // Bars and a padlock: closed until every key is broken.
+      ctx.fillStyle = 'rgba(20, 16, 10, 0.55)';
+      [10, 18, 26, 34].forEach((x) => ctx.fillRect(x, 5, 3, h - 10));
+      ctx.fillStyle = '#ffd23f';
+      ctx.fillRect(cx - 6, cy - 1, 12, 9);
+      ctx.strokeStyle = '#ffd23f';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(cx, cy - 2, 4.5, Math.PI, 0);
+      ctx.stroke();
+      break;
+    }
+    case 'phoenix': {
+      // Flame that comes back.
+      const flame = ctx.createLinearGradient(0, cy - 12, 0, cy + 10);
+      flame.addColorStop(0, '#fff4c2');
+      flame.addColorStop(1, '#ff5a1f');
+      ctx.fillStyle = flame;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 12);
+      ctx.quadraticCurveTo(cx + 11, cy, cx + 5, cy + 9);
+      ctx.quadraticCurveTo(cx, cy + 12, cx - 5, cy + 9);
+      ctx.quadraticCurveTo(cx - 11, cy, cx, cy - 12);
+      ctx.fill();
+      break;
+    }
+    case 'invisible': {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = '900 20px system-ui, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('?', cx, cy);
+      break;
+    }
+    case 'mover': {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.beginPath();
+      ctx.moveTo(cx - 14, cy);
+      ctx.lineTo(cx - 6, cy - 7);
+      ctx.lineTo(cx - 6, cy + 7);
+      ctx.closePath();
+      ctx.moveTo(cx + 14, cy);
+      ctx.lineTo(cx + 6, cy - 7);
+      ctx.lineTo(cx + 6, cy + 7);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(cx - 6, cy - 2, 12, 4);
+      break;
+    }
+    case 'fuse': {
+      ctx.strokeStyle = '#2a160a';
+      ctx.lineWidth = 3;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(6, cy + 4);
+      ctx.lineTo(14, cy - 4);
+      ctx.lineTo(22, cy + 4);
+      ctx.lineTo(30, cy - 4);
+      ctx.lineTo(38, cy + 4);
+      ctx.stroke();
+      ctx.fillStyle = '#fff2b0';
+      ctx.beginPath();
+      ctx.arc(38, cy + 4, 3, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
     case 'standard':
     default: {
       // Small forged notch so plain bricks still read as bricks.
@@ -250,4 +368,50 @@ function paintCracks(ctx: CanvasRenderingContext2D, damage: number, w: number, h
     ctx.fill();
   }
   ctx.restore();
+}
+
+function paintBumper(ctx: CanvasRenderingContext2D, color: number, w: number, h: number): void {
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) / 2 - 2;
+  const body = ctx.createRadialGradient(cx - 5, cy - 6, 2, cx, cy, radius);
+  body.addColorStop(0, shade(color, 0.7));
+  body.addColorStop(0.55, shade(color, 0));
+  body.addColorStop(1, shade(color, -0.5));
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius - 5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function paintPortal(ctx: CanvasRenderingContext2D, color: number, w: number, h: number): void {
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) / 2 - 1;
+  const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, radius);
+  glow.addColorStop(0, '#0b0614');
+  glow.addColorStop(0.55, shade(color, -0.6));
+  glow.addColorStop(0.8, shade(color, 0.2));
+  glow.addColorStop(1, css(color, 0));
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = shade(color, 0.6);
+  ctx.lineWidth = 2;
+  for (let index = 0; index < 3; index += 1) {
+    ctx.beginPath();
+    const start = (index * Math.PI * 2) / 3;
+    ctx.arc(cx, cy, radius - 6, start, start + Math.PI / 2);
+    ctx.stroke();
+  }
 }

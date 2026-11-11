@@ -3,9 +3,12 @@
  * player tests a level, reloads the page or leaves by accident.
  */
 
+import { sanitizeLevelOptions, type LevelOptions } from '../../game/levels/levelOptions';
+
 export interface EditorDraft {
   name: string;
   rows: string[];
+  options?: LevelOptions;
   /** Set when the draft was just created from the workshop (no "restored" message). */
   fresh?: boolean;
 }
@@ -21,6 +24,7 @@ export function readDraft(slotIndex: number): EditorDraft | null {
     return {
       name: parsed.name.slice(0, 120),
       rows: parsed.rows.filter((row): row is string => typeof row === 'string'),
+      options: sanitizeLevelOptions(parsed.options),
       fresh: parsed.fresh === true
     };
   } catch {

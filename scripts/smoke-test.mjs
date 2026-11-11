@@ -325,7 +325,7 @@ try {
   const migrated = await evaluate(page, `JSON.parse(localStorage.getItem('bounce-forge.save.v1'))`);
   check(
     'v5 save migrates to v6 and keeps progress',
-    migrated?.version === 6 && migrated.bestScore === 4321 && migrated.unlockedLevel === 3,
+    migrated?.version === 7 && migrated.bestScore === 4321 && migrated.unlockedLevel === 3,
     migrated?.version
   );
   // Start the rest from a French, tutorial-free profile for stable screenshots.
@@ -549,6 +549,169 @@ try {
   );
 
   // ---------------------------------------------------------------- sharing with Unicode
+  // ---------------------------------------------------------------- whole campaign
+  console.log('Campaign levels');
+  const stuck = [];
+  for (let index = 0; index < 30; index += 1) {
+    await evaluate(
+      page,
+      `(() => { ${GAME}.scene.restart({ mode: 'campaign', levelIndex: ${index} }); return true; })()`
+    );
+    // Slow CI runners: measure only once the requested level is really running.
+    await waitFor(
+      page,
+      `${GAME} && ${GAME}.getSession().levelIndex === ${index} && ${GAME}.gameTime < 1500 && ${GAME}.getBricks().length > 0 && window.__bounceForge.scene.isActive('GameScene')`,
+      10000
+    );
+    await delay(350);
+    const before = await evaluate(
+      page,
+      `(() => { const s = ${GAME}; s.setAutopilot(true); s.launchAttachedBalls(); for (let i = 0; i < 12; i += 1) s.createBall(false); s.ballManager.getActiveBalls().forEach((b, i) => { b.y = 900; b.x = 180 + ((i * 61) % 720); }); return s.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0); })()`
+    );
+    // Give every level the same amount of game time, whatever the runner's frame rate.
+    await waitFor(page, `${GAME}.gameTime > 3200`, 20000);
+    const after = await evaluate(
+      page,
+      `({ left: ${GAME}.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0), active: window.__bounceForge.scene.isActive('GameScene'), level: ${GAME}.getSession().levelIndex })`
+    );
+    if (!after.active || after.level !== index || !(after.left < before)) {
+      stuck.push({ ...after, level: index + 1, before });
+    }
+  }
+  check('all 30 campaign levels load, play and make progress', stuck.length === 0, stuck);
+
+  // ---------------------------------------------------------------- power-ups
+  console.log('Power-ups');
+  await goto(page, baseUrl, '#/play/campaign/2');
+  await waitFor(page, `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === 1`);
+  const allPowerUps = [
+    'multiBall',
+    'splitBall',
+    'widePaddle',
+    'stickyPaddle',
+    'extraLife',
+    'fireBall',
+    'explosiveBall',
+    'bigBall',
+    'laserPaddle',
+    'magnet',
+    'shield',
+    'slowMotion',
+    'fever',
+    'turbo',
+    'shrinkPaddle'
+  ];
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.launchAttachedBalls(); ${JSON.stringify(allPowerUps)}.forEach((type) => s.applyPowerUp(type)); s.launchAttachedBalls(); return true; })()`
+  );
+  await delay(2500);
+  const powered = await evaluate(
+    page,
+    `({ chips: document.querySelectorAll('.hud .effect-chip, .effect-list .effect-chip').length, balls: ${GAME}.ballManager.getStats().activeCount, active: window.__bounceForge.scene.isActive('GameScene') })`
+  );
+  check(
+    'every power-up applies without error and shows in the HUD',
+    powered.chips >= 8 && powered.balls >= 1 && powered.active,
+    powered
+  );
+
+  // ---------------------------------------------------------------- mechanisms
+  console.log('Mechanisms');
+  const mechRows = Array.from({ length: 58 }, () => '.'.repeat(36));
+  const put = (row, col, text) => {
+    mechRows[row] = (
+      mechRows[row].slice(0, col) +
+      text +
+      mechRows[row].slice(col + text.length)
+    ).slice(0, 36);
+  };
+  put(4, 2, 'T');
+  put(4, 30, 'T');
+  put(8, 10, 'K.GGG');
+  put(10, 5, 'C.R.I');
+  put(10, 15, 'M');
+  put(10, 20, 'O');
+  put(10, 24, 'FFFF');
+  put(12, 0, '1'.repeat(36));
+  await evaluate(
+    page,
+    `(() => { window.__bounceForge.scene.getScene('GameScene').scene.restart({ mode: 'creative', levelIndex: 0, draft: { name: 'Mech', rows: ${JSON.stringify(mechRows)} } }); return true; })()`
+  );
+  await delay(900);
+  const B = `${GAME}.getBricks()`;
+  const kinds = await evaluate(page, `[...new Set(${B}.map((b) => b.kind))].sort()`);
+  check(
+    'all nine mechanisms load',
+    [
+      'bumper',
+      'crystal',
+      'fuse',
+      'gate',
+      'invisible',
+      'key',
+      'mover',
+      'phoenix',
+      'teleporter'
+    ].every((k) => kinds.includes(k)),
+    kinds
+  );
+  const ghost = await evaluate(
+    page,
+    `(() => { const s = ${GAME}; const g = s.getBricks().find((b) => b.kind === 'invisible'); const before = g.alpha; s.damageBrick(g, 1); return { before, active: g.active, after: g.alpha }; })()`
+  );
+  check(
+    'ghost brick is hidden, then revealed by the first hit',
+    ghost.before < 0.2 && ghost.active && ghost.after === 1,
+    ghost
+  );
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'key'), 1); return true; })()`
+  );
+  await waitFor(page, `${B}.filter((b) => b.kind === 'gate').length === 0`, 8000);
+  const gatesLeft = await evaluate(page, `${B}.filter((b) => b.kind === 'gate').length`);
+  check('breaking the last key opens every gate', gatesLeft === 0, gatesLeft);
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'fuse'), 99); return true; })()`
+  );
+  await waitFor(
+    page,
+    `${B}.filter((b) => b.kind === 'fuse').length === 0 && ${GAME}.explosionsTriggered >= 1`,
+    10000
+  );
+  const fuses = await evaluate(
+    page,
+    `({ left: ${B}.filter((b) => b.kind === 'fuse').length, explosions: ${GAME}.explosionsTriggered })`
+  );
+  check(
+    'a fuse burns down the whole line and explodes',
+    fuses.left === 0 && fuses.explosions >= 1,
+    fuses
+  );
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'phoenix'), 1); s.gameTime += 9000; return true; })()`
+  );
+  await waitFor(page, `${B}.filter((b) => b.kind === 'phoenix').length === 1`, 8000);
+  const phoenix = await evaluate(page, `${B}.filter((b) => b.kind === 'phoenix').length`);
+  check('a phoenix brick comes back', phoenix === 1, phoenix);
+  const moverCols = await evaluate(
+    page,
+    `new Promise((resolve) => { const seen = new Set(); const started = Date.now(); const id = setInterval(() => { const m = ${B}.find((b) => b.kind === 'mover'); if (m) seen.add(m.col); if (seen.size >= 2 || Date.now() - started > 8000) { clearInterval(id); resolve([...seen]); } }, 100); })`
+  );
+  check('a moving brick slides along its row', moverCols.length >= 2, moverCols);
+  const teleported = await evaluate(
+    page,
+    `(() => new Promise((resolve) => { const s = ${GAME}; s.launchAttachedBalls(); const [a, b] = s.getBricks().filter((x) => x.kind === 'teleporter').sort((p, q) => p.col - q.col); const ball = s.ballManager.getActiveBalls()[0]; ball.setPosition(a.x, a.y + 70); ball.vx = 0; ball.vy = -700; ball.speed = 700; const started = Date.now(); const id = setInterval(() => { if (Math.abs(ball.x - b.x) < 60 || Date.now() - started > 4000) { clearInterval(id); resolve({ x: ball.x, exitX: b.x, entryX: a.x }); } }, 50); }))()`
+  );
+  check(
+    'a teleporter sends the ball out of its twin',
+    Math.abs(teleported.x - teleported.exitX) < 60,
+    teleported
+  );
+
   // ---------------------------------------------------------------- workshop & editor
   console.log('Workshop');
   await goto(page, baseUrl, '#/create');
@@ -587,11 +750,21 @@ try {
   );
   await evaluate(
     page,
+    `(() => { [...document.querySelectorAll('.editor-side .button')].find((b) => b.textContent.includes('Réglages du niveau')).click(); const toggles = document.querySelectorAll('.settings-toggle input'); toggles[toggles.length - 1].click(); document.querySelector('.dialog .button-primary').click(); return true; })()`
+  );
+  await delay(500);
+  const settingsDraft = await evaluate(
+    page,
+    `JSON.parse(localStorage.getItem('bounce-forge.editor-draft.v1.${slotIndex}') || '{}').options`
+  );
+  check('level settings land in the draft', settingsDraft?.storm === true, settingsDraft);
+  await evaluate(
+    page,
     `[...document.querySelectorAll('.editor-bar .button')].find((b) => b.textContent.includes('Tester')).click(); true`
   );
   const testing = await waitFor(
     page,
-    `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().mode === 'creative' && Boolean(${GAME}.getSession().draft)`,
+    `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().mode === 'creative' && ${GAME}.getSession().draft?.options?.storm === true`,
     10000
   );
   const slotUntouched = await evaluate(

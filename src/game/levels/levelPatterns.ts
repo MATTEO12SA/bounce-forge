@@ -1,16 +1,23 @@
 import { EDITOR_GRID_COLS, EDITOR_GRID_ROWS } from '../../../shared/editorGridRules.mjs';
+import type { LevelOptions } from './levelOptions';
 import type { LevelObjective, PatternDefinition } from './levelTypes';
 
 /**
- * The 24 campaign levels, drawn as pixel art.
+ * The 30 campaign levels, drawn as pixel art.
  *
  * Each art character becomes a 2×2 block of bricks, so a level is at most 18 characters wide
  * (36 editor columns). Legend: `.` empty · `1` standard · `2`/`3` reinforced · `E` explosive ·
- * `B` bonus (always drops a multiball) · `S` shield · `X` steel (indestructible).
+ * `B` bonus · `S` shield · `X` steel · `C` crystal · `K` key · `G` gate · `R` phoenix ·
+ * `I` ghost · `M` moving · `O` bumper · `T` teleporter · `F` fuse.
  *
- * Design rules: every level leaves room above the bricks (getting the ball over the top is the
- * most satisfying moment of a breakout), steel never fully encloses breakable bricks, and each
- * chapter introduces one idea before mixing it with the others.
+ * How the campaign is built:
+ * - five chapters with a theme each: basics, steel and angles, chain reactions, ball storms,
+ *   then mastery of every mechanism;
+ * - inside a chapter, each level introduces ONE new idea on its own, in a forgiving layout,
+ *   before later levels combine it with the others; the last level of a chapter is a finale;
+ * - power-ups unlock with the chapters (see config/powerUps.ts) and level events (power-up rain,
+ *   storm, descending wall) appear only in chapters 4 and 5;
+ * - every level leaves room above the bricks and never seals a required brick (tested).
  */
 
 const COLS = EDITOR_GRID_COLS;
@@ -25,7 +32,14 @@ const SYMBOL_SCORE: Record<string, number> = {
   '3': 240,
   E: 210,
   B: 130,
-  S: 280
+  S: 280,
+  C: 160,
+  K: 150,
+  G: 120,
+  R: 60,
+  I: 150,
+  M: 180,
+  F: 140
 };
 
 function objective(type: LevelObjective['type'], target: number, label: string): LevelObjective {
@@ -55,7 +69,7 @@ export function expandArt(art: readonly string[], topMargin = TOP_MARGIN): strin
   return rows.map((row) => row.join(''));
 }
 
-interface ArtLevel {
+export interface ArtLevel {
   id: string;
   name: string;
   chapter: string;
@@ -63,6 +77,7 @@ interface ArtLevel {
   objective: LevelObjective;
   /** Best combo that earns gold on its own. */
   goldCombo: number;
+  options?: LevelOptions;
 }
 
 function makeLevel(level: ArtLevel, index: number): PatternDefinition {
@@ -80,7 +95,8 @@ function makeLevel(level: ArtLevel, index: number): PatternDefinition {
     chapter: level.chapter,
     rows,
     objective: level.objective,
-    medalTargets: { silverLives: 2, goldScore, goldBestCombo: level.goldCombo }
+    medalTargets: { silverLives: 2, goldScore, goldBestCombo: level.goldCombo },
+    ...(level.options ? { options: level.options } : {})
   };
 }
 
@@ -88,13 +104,17 @@ const FORGE = 'Forge Basics';
 const STEEL = 'Wall Mazes';
 const CHAIN = 'Chain Reactor';
 const STORM = 'Ball Storm';
+const MECH = 'Mechanisms';
 
-const LEVELS: ArtLevel[] = [
-  // ------------------------------------------------------------ Chapter 1: Forge Basics
+/** Chapter keys in campaign order (also used by the interface). */
+export const CAMPAIGN_CHAPTERS = [FORGE, STEEL, CHAIN, STORM, MECH] as const;
+
+export const CAMPAIGN_ART: ArtLevel[] = [
   {
     id: 'spark',
     name: 'Spark',
     chapter: FORGE,
+    // Bonus bricks: catch the multiball and enjoy the first storm of balls.
     objective: objective('reachBalls', 6, 'Reach 6 balls'),
     goldCombo: 16,
     art: [
@@ -113,6 +133,7 @@ const LEVELS: ArtLevel[] = [
     id: 'anvil',
     name: 'Anvil',
     chapter: FORGE,
+    // Reinforced bricks: pink ones take two hits.
     objective: objective('clearWithLives', 2, 'Clear with 2 lives'),
     goldCombo: 18,
     art: [
@@ -127,9 +148,10 @@ const LEVELS: ArtLevel[] = [
     ]
   },
   {
-    id: 'fuse',
-    name: 'Fuse',
+    id: 'powder-keg',
+    name: 'Powder Keg',
     chapter: FORGE,
+    // Explosive bricks: one hit clears a whole area.
     objective: objective('triggerExplosions', 4, 'Trigger 4 explosions'),
     goldCombo: 22,
     art: [
@@ -148,6 +170,7 @@ const LEVELS: ArtLevel[] = [
     id: 'forge-heart',
     name: 'Forge Heart',
     chapter: FORGE,
+    // Combo: keep breaking bricks without a pause.
     objective: objective('bestCombo', 20, 'Reach 20 combo'),
     goldCombo: 26,
     art: [
@@ -169,13 +192,14 @@ const LEVELS: ArtLevel[] = [
     id: 'fountain',
     name: 'Fountain',
     chapter: FORGE,
+    // Crystals: each one splits the ball that breaks it.
     objective: objective('reachBalls', 10, 'Reach 10 balls'),
     goldCombo: 26,
     art: [
-      'B.1.B.1.B.1.B.1.B.',
+      'C.1.C.1.C.1.C.1.C.',
       '111111111111111111',
       '.1111111111111111.',
-      '..11111111111111..',
+      '..11111CC1111111..',
       '...111111111111...',
       '....1111111111....',
       '.....11111111.....',
@@ -186,6 +210,7 @@ const LEVELS: ArtLevel[] = [
     id: 'hammer',
     name: 'Hammer',
     chapter: FORGE,
+    // Finale: steel cannot be broken, aim around it.
     objective: objective('bestCombo', 26, 'Reach 26 combo'),
     goldCombo: 30,
     art: [
@@ -201,27 +226,29 @@ const LEVELS: ArtLevel[] = [
       '......111111......'
     ]
   },
-
-  // ------------------------------------------------------------ Chapter 2: Steel Mazes
   {
-    id: 'gates',
-    name: 'Gates',
+    id: 'lock',
+    name: 'Lock',
     chapter: STEEL,
-    objective: objective('bestCombo', 30, 'Reach 30 combo'),
-    goldCombo: 34,
+    // Keys: break both keys and the gates guarding the bonus vault open.
+    objective: objective('reachBalls', 12, 'Reach 12 balls'),
+    goldCombo: 30,
     art: [
-      '222222222222222222',
-      '111B1111111111B111',
-      '111111111111111111',
-      'X..X..X..X..X..X.X',
-      'X..X..X..X..X..X.X',
-      '1..1..1..1..1..1.1'
+      '..GGGGGGGGGGGGGG..',
+      '..GBBB222222BBBG..',
+      '..G222222222222G..',
+      '..GGGGGGGGGGGGGG..',
+      '..................',
+      'K1..............1K',
+      '111....1111....111',
+      '1111..111111..1111'
     ]
   },
   {
     id: 'battlements',
     name: 'Battlements',
     chapter: STEEL,
+    // Towers open at the bottom: get the ball inside and let it rattle.
     objective: objective('clearWithLives', 2, 'Clear with 2 lives'),
     goldCombo: 34,
     art: [
@@ -239,6 +266,7 @@ const LEVELS: ArtLevel[] = [
     id: 'switchbacks',
     name: 'Switchbacks',
     chapter: STEEL,
+    // Zigzag corridors: the ball climbs from one shelf to the next.
     objective: objective('reachBalls', 14, 'Reach 14 balls'),
     goldCombo: 38,
     art: [
@@ -255,56 +283,62 @@ const LEVELS: ArtLevel[] = [
     id: 'pachinko',
     name: 'Pachinko',
     chapter: STEEL,
+    // Bumpers: unbreakable, they kick the ball back faster and pay points.
     objective: objective('bestCombo', 36, 'Reach 36 combo'),
     goldCombo: 42,
     art: [
       '2.2.2.2.2.2.2.2.2.',
-      '.X...X...X...X...X',
+      '.O...O...O...O...O',
       '1.1.1.B.1.1.1.B.1.',
-      '...X...X...X...X..',
+      '...O...O...O...O..',
       '2.2.2.2.2.2.2.2.2.',
-      '.X...X...X...X...X',
+      '.O...O...O...O...O',
       '1.B.1.1.1.B.1.1.1.'
     ]
   },
   {
-    id: 'corridors',
-    name: 'Corridors',
+    id: 'passages',
+    name: 'Passages',
     chapter: STEEL,
-    objective: objective('triggerExplosions', 3, 'Trigger 3 explosions'),
-    goldCombo: 44,
+    // Teleporters: the lower portal sends the ball above the steel shelf.
+    objective: objective('clearWithLives', 2, 'Clear with 2 lives'),
+    goldCombo: 40,
     art: [
-      '1X1111X1111X1111X1',
-      '1X1111X1111X1111X1',
-      '1X11E1X1B11X11E1X1',
-      '1X1111X1111X1111X1',
-      '1X1111X1111X1111X1',
-      '1X2222X2222X2222X1'
+      '111111111111111111',
+      '11B1111BB1111B1111',
+      '111111111111111111',
+      '........T.........',
+      '.XXXXXXXXXXXXXXXX.',
+      '..................',
+      '........T.........',
+      '..1111......1111..'
     ]
   },
   {
     id: 'vault',
     name: 'Vault',
     chapter: STEEL,
+    // Finale: steel vault with a gate door; the keys hide in side pockets.
     objective: objective('reachBalls', 18, 'Reach 18 balls'),
     goldCombo: 48,
     art: [
-      'XXXXXXXXXXXXXXXX',
-      'XBBBBBBBBBBBBBBX',
-      'X33333333333333X',
-      'X22222222222222X',
-      'X22222222222222X',
-      'X11111111111111X',
-      'X11111111111111X',
-      'XXXXXXX..XXXXXXX'
+      '..XXXXXXXXXXXXXX..',
+      '..XBBBBBBBBBBBBX..',
+      '..X333333333333X..',
+      '..X222222222222X..',
+      '..X111111111111X..',
+      '..XXXXXGGGGXXXXX..',
+      '..................',
+      'XK..............KX',
+      'X11............11X',
+      '..11....11....11..'
     ]
   },
-
-  // ------------------------------------------------------------ Chapter 3: Chain Reactor
   {
     id: 'powder-store',
     name: 'Powder Store',
     chapter: CHAIN,
+    // Clusters of explosives: one blast sets off the next.
     objective: objective('triggerExplosions', 8, 'Trigger 8 explosions'),
     goldCombo: 50,
     art: [
@@ -323,25 +357,25 @@ const LEVELS: ArtLevel[] = [
     id: 'fireworks',
     name: 'Fireworks',
     chapter: CHAIN,
+    // Fuses: light one and it burns along the line, then blows up the rocket.
     objective: objective('triggerExplosions', 10, 'Trigger 10 explosions'),
     goldCombo: 54,
     art: [
-      '...EEE......EEE...',
-      '..E111E....E111E..',
-      '..E1B1E....E1B1E..',
-      '..E111E....E111E..',
-      '...EEE......EEE...',
-      '.......EEEE.......',
-      '......E2222E......',
-      '......E22B2E......',
-      '......E2222E......',
-      '.......EEEE.......'
+      '..EEE........EEE..',
+      '.E1B1E......E1B1E.',
+      '..EEE........EEE..',
+      '...F..........F...',
+      '...F...EEEE...F...',
+      '...F..E2B2E...F...',
+      '..FF...EEEE...FF..',
+      '.FF......F.....FF.'
     ]
   },
   {
     id: 'dominoes',
     name: 'Dominoes',
     chapter: CHAIN,
+    // Diagonal chains: trigger the top and watch them fall.
     objective: objective('bestCombo', 50, 'Reach 50 combo'),
     goldCombo: 60,
     art: [
@@ -359,9 +393,11 @@ const LEVELS: ArtLevel[] = [
     id: 'volcano',
     name: 'Volcano',
     chapter: CHAIN,
+    // Phoenix bricks: the lava keeps coming back, but you never need to clear it.
     objective: objective('triggerExplosions', 14, 'Trigger 14 explosions'),
     goldCombo: 62,
     art: [
+      '.......RRRR.......',
       '........EE........',
       '.......1EE1.......',
       '......1EEEE1......',
@@ -377,6 +413,7 @@ const LEVELS: ArtLevel[] = [
     id: 'chain-cross',
     name: 'Chain Cross',
     chapter: CHAIN,
+    // Shielded crossroads: break in, then let the cross ignite.
     objective: objective('bestCombo', 58, 'Reach 58 combo'),
     goldCombo: 66,
     art: [
@@ -395,33 +432,34 @@ const LEVELS: ArtLevel[] = [
     id: 'atomic-core',
     name: 'Atomic Core',
     chapter: CHAIN,
+    // Finale: a fuse ring around the core; one spark lights the whole reactor.
     objective: objective('triggerExplosions', 18, 'Trigger 18 explosions'),
     goldCombo: 70,
     art: [
       '....SSSSSSSSSS....',
-      '..SSEEEEEEEEEESS..',
-      '.SEE2222222222EES.',
-      '.SE222BBBBBB222ES.',
-      '.SE222BBBBBB222ES.',
-      '.SEE2222222222EES.',
-      '..SSEEEEEEEEEESS..',
+      '..SSFFFFFFFFFFSS..',
+      '.SFE2222222222EFS.',
+      '.SF222BBBBBB222FS.',
+      '.SF222BBBBBB222FS.',
+      '.SFE2222222222EFS.',
+      '..SSFFFFFFFFFFSS..',
       '....SSSSSSSSSS....'
     ]
   },
-
-  // ------------------------------------------------------------ Chapter 4: Ball Storm
   {
     id: 'rain',
     name: 'Rain',
     chapter: STORM,
+    // Crystal drops and power-up rain at every 25 combo.
     objective: objective('reachBalls', 20, 'Reach 20 balls'),
     goldCombo: 72,
+    options: { bonusRain: true },
     art: [
-      'B.1.1.B.1.1.B.1.1.',
+      'C.1.1.C.1.1.C.1.1.',
       '.1.1.1.1.1.1.1.1.1',
-      '1.1.B.1.1.B.1.1.B.',
+      '1.1.C.1.1.C.1.1.C.',
       '.1.1.1.1.1.1.1.1.1',
-      '1.B.1.1.B.1.1.B.1.',
+      '1.C.1.1.C.1.1.C.1.',
       '.1.1.1.1.1.1.1.1.1',
       '2.2.2.2.2.2.2.2.2.',
       '.2.2.2.2.2.2.2.2.2',
@@ -432,6 +470,7 @@ const LEVELS: ArtLevel[] = [
     id: 'target',
     name: 'Target',
     chapter: STORM,
+    // Moving bricks: the bar slides inside the rings, time your shots.
     objective: objective('reachBalls', 24, 'Reach 24 balls'),
     goldCombo: 76,
     art: [
@@ -439,7 +478,7 @@ const LEVELS: ArtLevel[] = [
       '..111........111..',
       '.11...222222...11.',
       '11...2......2...11',
-      '1...2..BBBB..2...1',
+      '1....MMMMMMMM....1',
       '1...2..BEEB..2...1',
       '1...2..BBBB..2...1',
       '11...2......2...11',
@@ -452,32 +491,35 @@ const LEVELS: ArtLevel[] = [
     id: 'hive',
     name: 'Hive',
     chapter: STORM,
+    // Ghost bricks hide in the honeycomb: they appear when touched.
     objective: objective('bestCombo', 70, 'Reach 70 combo'),
     goldCombo: 80,
     art: [
       '.222..222..222..22',
       '21B1221B1221B1221B',
-      '211122111221112211',
+      '21I122111221I12211',
       '.222..222..222..22',
       '...222..222..222..',
-      '..21112211122111..',
+      '..21I122111221I1..',
       '..21B1221B1221B12.',
       '...222..222..222..',
       '.222..222..222..22',
-      '211122111221112211'
+      '2111221I12211I2211'
     ]
   },
   {
     id: 'tempest',
     name: 'Tempest',
     chapter: STORM,
+    // Storm: lightning strikes a brick every few seconds.
     objective: objective('reachBalls', 30, 'Reach 30 balls'),
     goldCombo: 84,
+    options: { storm: true },
     art: [
       '11....111111....11',
       '.11..11B..B11..11.',
       '..1111......1111..',
-      '...........,......',
+      '..................',
       '22....222222....22',
       '.22..22E..E22..22.',
       '..2222......2222..',
@@ -491,6 +533,7 @@ const LEVELS: ArtLevel[] = [
     id: 'fortress',
     name: 'Fortress',
     chapter: STORM,
+    // Shielded towers open at the bottom; the keep holds explosives.
     objective: objective('reachBalls', 34, 'Reach 34 balls'),
     goldCombo: 88,
     art: [
@@ -507,28 +550,153 @@ const LEVELS: ArtLevel[] = [
     ]
   },
   {
-    id: 'grand-finale',
-    name: 'Grand Finale',
+    id: 'eye-of-the-storm',
+    name: 'Eye of the Storm',
     chapter: STORM,
+    // Finale: a crystal ring, a sliding bar and a core of explosives.
     objective: objective('reachBalls', 40, 'Reach 40 balls'),
     goldCombo: 96,
+    options: { bonusRain: true },
     art: [
       '333333333333333333',
-      '3BBBBBBBBBBBBBBBB3',
-      '3B22222222222222B3',
-      '3B2EEEE2SS2EEEE2B3',
-      '3B2E11E2SS2E11E2B3',
-      '3B2EEEE2SS2EEEE2B3',
-      '3B22222222222222B3',
-      '3B11111111111111B3',
+      '3CCCCCCCCCCCCCCCC3',
+      '3C22222222222222C3',
+      '3C2..MMMMMMMM..2C3',
+      '3C2EEEE2SS2EEEE2C3',
+      '3C2E11E2SS2E11E2C3',
+      '3C2EEEE2SS2EEEE2C3',
+      '3C22222222222222C3',
+      '3C11111111111111C3',
       '.X1111XXXXXX1111X.',
       '..111111BB111111..',
       '...111111111111...',
       '....1111111111....'
     ]
+  },
+  {
+    id: 'clockwork',
+    name: 'Clockwork',
+    chapter: MECH,
+    // Gears of moving bricks turn between bumper pins.
+    objective: objective('bestCombo', 60, 'Reach 60 combo'),
+    goldCombo: 90,
+    art: [
+      '.2222222222222222.',
+      '.2MMM........MMM2.',
+      '.2..O..O..O..O..2.',
+      '.2....MMMMMM....2.',
+      '.2.O..O....O..O.2.',
+      '.2MMM........MMM2.',
+      '.2222222222222222.',
+      '..1B1..1B1..1B1...',
+      '..111..111..111...'
+    ]
+  },
+  {
+    id: 'portals',
+    name: 'Portals',
+    chapter: MECH,
+    // Two teleporter pairs cut through a steel switchback.
+    objective: objective('clearWithLives', 2, 'Clear with 2 lives'),
+    goldCombo: 90,
+    art: [
+      '1111B1111111B11111',
+      '11111111T111111111',
+      'XXXXXXXXXXXXXXX...',
+      '..T...............',
+      '222222222222222222',
+      '...XXXXXXXXXXXXXXX',
+      '.T................',
+      '..33333333333333..',
+      '..3BB3333333BB33..',
+      '..................',
+      '........T.........'
+    ]
+  },
+  {
+    id: 'phoenix',
+    name: 'Phoenix',
+    chapter: MECH,
+    // The wings keep reviving: perfect for huge combos. The fuse tail ends with a bang.
+    objective: objective('bestCombo', 60, 'Reach 60 combo'),
+    goldCombo: 96,
+    art: [
+      'RR..............RR',
+      'RRR............RRR',
+      '.RRR....33....RRR.',
+      '..RRR..3EE3..RRR..',
+      '...RRRR3333RRRR...',
+      '....RR333333RR....',
+      '......3BBBB3......',
+      '.......3333.......',
+      '........FF........',
+      '.......FFFF.......',
+      '......FF..FF......'
+    ]
+  },
+  {
+    id: 'descent',
+    name: 'The Descent',
+    chapter: MECH,
+    // Every 25 seconds the whole wall comes one row closer.
+    objective: objective('clearWithLives', 2, 'Clear with 2 lives'),
+    goldCombo: 90,
+    options: { descendEverySec: 25 },
+    art: [
+      '333333333333333333',
+      '3B22222222222222B3',
+      '322222222222222223',
+      '311111111111111113',
+      '31111CC1111CC11113',
+      '311111111111111113',
+      '.X..X..X..X..X..X.'
+    ]
+  },
+  {
+    id: 'ghost-ship',
+    name: 'Ghost Ship',
+    chapter: MECH,
+    // A ship of ghost bricks sails through the storm.
+    objective: objective('bestCombo', 50, 'Reach 50 combo'),
+    goldCombo: 90,
+    options: { storm: true },
+    art: [
+      '........I.........',
+      '........II........',
+      '........III.......',
+      '........IIII......',
+      '........IIIII.....',
+      '........1.........',
+      '.2222222222222222.',
+      '..22B22222222B22..',
+      '...222222222222...',
+      '....3333333333....'
+    ]
+  },
+  {
+    id: 'grand-forge',
+    name: 'The Grand Forge',
+    chapter: MECH,
+    // Finale: keys to the explosive vault, portals, fuses, a sliding bar, ghosts and phoenixes.
+    objective: objective('triggerExplosions', 24, 'Trigger 24 explosions'),
+    goldCombo: 110,
+    options: { storm: true, bonusRain: true },
+    art: [
+      'O.......KK.......O',
+      '..XXXXXXGGXXXXXX..',
+      '..XBBBBBBBBBBBBX..',
+      '..XEEE222222EEEX..',
+      '..XXXXXXXXXXXXXX..',
+      '.T..............T.',
+      '..FFFF333333FFFF..',
+      '.C....MMMMMM....C.',
+      '..R3333333333333R.',
+      '...2B22I22I22B2...',
+      '....222222222.....'
+    ]
   }
 ];
 
-export const LEVEL_PATTERNS: PatternDefinition[] = LEVELS.map((level, index) =>
-  makeLevel({ ...level, art: level.art.map((row) => row.replace(/[^.123EBSX]/g, '.')) }, index)
+export const LEVEL_PATTERNS: PatternDefinition[] = CAMPAIGN_ART.map((level, index) =>
+  makeLevel(level, index)
 );

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import type { BrickKind } from '../levels/levelTypes';
-import type { PowerUpType } from '../systems/PowerUpSystem';
+import { getPowerUpDefinition, type PowerUpType } from '../config/powerUps';
 import { BRICK_H, BRICK_W, css, paintBrick, roundRect, shade } from './brickArt';
 
 /**
@@ -66,14 +66,6 @@ export function powerUpTextureKey(type: PowerUpType): string {
   return `bf-power-${type}`;
 }
 
-const POWER_ICONS: Record<PowerUpType, string> = {
-  multiBall: '×3',
-  splitBall: '×2',
-  widePaddle: '↔',
-  stickyPaddle: 'AIM',
-  extraLife: '♥'
-};
-
 export const POWER_UP_SIZE = { width: 84, height: 44 };
 
 export function ensurePowerUpTexture(
@@ -111,11 +103,34 @@ export function ensurePowerUpTexture(
     ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
     ctx.fill();
 
-    ctx.fillStyle = '#10120e';
-    ctx.font = `900 ${type === 'stickyPaddle' ? 30 : 38}px system-ui, "Segoe UI", Arial, sans-serif`;
+    const definition = getPowerUpDefinition(type);
+    if (definition.risk) {
+      // Hazard stripes: a risk capsule has a drawback and a score reward.
+      ctx.save();
+      roundRect(ctx, px, py, pw, ph, ph / 2);
+      ctx.clip();
+      ctx.fillStyle = 'rgba(20, 8, 6, 0.28)';
+      for (let x = px - ph; x < px + pw; x += 22) {
+        ctx.beginPath();
+        ctx.moveTo(x, py + ph);
+        ctx.lineTo(x + 11, py + ph);
+        ctx.lineTo(x + 11 + ph, py);
+        ctx.lineTo(x + ph, py);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    const icon = definition.icon;
+    const size = icon.length >= 3 ? 28 : icon.length === 2 ? 34 : 40;
+    ctx.font = `900 ${size}px system-ui, "Segoe UI", "Segoe UI Emoji", Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(POWER_ICONS[type], w / 2, h / 2 + 2);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = definition.risk ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.55)';
+    ctx.strokeText(icon, w / 2, h / 2 + 2);
+    ctx.fillStyle = '#10120e';
+    ctx.fillText(icon, w / 2, h / 2 + 2);
   });
   return key;
 }

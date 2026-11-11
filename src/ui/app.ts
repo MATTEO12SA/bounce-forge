@@ -2,16 +2,19 @@ import {
   bridge,
   type GameMode,
   type GameResult,
+  type GameNotice,
   type GameSession,
   type HudSnapshot
 } from '../game/bridge';
 import { audio } from '../game/audio/AudioEngine';
 import { ADMIN_ENABLED } from '../game/config/features';
+import { getPowerUpDefinition, introducedInChapter, POWER_UP_TYPES } from '../game/config/powerUps';
 import { campaignLevels } from '../game/levels/campaignLevels';
 import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../game/levels/levelShare';
 import { createLevelFromPattern } from '../game/levels/levelFactory';
 import { estimateDifficulty } from '../game/levels/levelChecks';
-import { LEVEL_PATTERNS } from '../game/levels/levelPatterns';
+import { CAMPAIGN_CHAPTERS, LEVEL_PATTERNS } from '../game/levels/levelPatterns';
+import type { LevelOptions } from '../game/levels/levelOptions';
 import type { LevelDefinition } from '../game/levels/levelTypes';
 import {
   createRunSeed,
@@ -29,7 +32,7 @@ import {
 } from '../game/systems/SaveSystem';
 import { clear, h, icon } from './dom';
 import { clearDraft, readDraft, writeDraft } from './editor/drafts';
-import { EditorScreen } from './editor/EditorScreen';
+import { brickSprite, EditorScreen } from './editor/EditorScreen';
 import { generateLevel, randomSeed } from './editor/generator';
 import { EngineLoader, type EngineState } from './engine';
 import {
@@ -45,13 +48,34 @@ import {
 import { drawLevelPreview } from './preview';
 
 const REPO_URL = 'https://github.com/MATTEO12SA/bounce-forge';
-const CHAPTERS = ['Forge Basics', 'Wall Mazes', 'Chain Reactor', 'Ball Storm'] as const;
+const CHAPTERS = CAMPAIGN_CHAPTERS;
 const CHAPTER_SLUG: Record<string, string> = {
   'Forge Basics': 'forge',
   'Wall Mazes': 'steel',
   'Chain Reactor': 'chain',
-  'Ball Storm': 'storm'
+  'Ball Storm': 'storm',
+  Mechanisms: 'mech'
 };
+/** Brick symbols worth a "New" badge on the level that introduces them. */
+const INTRODUCED_SYMBOLS: Array<[string, MessageKey]> = [
+  ['B', 'editor.brick.B'],
+  ['2', 'editor.brick.2'],
+  ['E', 'editor.brick.E'],
+  ['C', 'editor.brick.C'],
+  ['X', 'editor.brick.X'],
+  ['K', 'editor.brick.K'],
+  ['O', 'editor.brick.O'],
+  ['T', 'editor.brick.T'],
+  ['F', 'editor.brick.F'],
+  ['R', 'editor.brick.R'],
+  ['M', 'editor.brick.M'],
+  ['I', 'editor.brick.I']
+];
+const INTRODUCED_AT = new Map<number, MessageKey[]>();
+INTRODUCED_SYMBOLS.forEach(([symbol, key]) => {
+  const index = LEVEL_PATTERNS.findIndex((level) => level.rows.some((row) => row.includes(symbol)));
+  if (index >= 0) INTRODUCED_AT.set(index, [...(INTRODUCED_AT.get(index) ?? []), key]);
+});
 const SLOT_COUNT = campaignLevels.length;
 
 type View = 'home' | 'menu' | 'play' | 'tool' | 'editor';
@@ -132,7 +156,12 @@ export class App {
   private stageSlot: HTMLElement | null = null;
   private editor: EditorScreen | null = null;
   /** Unsaved editor level to play next ("Test" never overwrites the saved slot). */
-  private pendingDraft: { slotIndex: number; name: string; rows: string[] } | null = null;
+  private pendingDraft: {
+    slotIndex: number;
+    name: string;
+    rows: string[];
+    options?: LevelOptions;
+  } | null = null;
 
   public constructor(root: HTMLElement) {
     this.root = root;
@@ -168,6 +197,7 @@ export class App {
       bridge.on('result', (result) => this.onResult(result)),
       bridge.on('pauseRequested', () => this.pauseGame()),
       bridge.on('waveCleared', ({ wave }) => this.toast(t('wave.cleared', { n: wave }))),
+      bridge.on('notice', (notice) => this.onNotice(notice)),
       bridge.on('exitToShell', ({ from }) => this.navigate(from === 'admin' ? '#/' : '#/create')),
       bridge.on('toolOpened', () => this.setView('tool')),
       this.engine.onState((state) => this.onEngineState(state)),
@@ -635,6 +665,9 @@ export class App {
                 'span',
                 { class: 'card-sub' },
                 this.objectiveText(level.objective.type, level.objective.target)
+              ),
+              ...(INTRODUCED_AT.get(level.index) ?? []).map((key) =>
+                h('span', { class: 'new-badge' }, t('campaign.new', { name: t(key) }))
               )
             ),
             this.medalBadge(medal)
@@ -680,7 +713,39 @@ export class App {
         )
       ),
       filters,
+      activeChapter ? this.chapterIntro(activeChapter) : null,
       h('ul', { class: 'card-grid', role: 'list' }, ...cards)
+    );
+  }
+
+  /** Chapter header: theme and the power-ups that start dropping in it. */
+  private chapterIntro(chapter: string): HTMLElement {
+    const index = CHAPTERS.indexOf(chapter as (typeof CHAPTERS)[number]);
+    const fresh = POWER_UP_TYPES.filter((type) => introducedInChapter(type) === index);
+    return h(
+      'div',
+      { class: `chapter-intro accent-${CHAPTER_SLUG[chapter] ?? 'forge'}` },
+      h('p', {}, t(`chapter.about.${CHAPTER_SLUG[chapter] ?? 'forge'}` as MessageKey)),
+      fresh.length > 0
+        ? h(
+            'p',
+            { class: 'chapter-powers' },
+            t('campaign.newPowers'),
+            ' ',
+            ...fresh.map((type) => {
+              const definition = getPowerUpDefinition(type);
+              return h(
+                'span',
+                {
+                  class: `power-chip effect-chip${definition.risk ? ' is-risk' : ''}`,
+                  style: `--chip: #${definition.color.toString(16).padStart(6, '0')}; --ratio: 1`,
+                  title: t(`power.${type}` as MessageKey)
+                },
+                definition.icon
+              );
+            })
+          )
+        : null
     );
   }
 
@@ -1130,11 +1195,11 @@ export class App {
           this.openDialog(title, body, actions, onEscape),
         closeOverlays: () => this.closeOverlays(),
         navigate: (hash) => this.navigate(hash),
-        testDraft: (index, name, rows) => {
-          this.pendingDraft = { slotIndex: index, name, rows };
+        testDraft: (index, name, rows, options) => {
+          this.pendingDraft = { slotIndex: index, name, rows, options };
           this.navigate(playHash('creative', index));
         },
-        shareCode: (rows, name) => void this.shareCode(rows, name)
+        shareCode: (rows, name, options) => void this.shareCode(rows, name, options)
       },
       slotIndex
     );
@@ -1150,7 +1215,7 @@ export class App {
         throw new Error('full');
       }
       const name = decoded.name ?? t('create.slot', { n: slotIndex + 1 });
-      this.save.setCreativeLevelSlot(slotIndex, decoded.rows, name);
+      this.save.setCreativeLevelSlot(slotIndex, decoded.rows, name, Date.now(), decoded.options);
       this.toast(t('create.import.success', { name, n: slotIndex + 1 }));
       this.renderMenu('create');
     } catch (error) {
@@ -1181,7 +1246,13 @@ export class App {
       return;
     }
     const suffix = getLanguage() === 'fr' ? ' (copie)' : ' (copy)';
-    this.save.setCreativeLevelSlot(target, source.rows, `${source.name}${suffix}`);
+    this.save.setCreativeLevelSlot(
+      target,
+      source.rows,
+      `${source.name}${suffix}`,
+      Date.now(),
+      source.options
+    );
     this.toast(t('create.duplicated', { n: target + 1 }));
     this.renderMenu('create');
   }
@@ -1189,12 +1260,16 @@ export class App {
   private async shareSlot(slotIndex: number): Promise<void> {
     const slot = this.save.getCreativeLevelSlot(slotIndex);
     if (slot) {
-      await this.shareCode(slot.rows, slot.name);
+      await this.shareCode(slot.rows, slot.name, slot.options);
     }
   }
 
-  private async shareCode(rows: readonly string[], name: string): Promise<void> {
-    const code = encodeCreativeLevelCode(rows, name);
+  private async shareCode(
+    rows: readonly string[],
+    name: string,
+    options?: LevelOptions
+  ): Promise<void> {
+    const code = encodeCreativeLevelCode(rows, name, options);
     try {
       await navigator.clipboard.writeText(code);
       this.toast(t('create.copied'));
@@ -1222,22 +1297,71 @@ export class App {
     }
   }
 
+  /** HUD chip of an active effect: icon, colour, time gauge and charges. */
+  private effectChip(effect: { type: string; ratio: number; count?: number }): HTMLElement {
+    const known = POWER_UP_TYPES.find((type) => type === effect.type);
+    const definition = known ? getPowerUpDefinition(known) : null;
+    const color = definition ? `#${definition.color.toString(16).padStart(6, '0')}` : '#ffb423';
+    const label = known ? (t(`power.${known}` as MessageKey).split(' — ')[0] ?? '') : effect.type;
+    return h(
+      'li',
+      {
+        class: `power-chip effect-chip${definition?.risk ? ' is-risk' : ''}`,
+        'data-effect': effect.type,
+        style: `--chip: ${color}; --ratio: ${effect.ratio.toFixed(3)}`,
+        title: label,
+        'aria-label': effect.count ? `${label} ×${effect.count}` : label
+      },
+      definition?.icon ?? '?',
+      effect.count ? h('small', {}, `×${effect.count}`) : null
+    );
+  }
+
+  private onNotice(notice: GameNotice): void {
+    if (notice.kind === 'discovery') {
+      const [group, id] = notice.id.split(':');
+      const key = `${group === 'power' ? 'power' : 'brickinfo'}.${id}`;
+      if (hasMessage(key)) {
+        this.toast(t('notice.discovery', { text: t(key) }));
+      }
+      return;
+    }
+    const key = `notice.${notice.kind}.${notice.id}`;
+    if (hasMessage(key)) this.toast(t(key));
+  }
+
   private helpScreen(): HTMLElement {
     const bricks: Array<[string, MessageKey]> = [
-      ['standard', 'help.brick.standard'],
-      ['resistant', 'help.brick.resistant'],
-      ['explosive', 'help.brick.explosive'],
-      ['bonus', 'help.brick.bonus'],
-      ['shield', 'help.brick.shield'],
-      ['indestructible', 'help.brick.indestructible']
+      ['1', 'help.brick.standard'],
+      ['2', 'help.brick.resistant'],
+      ['E', 'help.brick.explosive'],
+      ['B', 'help.brick.bonus'],
+      ['S', 'help.brick.shield'],
+      ['X', 'help.brick.indestructible']
     ];
-    const powers: Array<[string, string, MessageKey]> = [
-      ['multi', '×3', 'help.power.multiBall'],
-      ['split', '×2', 'help.power.splitBall'],
-      ['wide', 'W', 'help.power.widePaddle'],
-      ['sticky', 'AIM', 'help.power.stickyPaddle'],
-      ['life', '+1', 'help.power.extraLife']
+    const mechanisms: Array<[string, MessageKey]> = [
+      ['C', 'brickinfo.crystal'],
+      ['K', 'brickinfo.key'],
+      ['G', 'brickinfo.gate'],
+      ['R', 'brickinfo.phoenix'],
+      ['I', 'brickinfo.invisible'],
+      ['M', 'brickinfo.mover'],
+      ['O', 'brickinfo.bumper'],
+      ['T', 'brickinfo.teleporter'],
+      ['F', 'brickinfo.fuse']
     ];
+    const brickItem = ([symbol, key]: [string, MessageKey]): HTMLElement => {
+      const swatch = h('canvas', {
+        class: 'help-swatch',
+        width: '44',
+        height: '40',
+        'aria-hidden': 'true'
+      });
+      const sprite = brickSprite(symbol);
+      if (sprite) swatch.getContext('2d')?.drawImage(sprite, 0, 0);
+      return h('li', {}, swatch, t(key));
+    };
+
     return h(
       'section',
       { class: 'screen', 'aria-labelledby': 'screen-title' },
@@ -1266,18 +1390,13 @@ export class App {
           'div',
           { class: 'panel' },
           h('h2', { class: 'panel-title' }, t('help.bricks')),
-          h(
-            'ul',
-            { class: 'help-list' },
-            ...bricks.map(([kind, key]) =>
-              h(
-                'li',
-                {},
-                h('span', { class: `brick-swatch brick-${kind}`, 'aria-hidden': 'true' }),
-                t(key)
-              )
-            )
-          )
+          h('ul', { class: 'help-list' }, ...bricks.map(brickItem))
+        ),
+        h(
+          'div',
+          { class: 'panel' },
+          h('h2', { class: 'panel-title' }, t('help.mechanisms')),
+          h('ul', { class: 'help-list' }, ...mechanisms.map(brickItem))
         ),
         h(
           'div',
@@ -1286,14 +1405,36 @@ export class App {
           h(
             'ul',
             { class: 'help-list' },
-            ...powers.map(([kind, label, key]) =>
-              h(
+            ...POWER_UP_TYPES.map((type) => {
+              const definition = getPowerUpDefinition(type);
+              return h(
                 'li',
                 {},
-                h('span', { class: `power-chip power-${kind}`, 'aria-hidden': 'true' }, label),
-                t(key)
-              )
-            )
+                h(
+                  'span',
+                  {
+                    class: `power-chip effect-chip${definition.risk ? ' is-risk' : ''}`,
+                    style: `--chip: #${definition.color.toString(16).padStart(6, '0')}; --ratio: 1`,
+                    'aria-hidden': 'true'
+                  },
+                  definition.icon
+                ),
+                t(`power.${type}` as MessageKey)
+              );
+            })
+          ),
+          h('p', { class: 'help-note' }, t('help.risk'))
+        ),
+        h(
+          'div',
+          { class: 'panel' },
+          h('h2', { class: 'panel-title' }, t('help.combos')),
+          h(
+            'ul',
+            { class: 'help-list' },
+            ...(
+              ['help.combo.meteor', 'help.combo.explosiveLasers', 'help.combo.sun'] as MessageKey[]
+            ).map((key) => h('li', {}, t(key)))
           )
         )
       )
@@ -1564,7 +1705,7 @@ export class App {
     } else if (route.mode === 'creative') {
       session.editorReturn = { mode: 'creative', slotIndex: route.index };
       if (draft) {
-        session.draft = { name: draft.name, rows: draft.rows };
+        session.draft = { name: draft.name, rows: draft.rows, options: draft.options };
       }
     }
     this.startSession(session);
@@ -1825,22 +1966,20 @@ export class App {
 
     const effects = r.effects;
     if (effects) {
-      const signature = hud.effects.join(',');
+      const signature = hud.effects
+        .map((effect) => `${effect.type}:${effect.count ?? ''}`)
+        .join(',');
       if (effects.dataset.signature !== signature) {
         effects.dataset.signature = signature;
         clear(effects);
-        hud.effects.forEach((effect) => {
-          const label = effect === 'widePaddle' ? 'W' : effect === 'stickyPaddle' ? 'AIM' : effect;
-          effects.append(
-            h(
-              'li',
-              { class: `power-chip power-${effect === 'widePaddle' ? 'wide' : 'sticky'}` },
-              label
-            )
-          );
-        });
+        hud.effects.forEach((effect) => effects.append(this.effectChip(effect)));
       }
     }
+
+    effects?.querySelectorAll<HTMLElement>('[data-effect]').forEach((chip) => {
+      const effect = hud.effects.find((item) => item.type === chip.dataset.effect);
+      if (effect) chip.style.setProperty('--ratio', effect.ratio.toFixed(3));
+    });
 
     const hint = r.launchHint;
     if (hint) {

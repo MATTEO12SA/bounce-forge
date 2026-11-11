@@ -1,0 +1,112 @@
+/* Active-effect chips (HUD and help): power-up colour, icon, time gauge and charges. */
+
+.effect-chip {
+  position: relative;
+  gap: 2px;
+  grid-auto-flow: column;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--chip) 30%, #15130f);
+  color: #fff;
+  font-size: 0.82rem;
+  isolation: isolate;
+}
+
+.effect-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--chip);
+  transform-origin: left center;
+  transform: scaleX(var(--ratio, 1));
+  transition: transform 120ms linear;
+}
+
+.effect-chip {
+  color: #10120e;
+}
+
+.effect-chip small {
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.effect-chip.is-risk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.22) 0 5px, transparent 5px 10px);
+}
+
+.help-note {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.help-swatch {
+  flex: none;
+  width: 34px;
+  height: 31px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .effect-chip::before {
+    transition: none;
+  }
+}
+
+/* Chapter 5 accent, "New" badges and chapter introductions on the campaign screen. */
+
+:root {
+  --accent-mech: #c6a8ff;
+}
+
+.accent-mech {
+  --accent: var(--accent-mech);
+}
+
+.new-badge {
+  justify-self: start;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent, #ffb423) 18%, transparent);
+  color: var(--accent, #ffb423);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.chapter-intro {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 20px;
+  padding: 16px 20px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-raised));
+}
+
+.chapter-intro p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.chapter-powers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Long titles, badges or a preview canvas must never widen a card and push the medal out. */
+.level-card,
+.card-text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.card-visual canvas {
+  display: block;
+  max-width: 100%;
+}

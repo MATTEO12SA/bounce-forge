@@ -58,6 +58,10 @@ async function connect(wsUrl) {
     if (msg.id && pending.has(msg.id)) {
       pending.get(msg.id)(msg);
       pending.delete(msg.id);
+    } else if (msg.method === 'Runtime.exceptionThrown') {
+      // Surface page errors: a broken level would otherwise just look empty.
+      const details = msg.params.exceptionDetails;
+      console.error('[page error]', details.exception?.description ?? details.text);
     }
   });
   await new Promise((resolve) => ws.addEventListener('open', resolve));
@@ -99,6 +103,10 @@ async function viewport(page, width, height, mobile = false) {
 }
 
 async function shot(page, file, clip) {
+  if (!clip) {
+    await page.send('Runtime.evaluate', { expression: 'window.scrollTo(0, 0)' });
+    await delay(150);
+  }
   const { data } = await page.send('Page.captureScreenshot', {
     format: 'png',
     ...(clip ? { clip } : {})
@@ -164,7 +172,7 @@ try {
   await waitFor(page, `document.querySelector('.home') !== null`);
   await evaluate(
     page,
-    `localStorage.setItem('bounce-forge.save.v1', JSON.stringify({ version: 6, bestScore: 48210, unlockedLevel: ${process.env.CAPTURE_LEVELS ? 24 : 9}, completedLevels: [0,1,2,3,4,5,6,7,8], levelMedals: {'0':'gold','1':'gold','2':'silver','3':'gold','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, preferences: { soundEnabled: true, themeId: 'forge', volumeSfx: 0.6, volumeMusic: 0.5, fxQuality: 'high', fullscreen: false, language: '${process.env.MEDIA_LANG ?? 'fr'}', reducedMotion: false }, creativeLevelSlots: {}, tutorialSeen: true, records: { endless: { bestScore: 61250, bestWave: 14 }, daily: {} } })); true`
+    `localStorage.setItem('bounce-forge.save.v1', JSON.stringify({ version: 7, bestScore: 48210, unlockedLevel: ${process.env.CAPTURE_LEVELS ? 29 : 9}, completedLevels: [0,1,2,3,4,5,6,7,8], levelMedals: {'0':'gold','1':'gold','2':'silver','3':'gold','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, preferences: { soundEnabled: true, themeId: 'forge', volumeSfx: 0.6, volumeMusic: 0.5, fxQuality: 'high', fullscreen: false, language: '${process.env.MEDIA_LANG ?? 'fr'}', reducedMotion: ${process.env.CAPTURE_LEVELS ? 'true' : 'false'} }, creativeLevelSlots: {}, tutorialSeen: true, records: { endless: { bestScore: 61250, bestWave: 14 }, daily: {} } })); true`
   );
   await page.send('Page.reload', {});
 
@@ -181,18 +189,13 @@ try {
   // CAPTURE_LEVELS=<dir>: one screenshot of every campaign level, for design review.
   if (process.env.CAPTURE_LEVELS) {
     await mkdir(process.env.CAPTURE_LEVELS, { recursive: true });
-    for (let level = 1; level <= 24; level += 1) {
+    for (let level = 1; level <= 30; level += 1) {
       await evaluate(page, `location.hash = '#/play/campaign/${level}'; true`);
       await waitFor(
         page,
         `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === ${level - 1}`
       );
       await delay(1200);
-      // Headless frames are slow: finish the brick drop-in so the shot shows the whole level.
-      await evaluate(
-        page,
-        `(() => { ${GAME}.tweens.getTweens().forEach((tw) => tw.complete()); return true; })()`
-      );
       await delay(600);
       const stage = await evaluate(
         page,

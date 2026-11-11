@@ -34,21 +34,29 @@ Power-ups are round pickups that fall from broken bricks. The drop chance scales
 
 ## Progression
 
-The campaign contains 24 fixed levels across four chapters:
+The campaign contains 30 pixel-art levels across five chapters. Each chapter has a theme and
+introduces one idea per level, in a forgiving layout, before later levels combine it with the
+others; the sixth level of each chapter is a finale.
 
-- Forge Basics
-- Wall Mazes
-- Chain Reactor
-- Ball Storm
+| Chapter       | Theme                          | Introduces                                    |
+| ------------- | ------------------------------ | --------------------------------------------- |
+| Forge Basics  | bounces and the classic bricks | bonus, reinforced, explosive, crystal, steel  |
+| Wall Mazes    | walls and angles               | keys and gates, bumpers, teleporters          |
+| Chain Reactor | chain reactions                | fuses, phoenix bricks                         |
+| Ball Storm    | many balls at once             | moving and ghost bricks, power-up rain, storm |
+| Mechanisms    | mastery                        | everything combined, descending wall          |
+
+Power-ups unlock with the chapters (weights per chapter in `src/game/config/powerUps.ts`).
 
 Difficulty is derived from the campaign level index:
 
-- Ball speed increases gradually.
-- Maximum ball speed increases gradually.
-- Resistant bricks gain health after later levels.
-- Power-up drop chance rises from 35% toward 48%.
+- Ball speed increases gently over the 30 levels.
+- Reinforced bricks always take exactly 2 or 3 hits; only shields get tougher later.
+- About a fifth of the bricks drop a capsule (16% rising to 22%).
 - Score multiplier increases per level.
-- Starting lives drop gradually but never below 2.
+- Every level starts with three lives.
+
+`tests/balance.test.ts` prints the expected drops per level and guards the ranges.
 
 Each campaign level has an objective shown in the HUD. Objectives currently track reaching a target number of balls, triggering explosions, clearing with lives remaining, or reaching a best-combo target.
 

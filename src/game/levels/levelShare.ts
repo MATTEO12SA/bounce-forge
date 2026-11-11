@@ -1,15 +1,19 @@
 import { normalizeEditorRows, validateEditorRows } from './editorGrid';
 import { sanitizeOptionalLevelName } from './levelNames';
+import { sanitizeLevelOptions, type LevelOptions } from './levelOptions';
 
 /** Legacy codes: base64 of a Latin-1 JSON string. Non-ASCII names could not be encoded. */
 const LEGACY_PREFIX = 'BF1:';
 /** Current codes: base64url of UTF-8 JSON, safe for accents and emoji. */
 const SHARE_PREFIX = 'BF2:';
+/** Same as BF2, plus level settings (power-ups, lives, events). Used only when settings exist. */
+const OPTIONS_PREFIX = 'BF3:';
 
 interface SharedLevelPayload {
-  v: 1 | 2;
+  v: 1 | 2 | 3;
   name?: string;
   rows: string[];
+  options?: LevelOptions;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -37,7 +41,11 @@ function fromBase64Url(value: string): string {
   return base64 + '='.repeat((4 - (base64.length % 4)) % 4);
 }
 
-export function encodeCreativeLevelCode(rows: readonly string[], name?: string): string {
+export function encodeCreativeLevelCode(
+  rows: readonly string[],
+  name?: string,
+  options?: LevelOptions
+): string {
   const normalizedRows = normalizeEditorRows(rows);
   const validation = validateEditorRows(normalizedRows);
 
@@ -55,12 +63,19 @@ export function encodeCreativeLevelCode(rows: readonly string[], name?: string):
     payload.name = safeName;
   }
 
+  const cleanOptions = sanitizeLevelOptions(options);
+  if (cleanOptions) {
+    payload.v = 3;
+    payload.options = cleanOptions;
+  }
+
   const bytes = new TextEncoder().encode(JSON.stringify(payload));
-  return `${SHARE_PREFIX}${toBase64Url(bytesToBase64(bytes))}`;
+  const prefix = cleanOptions ? OPTIONS_PREFIX : SHARE_PREFIX;
+  return `${prefix}${toBase64Url(bytesToBase64(bytes))}`;
 }
 
 function parsePayload(code: string): Partial<SharedLevelPayload> {
-  if (code.startsWith(SHARE_PREFIX)) {
+  if (code.startsWith(SHARE_PREFIX) || code.startsWith(OPTIONS_PREFIX)) {
     const bytes = base64ToBytes(fromBase64Url(code.slice(SHARE_PREFIX.length)));
     return JSON.parse(
       new TextDecoder('utf-8', { fatal: true }).decode(bytes)
@@ -78,7 +93,11 @@ function parsePayload(code: string): Partial<SharedLevelPayload> {
   throw new Error('Invalid Bounce Forge level code.');
 }
 
-export function decodeCreativeLevelCode(code: string): { name?: string; rows: string[] } {
+export function decodeCreativeLevelCode(code: string): {
+  name?: string;
+  rows: string[];
+  options?: LevelOptions;
+} {
   const trimmed = code.trim().replace(/\s+/g, '');
   let parsed: Partial<SharedLevelPayload>;
 
@@ -91,7 +110,7 @@ export function decodeCreativeLevelCode(code: string): { name?: string; rows: st
     throw new Error('Corrupted Bounce Forge level code.', { cause: error });
   }
 
-  if ((parsed.v !== 1 && parsed.v !== 2) || !Array.isArray(parsed.rows)) {
+  if ((parsed.v !== 1 && parsed.v !== 2 && parsed.v !== 3) || !Array.isArray(parsed.rows)) {
     throw new Error('Unsupported Bounce Forge level code.');
   }
 
@@ -102,8 +121,10 @@ export function decodeCreativeLevelCode(code: string): { name?: string; rows: st
     throw new Error(validation.message);
   }
 
+  const options = parsed.v === 3 ? sanitizeLevelOptions(parsed.options) : undefined;
   return {
     name: sanitizeOptionalLevelName(parsed.name),
-    rows
+    rows,
+    ...(options ? { options } : {})
   };
 }

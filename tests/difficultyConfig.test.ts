@@ -13,6 +13,11 @@ describe('difficulty config', () => {
 
   it('keeps lives within intended campaign bounds', () => {
     expect(getDifficultyForLevel(0).initialLives).toBe(3);
-    expect(getDifficultyForLevel(99).initialLives).toBe(2);
+    expect(getDifficultyForLevel(29).initialLives).toBe(3);
+    expect(getDifficultyForLevel(29).brickHealthBonus).toBeLessThanOrEqual(2);
+    // The ball keeps getting a little faster across the whole campaign.
+    expect(getDifficultyForLevel(29).ballSpeed).toBeGreaterThan(
+      getDifficultyForLevel(20).ballSpeed
+    );
   });
 });

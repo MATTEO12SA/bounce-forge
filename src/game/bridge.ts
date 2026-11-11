@@ -4,6 +4,7 @@
  * This module never imports Phaser so the interface can use it before the engine is loaded.
  * The UI drives the game through `GameController` (see GameApp) and listens to the events below.
  */
+import type { LevelOptions } from './levels/levelOptions';
 import type { LevelMedal } from './systems/SaveSystem';
 
 export type GameMode = 'campaign' | 'creative' | 'endless' | 'daily' | 'demo';
@@ -25,7 +26,7 @@ export interface GameSession {
   /** UTC day of a daily challenge, frozen when the run starts so midnight never changes it. */
   dateKey?: string;
   /** Unsaved editor level played by the editor's "Test" button (the slot is not overwritten). */
-  draft?: { name: string; rows: string[] };
+  draft?: { name: string; rows: string[]; options?: LevelOptions };
   /** Score and lives carried from the previous wave. */
   carry?: { score: number; lives: number };
 }
@@ -36,6 +37,19 @@ export type ObjectiveKind =
   | 'clearWithLives'
   | 'bestCombo'
   | 'clearWave';
+
+/** An active effect shown in the HUD: a timed one (ratio of time left) or charges (count). */
+export interface HudEffect {
+  type: string;
+  ratio: number;
+  count?: number;
+}
+
+/** One-off messages from the game that the interface shows as toasts. */
+export type GameNotice =
+  | { kind: 'discovery'; id: string }
+  | { kind: 'combo'; id: 'meteor' | 'explosiveLasers' | 'sun' }
+  | { kind: 'event'; id: 'descend' | 'storm' | 'bonusRain' | 'gatesOpen' };
 
 export interface HudSnapshot {
   mode: GameMode;
@@ -54,7 +68,7 @@ export interface HudSnapshot {
   bricksLeft: number;
   bricksTotal: number;
   waitingToLaunch: boolean;
-  effects: string[];
+  effects: HudEffect[];
   objective: { kind: ObjectiveKind; current: number; target: number };
 }
 
@@ -82,6 +96,7 @@ export interface BridgeEvents {
   /** The player pressed Esc/P or the page went to background. */
   pauseRequested: undefined;
   waveCleared: { wave: number; score: number; nextWave: number };
+  notice: GameNotice;
   /** An in-canvas tool (editor, admin) asked to return to the interface. */
   exitToShell: { from: 'editor' | 'admin' };
   /** The engine is showing a canvas tool and the interface must step aside. */

@@ -77,8 +77,8 @@ Medals are saved per campaign level:
 
 The campaign is generated from [src/game/levels/levelPatterns.ts](../src/game/levels/levelPatterns.ts) and compiled through [src/game/levels/campaignLevels.ts](../src/game/levels/campaignLevels.ts).
 
-- 24 fixed campaign levels.
-- 4 chapters: Forge Basics, Wall Mazes, Chain Reactor, Ball Storm.
+- 30 fixed campaign levels drawn as pixel art (one character = 2×2 cells).
+- 5 chapters: Forge Basics, Wall Mazes, Chain Reactor, Ball Storm, Mechanisms.
 - Each level defines a name, objective, medal targets, and a 36x58 grid.
 - Objectives track reaching a ball count, triggering explosions, clearing with enough lives, or hitting a best-combo target.
 - Admin campaign overrides can replace a level's rows and display name, but keep the original level id, chapter, objective, and medal targets.
@@ -120,7 +120,7 @@ Creative mode is local-only:
 
 - Accessible from `MODE CREATIF`.
 - Saves 36x58 editor rows to browser localStorage under `creativeLevelSlots`.
-- Has 24 slots aligned with campaign slot numbers.
+- Has 30 slots aligned with campaign slot numbers.
 - `PLAY` runs the selected creative slot with source `creative`.
 - Creative saves never replace campaign levels.
 
