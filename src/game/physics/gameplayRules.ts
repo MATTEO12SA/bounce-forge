@@ -37,10 +37,66 @@ export function rampSpeed(current: number, max: number, step = 7): number {
 }
 
 /** Launch angle: aimed toward the pointer when known, otherwise a gentle random tilt. */
-export function launchVelocity(speed: number, aimOffset: number | null, random: () => number) {
-  const offset = aimOffset === null ? (random() * 2 - 1) * 0.35 : clamp(aimOffset, -0.6, 0.6);
-  const angle = offset * (Math.PI / 4);
+/** Widest launch angle from vertical when aiming. */
+export const MAX_AIM_RADIANS = (70 * Math.PI) / 180;
+
+/**
+ * Launch velocity for an aim angle in radians from vertical (positive = right). Without an aim,
+ * the ball leaves with a gentle random tilt.
+ */
+export function launchVelocity(speed: number, aimAngle: number | null, random: () => number) {
+  const angle =
+    aimAngle === null
+      ? (random() * 2 - 1) * 0.26
+      : clamp(aimAngle, -MAX_AIM_RADIANS, MAX_AIM_RADIANS);
   return { vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed };
+}
+
+/** Aim angle from the ball toward the pointer, clamped so the ball always goes up. */
+export function aimAngleToward(
+  ballX: number,
+  ballY: number,
+  pointerX: number,
+  pointerY: number
+): number {
+  const dx = pointerX - ballX;
+  const dy = ballY - pointerY;
+  if (dy < 12) {
+    // Pointer at or below the ball: aim as far as allowed toward that side.
+    return dx === 0 ? 0 : Math.sign(dx) * MAX_AIM_RADIANS;
+  }
+  return clamp(Math.atan2(dx, dy), -MAX_AIM_RADIANS, MAX_AIM_RADIANS);
+}
+
+/**
+ * Points of the predicted path from (x, y) along an aim angle, bouncing off the side walls,
+ * used to draw the aiming guide.
+ */
+export function aimPath(
+  x: number,
+  y: number,
+  angle: number,
+  length: number,
+  left: number,
+  right: number
+): Array<{ x: number; y: number }> {
+  const points = [{ x, y }];
+  let dx = Math.sin(angle);
+  const dy = -Math.cos(angle);
+  let px = x;
+  let py = y;
+  let remaining = length;
+  for (let bounce = 0; bounce < 3 && remaining > 0; bounce += 1) {
+    const wallX = dx > 0 ? right : left;
+    const toWall = dx === 0 ? Infinity : (wallX - px) / dx;
+    const step = Math.min(remaining, toWall);
+    px += dx * step;
+    py += dy * step;
+    points.push({ x: px, y: py });
+    remaining -= step;
+    dx = -dx;
+  }
+  return points;
 }
 
 export interface Faller {

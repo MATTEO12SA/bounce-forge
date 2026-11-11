@@ -25,7 +25,14 @@ import {
 import { stepBall, type StepContext, type StepEvent } from '../physics/ballStep';
 import { BrickGrid } from '../physics/BrickGrid';
 import { enforceMinVerticalAngle, setSpeed } from '../physics/geometry';
-import { paddleBounce, rampSpeed, separateFallers } from '../physics/gameplayRules';
+import {
+  aimAngleToward,
+  aimPath,
+  paddleBounce,
+  rampSpeed,
+  separateFallers
+} from '../physics/gameplayRules';
+import { TEX } from '../render/textures';
 import { Juice } from '../render/Juice';
 import { ComboSystem } from '../systems/ComboSystem';
 import { FxManager } from '../systems/FxManager';
@@ -40,6 +47,7 @@ import { DebugOverlay, isDebugOverlayEnabled, type DebugOverlaySnapshot } from '
 import { SeededRandom } from '../utils/random';
 import {
   BRICK_GAP,
+  DEPTHS,
   BRICK_HEIGHT,
   MAX_LIVES,
   PADDLE_HEIGHT,
@@ -106,6 +114,10 @@ export class GameScene extends Phaser.Scene {
   private demoLaunchMs = 0;
   private reducedMotion = false;
   private autopilot = false;
+  private aiming = false;
+  private aimGraphics!: Phaser.GameObjects.Graphics;
+  private aimArrow!: Phaser.GameObjects.Image;
+  private aimPulse = 0;
   private ending = false;
   private respawning = false;
   private explosionsTriggered = 0;
@@ -241,6 +253,13 @@ export class GameScene extends Phaser.Scene {
     if (isDebugOverlayEnabled()) {
       this.debugOverlay = new DebugOverlay(this);
     }
+    this.aiming = false;
+    this.aimGraphics = this.add.graphics().setDepth(DEPTHS.ball + 2);
+    this.aimArrow = this.add
+      .image(0, 0, TEX.spark)
+      .setDepth(DEPTHS.ball + 3)
+      .setVisible(false)
+      .setBlendMode(Phaser.BlendModes.ADD);
     this.registerSceneInput();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownSystems, this);
     this.emitHud();
@@ -348,7 +367,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private registerSceneInput(): void {
-    this.input.on('pointerdown', this.unlockAndLaunch, this);
+    this.input.on('pointerdown', this.startAiming, this);
+    this.input.on('pointerup', this.releaseAim, this);
+    this.input.on('pointerupoutside', this.releaseAim, this);
     this.input.keyboard?.on('keydown-SPACE', this.unlockAndLaunch, this);
     this.input.keyboard?.on('keydown-ENTER', this.unlockAndLaunch, this);
     this.input.keyboard?.on('keydown-P', this.pauseGame, this);
@@ -363,7 +384,9 @@ export class GameScene extends Phaser.Scene {
     this.ballManager.destroy();
     this.powerUps.length = 0;
     this.explosions.length = 0;
-    this.input.off('pointerdown', this.unlockAndLaunch, this);
+    this.input.off('pointerdown', this.startAiming, this);
+    this.input.off('pointerup', this.releaseAim, this);
+    this.input.off('pointerupoutside', this.releaseAim, this);
     this.input.keyboard?.off('keydown-SPACE', this.unlockAndLaunch, this);
     this.input.keyboard?.off('keydown-ENTER', this.unlockAndLaunch, this);
     this.input.keyboard?.off('keydown-P', this.pauseGame, this);
@@ -371,12 +394,39 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.off('keydown-R', this.restartLevel, this);
   }
 
+  /** Keyboard launch (Space/Enter): toward the current aim. */
   private unlockAndLaunch(): void {
     if (this.mode === 'demo' || this.ending) {
       return;
     }
     audio.unlock();
+    this.aiming = false;
+    this.inputSystem.frozen = false;
     this.launchAttachedBalls();
+  }
+
+  /** Pressing on the game with a ball on the paddle starts aiming instead of launching. */
+  private startAiming(): void {
+    if (this.mode === 'demo' || this.ending) {
+      return;
+    }
+    audio.unlock();
+    if (this.getBalls().some((ball) => ball.isAttached)) {
+      this.aiming = true;
+      this.inputSystem.frozen = true;
+    }
+  }
+
+  /** Releasing the press launches toward the arrow. */
+  private releaseAim(): void {
+    if (!this.aiming) {
+      return;
+    }
+    this.aiming = false;
+    this.inputSystem.frozen = false;
+    if (!this.ending) {
+      this.launchAttachedBalls();
+    }
   }
 
   // ------------------------------------------------------------------ physics
@@ -652,6 +702,10 @@ export class GameScene extends Phaser.Scene {
     if (!type) {
       return;
     }
+    // AIM only makes sense with a few balls to catch.
+    if (type === 'stickyPaddle' && this.ballManager.getStats().activeCount > 3) {
+      return;
+    }
     let powerUp = this.powerUps.find((item) => !item.active);
     if (!powerUp) {
       if (this.powerUps.length >= MAX_POWER_UPS) {
@@ -799,13 +853,70 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateAim(): void {
-    const pointerX = this.inputSystem.pointerX;
-    if (pointerX === null) {
+    this.aimGraphics.clear();
+    const attached = this.getBalls().find((ball) => ball.isAttached);
+    if (!attached || this.mode === 'demo' || this.ending) {
+      this.aimArrow.setVisible(false);
       this.ballManager.aim = null;
+      if (!attached && this.aiming) {
+        this.aiming = false;
+        this.inputSystem.frozen = false;
+      }
       return;
     }
-    // Aim follows where the player last pointed relative to the paddle.
-    this.ballManager.aim = Phaser.Math.Clamp((pointerX - this.paddle.x) / 260, -0.6, 0.6);
+
+    const pointerX = this.inputSystem.pointerX;
+    const pointerY = this.inputSystem.pointerY;
+    const angle =
+      pointerX === null || pointerY === null
+        ? 0
+        : aimAngleToward(attached.x, attached.y, pointerX, pointerY);
+    this.ballManager.aim = angle;
+
+    // Dotted guide with the predicted bounce off the side walls; bright while the press is held.
+    this.aimPulse += 0.06;
+    const strength = this.aiming ? 1 : 0.35;
+    const length = this.aiming ? 560 : 220;
+    const path = aimPath(
+      attached.x,
+      attached.y,
+      angle,
+      length,
+      PLAYFIELD_LEFT + attached.radius,
+      PLAYFIELD_RIGHT - attached.radius
+    );
+    const dotSpacing = 26;
+    let travelled = (this.aimPulse * 18) % dotSpacing;
+    for (let index = 1; index < path.length; index += 1) {
+      const from = path[index - 1];
+      const to = path[index];
+      if (!from || !to) continue;
+      const segment = Math.hypot(to.x - from.x, to.y - from.y);
+      for (let d = travelled; d < segment; d += dotSpacing) {
+        const t = d / segment;
+        const fade = 1 - (d + (index - 1) * 400) / (length + 80);
+        this.aimGraphics.fillStyle(this.theme.primary, Math.max(0.12, fade) * strength);
+        this.aimGraphics.fillCircle(
+          from.x + (to.x - from.x) * t,
+          from.y + (to.y - from.y) * t,
+          this.aiming ? 5 : 3.5
+        );
+      }
+      travelled = (travelled - segment) % dotSpacing;
+      if (travelled < 0) travelled += dotSpacing;
+    }
+    // Arrow head just above the ball.
+    const headDistance = 46;
+    this.aimArrow
+      .setVisible(true)
+      .setPosition(
+        attached.x + Math.sin(angle) * headDistance,
+        attached.y - Math.cos(angle) * headDistance
+      )
+      .setRotation(angle - Math.PI / 2)
+      .setDisplaySize(this.aiming ? 46 : 32, this.aiming ? 12 : 8)
+      .setTint(this.theme.primary)
+      .setAlpha(strength);
   }
 
   /** Attract-mode autopilot used behind the home screen and for media capture. */

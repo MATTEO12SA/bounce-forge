@@ -28,9 +28,15 @@ describe('power up system', () => {
   });
 
   it('can roll the sticky paddle skill power-up', () => {
-    const system = new PowerUpSystem(new FixedRandom([0.1, 0.902]));
+    const system = new PowerUpSystem(new FixedRandom([0.1, 0.927]));
 
     expect(system.roll(1)).toBe('stickyPaddle');
+  });
+
+  it('keeps the AIM power-up rare (about 1 drop in 100)', () => {
+    const total = DEFAULT_POWER_UP_DROP_TABLE.reduce((sum, entry) => sum + entry.weight, 0);
+    const sticky = DEFAULT_POWER_UP_DROP_TABLE.find((entry) => entry.type === 'stickyPaddle');
+    expect((sticky?.weight ?? 0) / total).toBeLessThan(0.02);
   });
 
   it('keeps future power-ups documented but out of the active drop table', () => {

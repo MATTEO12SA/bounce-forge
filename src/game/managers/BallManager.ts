@@ -34,7 +34,7 @@ export class BallManager {
   private activeLimit = INITIAL_ACTIVE_BALL_LIMIT;
   private stressFrames = 0;
   private pendingClones = 0;
-  /** Normalised pointer aim (-1..1) for the next launch, or null for a random tilt. */
+  /** Aim angle (radians from vertical) for the next launch, or null for a random tilt. */
   public aim: number | null = null;
 
   public constructor(
@@ -77,7 +77,7 @@ export class BallManager {
     const attached = this.getActiveBalls().filter((ball) => ball.isAttached);
     attached.forEach((ball, index) => {
       // Several caught balls fan out instead of travelling on top of each other.
-      const spread = attached.length > 1 ? (index / (attached.length - 1) - 0.5) * 0.5 : 0;
+      const spread = attached.length > 1 ? (index / (attached.length - 1) - 0.5) * 0.24 : 0;
       const aim = this.aim === null ? null : this.aim + spread;
       const v = launchVelocity(Math.max(ball.speed, this.options.ballSpeed), aim, Math.random);
       ball.launch(v.vx, v.vy);

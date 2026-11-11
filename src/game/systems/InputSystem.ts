@@ -8,6 +8,13 @@ export class InputSystem {
   private readonly keyA: Phaser.Input.Keyboard.Key | null;
   private readonly keyD: Phaser.Input.Keyboard.Key | null;
   private pointerTargetX: number | null = null;
+  private pointerTargetY: number | null = null;
+  /** While aiming, the paddle stays still so the ball does not move under the arrow. */
+  public frozen = false;
+
+  public get pointerY(): number | null {
+    return this.pointerTargetY;
+  }
 
   /** Last pointer x in world space, or null before the pointer moved over the game. */
   public get pointerX(): number | null {
@@ -24,6 +31,9 @@ export class InputSystem {
   }
 
   public updatePaddle(paddle: Paddle, deltaMs: number): void {
+    if (this.frozen) {
+      return;
+    }
     const direction = this.getKeyboardDirection();
 
     if (direction !== 0) {
@@ -45,6 +55,7 @@ export class InputSystem {
 
   private handlePointerMove(pointer: Phaser.Input.Pointer): void {
     this.pointerTargetX = pointer.worldX;
+    this.pointerTargetY = pointer.worldY;
   }
 
   private getKeyboardDirection(): number {

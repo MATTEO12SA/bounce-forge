@@ -3,7 +3,10 @@ import { stepBall, type BallBody, type StepContext } from '../src/game/physics/b
 import { BrickGrid, type GridItem } from '../src/game/physics/BrickGrid';
 import { enforceMinVerticalAngle, sweepPointBox } from '../src/game/physics/geometry';
 import {
+  aimAngleToward,
+  aimPath,
   launchVelocity,
+  MAX_AIM_RADIANS,
   paddleBounce,
   rampSpeed,
   separateFallers
@@ -205,5 +208,20 @@ describe('BrickGrid', () => {
     const grid = makeGrid([[5, 5, true]]);
     expect(grid.isBlocked(2 * PITCH_X, 5 * PITCH_Y + 5, 8 * PITCH_X, 5 * PITCH_Y + 5)).toBe(true);
     expect(grid.isBlocked(2 * PITCH_X, 8 * PITCH_Y, 8 * PITCH_X, 8 * PITCH_Y)).toBe(false);
+  });
+});
+
+describe('aiming', () => {
+  it('aims toward the pointer and never downward', () => {
+    expect(aimAngleToward(500, 1700, 500, 1000)).toBeCloseTo(0);
+    expect(aimAngleToward(500, 1700, 800, 1400)).toBeGreaterThan(0.5);
+    expect(aimAngleToward(500, 1700, 200, 1800)).toBeCloseTo(-MAX_AIM_RADIANS);
+  });
+
+  it('predicts the bounce off a side wall', () => {
+    const path = aimPath(500, 1700, Math.PI / 4, 1000, 120, 960);
+    expect(path.length).toBeGreaterThan(2);
+    expect(path[1]!.x).toBeCloseTo(960);
+    expect(path[2]!.x).toBeLessThan(960);
   });
 });
