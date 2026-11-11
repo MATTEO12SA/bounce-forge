@@ -1,6 +1,6 @@
 import type { BrickKind, LevelDefinition } from '../game/levels/levelTypes';
 
-const KIND_COLORS: Record<BrickKind, string> = {
+const KIND_COLORS: Partial<Record<BrickKind, string>> = {
   standard: '#ffb423',
   resistant: '#ffd36b',
   explosive: '#ff6b3d',
@@ -56,7 +56,7 @@ export function drawLevelPreview(
     ctx.fillStyle =
       typeof brick.color === 'number'
         ? `#${brick.color.toString(16).padStart(6, '0')}`
-        : KIND_COLORS[brick.kind];
+        : (KIND_COLORS[brick.kind] ?? '#ffb423');
     const w = Math.max(1, brick.width * scale - 0.6);
     const h = Math.max(1, brick.height * scale - 0.6);
     ctx.fillRect(

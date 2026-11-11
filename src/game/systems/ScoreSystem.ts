@@ -34,6 +34,14 @@ export class ScoreSystem {
     return awarded;
   }
 
+  /** Flat points (bumpers, events) that do not count as a broken brick. */
+  public addBonus(points: number): number {
+    const awarded = Math.max(0, Math.round(points));
+    this.state.score += awarded;
+    this.state.bestScore = Math.max(this.state.bestScore, this.state.score);
+    return awarded;
+  }
+
   public addLifeBonus(livesRemaining: number): number {
     const awarded = Math.max(0, livesRemaining) * 500;
     this.state.score += awarded;

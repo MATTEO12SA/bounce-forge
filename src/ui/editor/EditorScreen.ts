@@ -56,7 +56,26 @@ const GRID_H = ROWS * PITCH_Y;
 const WORLD_H = GRID_H + FOOTER;
 /** Bricks drawn from this row down are flagged as too close to the paddle. */
 const LOW_ROW = 46;
-const PALETTE = ['1', '2', '3', 'E', 'B', 'S', 'X'] as const;
+const PALETTE = [
+  '1',
+  '2',
+  '3',
+  'E',
+  'B',
+  'S',
+  'X',
+  'C',
+  'K',
+  'G',
+  'R',
+  'I',
+  'M',
+  'O',
+  'T',
+  'F'
+] as const;
+/** Classic bricks first; mechanisms get their own group in the palette. */
+const FIRST_MECHANISM = 7;
 const TOOLS: Array<[Tool, string, MessageKey, string]> = [
   ['brush', 'brush', 'editor.tool.brush', 'b'],
   ['eraser', 'eraser', 'editor.tool.eraser', 'e'],
@@ -397,37 +416,45 @@ export class EditorScreen {
       )
     );
 
+    const paletteButton = (symbol: string, index: number): HTMLButtonElement => {
+      const swatch = h('canvas', {
+        class: 'editor-swatch',
+        width: String(BRICK_W),
+        height: String(BRICK_H),
+        'aria-hidden': 'true'
+      });
+      const sprite = brickSprite(symbol);
+      if (sprite) swatch.getContext('2d')?.drawImage(sprite, 0, 0);
+      const count = h('span', { class: 'editor-swatch-count' });
+      this.paletteCounts.set(symbol, count);
+      const button = h(
+        'button',
+        {
+          class: 'editor-brick',
+          type: 'button',
+          role: 'radio',
+          'aria-checked': 'false',
+          onclick: () => this.selectSymbol(symbol)
+        },
+        swatch,
+        h('span', { class: 'editor-brick-name' }, t(`editor.brick.${symbol}` as MessageKey)),
+        index < 9 ? h('kbd', {}, String(index + 1)) : h('span'),
+        count
+      );
+      this.paletteButtons.set(symbol, button);
+      return button;
+    };
     const palette = h(
       'div',
       { class: 'editor-palette', role: 'radiogroup', 'aria-label': t('editor.bricksTitle') },
-      ...PALETTE.map((symbol, index) => {
-        const swatch = h('canvas', {
-          class: 'editor-swatch',
-          width: String(BRICK_W),
-          height: String(BRICK_H),
-          'aria-hidden': 'true'
-        });
-        const sprite = brickSprite(symbol);
-        if (sprite) swatch.getContext('2d')?.drawImage(sprite, 0, 0);
-        const count = h('span', { class: 'editor-swatch-count' });
-        this.paletteCounts.set(symbol, count);
-        const button = h(
-          'button',
-          {
-            class: 'editor-brick',
-            type: 'button',
-            role: 'radio',
-            'aria-checked': 'false',
-            onclick: () => this.selectSymbol(symbol)
-          },
-          swatch,
-          h('span', { class: 'editor-brick-name' }, t(`editor.brick.${symbol}` as MessageKey)),
-          h('kbd', {}, String(index + 1)),
-          count
-        );
-        this.paletteButtons.set(symbol, button);
-        return button;
-      })
+      ...PALETTE.slice(0, FIRST_MECHANISM).map((symbol, index) => paletteButton(symbol, index))
+    );
+    const mechanisms = h(
+      'div',
+      { class: 'editor-palette', role: 'radiogroup', 'aria-label': t('editor.mechanisms') },
+      ...PALETTE.slice(FIRST_MECHANISM).map((symbol, index) =>
+        paletteButton(symbol, index + FIRST_MECHANISM)
+      )
     );
 
     const right = h(
@@ -438,6 +465,12 @@ export class EditorScreen {
         { class: 'editor-group' },
         h('h2', { class: 'editor-group-title' }, t('editor.bricksTitle')),
         palette
+      ),
+      h(
+        'div',
+        { class: 'editor-group' },
+        h('h2', { class: 'editor-group-title' }, t('editor.mechanisms')),
+        mechanisms
       ),
       h(
         'div',
@@ -609,6 +642,13 @@ export class EditorScreen {
     if (sealed > 0)
       this.warnings.append(h('li', { class: 'is-error' }, t('editor.warn.sealed', { n: sealed })));
     if (low) this.warnings.append(h('li', { class: 'is-warning' }, t('editor.warn.low')));
+    const portals = stats.bySymbol.T ?? 0;
+    if ((stats.bySymbol.G ?? 0) > 0 && (stats.bySymbol.K ?? 0) === 0) {
+      this.warnings.append(h('li', { class: 'is-warning' }, t('editor.warn.gatesNoKey')));
+    }
+    if (portals % 2 === 1) {
+      this.warnings.append(h('li', { class: 'is-warning' }, t('editor.warn.lonePortal')));
+    }
     if (this.warnings.childElementCount === 0)
       this.warnings.append(h('li', { class: 'is-ok' }, t('editor.ok')));
 

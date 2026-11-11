@@ -14,11 +14,12 @@ import { EffectState, type ComboId } from '../effects/EffectState';
 import type { Ball } from '../entities/Ball';
 import { Brick } from '../entities/Brick';
 import { Lasers } from '../entities/Lasers';
+import { moverStep, pairTeleporters, teleportExit } from '../mechanics/mechanics';
 import { Paddle } from '../entities/Paddle';
 import { POWER_UP_HALF_HEIGHT, POWER_UP_HALF_WIDTH, PowerUp } from '../entities/PowerUp';
 import { createPatternFromEditorRows } from '../levels/editorGrid';
 import { createLevelFromPattern } from '../levels/levelFactory';
-import type { LevelDefinition } from '../levels/levelTypes';
+import type { BrickKind, BrickSpec, LevelDefinition } from '../levels/levelTypes';
 import { BallManager } from '../managers/BallManager';
 import { PlayfieldRenderer } from '../managers/PlayfieldRenderer';
 import {
@@ -85,6 +86,22 @@ const SHIELD_Y = PADDLE_Y + 72;
 const BIG_BALL_SCALE = 1.6;
 const FIRE_TINT = 0xff9a4a;
 const EXPLOSIVE_TINT = 0xff6a5a;
+const GHOST_ALPHA = 0.08;
+const MOVER_STEP_MS = 650;
+const PHOENIX_RESPAWN_MS = 8000;
+const FUSE_DELAY_MS = 130;
+/** Brick kinds introduced in v1.2: the interface explains each one the first time. */
+const NEW_KINDS: readonly BrickKind[] = [
+  'crystal',
+  'key',
+  'gate',
+  'phoenix',
+  'invisible',
+  'mover',
+  'bumper',
+  'teleporter',
+  'fuse'
+];
 
 const COMBO_NAMES: Record<ComboId, { fr: string; en: string }> = {
   meteor: { fr: 'MÉTÉORE !', en: 'METEOR!' },
@@ -149,6 +166,12 @@ export class GameScene extends Phaser.Scene {
   private laserCooldownMs = 0;
   private shieldBar!: Phaser.GameObjects.Rectangle;
   private language: 'fr' | 'en' = 'fr';
+  private teleportPairs = new Map<Brick, Brick>();
+  private keysLeft = 0;
+  private moverClockMs = 0;
+  private readonly phoenixQueue: Array<{ spec: BrickSpec; at: number }> = [];
+  private readonly fuseQueue: Array<{ brick: Brick; at: number }> = [];
+  private readonly litFuses = new Set<Brick>();
 
   public constructor() {
     super('GameScene');
@@ -257,6 +280,10 @@ export class GameScene extends Phaser.Scene {
     this.debugOverlay = undefined;
     this.effects.clear();
     this.laserCooldownMs = 0;
+    this.moverClockMs = 0;
+    this.phoenixQueue.length = 0;
+    this.fuseQueue.length = 0;
+    this.litFuses.clear();
 
     new PlayfieldRenderer(this, this.theme).render();
     if (!this.reducedMotion) {
@@ -281,7 +308,11 @@ export class GameScene extends Phaser.Scene {
       paddle: null,
       bouncePaddle: (ball) => this.bounceOffPaddle(ball as Ball),
       isActive: (brick) => brick.active,
-      passThrough: (_ball, brick) => this.effects.has('fireBall') && brick.isBreakable
+      passThrough: (ball, brick) =>
+        (brick.kind === 'teleporter' &&
+          this.teleportPairs.has(brick) &&
+          (ball as Ball).teleportReadyAt <= this.gameTime) ||
+        (this.effects.has('fireBall') && brick.isBreakable)
     };
     this.lasers = new Lasers<Brick>(this, 0xff4d8d);
     this.shieldBar = this.add
@@ -333,6 +364,7 @@ export class GameScene extends Phaser.Scene {
       this.loseLife();
     }
     this.processExplosions();
+    this.updateMechanics(physicsMs);
     this.updatePowerUps(physicsMs / 1000);
     this.updateBallVisuals(frameMs);
 
@@ -406,10 +438,15 @@ export class GameScene extends Phaser.Scene {
       BRICK_HEIGHT + BRICK_GAP
     );
     this.bricks = this.add.group();
+    this.keysLeft = this.level.bricks.filter((spec) => spec.kind === 'key').length;
     this.level.bricks.forEach((spec) => {
       const brick = new Brick(this, spec);
       this.bricks.add(brick);
       this.grid.set(brick);
+      if (spec.kind === 'gate') brick.locked = this.keysLeft > 0;
+      if (spec.kind === 'mover') brick.moveDir = spec.row % 2 === 0 ? 1 : -1;
+      const targetAlpha = spec.kind === 'invisible' ? GHOST_ALPHA : 1;
+      if (spec.kind === 'invisible') brick.revealed = false;
       if (!this.reducedMotion && this.mode !== 'demo') {
         // Bricks drop into place row by row when the level starts.
         const targetY = brick.y;
@@ -417,15 +454,22 @@ export class GameScene extends Phaser.Scene {
         this.tweens.add({
           targets: brick,
           y: targetY,
-          alpha: 1,
+          alpha: targetAlpha,
           delay: spec.row * 9 + (spec.col % 2) * 6,
           duration: 260,
           ease: 'Back.easeOut'
         });
+      } else {
+        brick.setAlpha(targetAlpha);
       }
     });
-    this.bricksTotal = this.getBricks().filter((brick) => brick.isBreakable).length;
+    this.teleportPairs = pairTeleporters(
+      this.getBricks().filter((brick) => brick.kind === 'teleporter')
+    );
+    this.bricksTotal = this.getBricks().filter((brick) => brick.isRequired).length;
     this.breakableLeft = this.bricksTotal;
+    const kinds = new Set(this.level.bricks.map((spec) => spec.kind));
+    NEW_KINDS.filter((kind) => kinds.has(kind)).forEach((kind) => this.discover(`brick:${kind}`));
   }
 
   private registerSceneInput(): void {
@@ -558,8 +602,16 @@ export class GameScene extends Phaser.Scene {
   private onBrickContact(ball: Ball, event: Extract<StepEvent<Brick>, { type: 'brick' }>): void {
     const brick = event.item;
     ball.impact = 1;
+    if (brick.kind === 'teleporter' && event.pierced) {
+      this.teleport(ball, brick);
+      return;
+    }
     if (!brick.isBreakable) {
-      this.sfx('steel', { x: event.x });
+      if (brick.kind === 'bumper') {
+        this.bump(ball, brick);
+        return;
+      }
+      this.sfx(brick.kind === 'gate' ? 'mechanism' : 'steel', { x: event.x });
       brick.flash(50);
       this.particleSystem.sparkBurst(event.x, event.y, 0xd8d2c4, 4);
       return;
@@ -641,6 +693,11 @@ export class GameScene extends Phaser.Scene {
     if (!brick.active || !brick.isBreakable) {
       return;
     }
+    if (!brick.revealed) {
+      // Ghost brick: the first touch only reveals it (strong hits go straight through).
+      this.reveal(brick);
+      if (amount < 2) return;
+    }
 
     const destroyed = brick.damage(amount);
     if (!destroyed) {
@@ -653,10 +710,13 @@ export class GameScene extends Phaser.Scene {
 
     const { x, y } = brick;
     const { color, kind, powerUpChance, score } = brick.spec;
+    const required = brick.isRequired;
     this.grid.remove(brick);
     this.bricks.remove(brick, false, false);
     brick.setActive(false);
-    this.breakableLeft = Math.max(0, this.breakableLeft - 1);
+    if (required) {
+      this.breakableLeft = Math.max(0, this.breakableLeft - 1);
+    }
     this.playBreakAnimation(brick);
 
     const combo = this.comboSystem.registerBreak();
@@ -683,13 +743,210 @@ export class GameScene extends Phaser.Scene {
     if (kind === 'explosive') {
       this.explode(x, y, color, chainDepth);
     }
+    this.onSpecialBrickDestroyed(brick, sourceBall);
 
     this.spawnPowerUp(x, y, powerUpChance, sourceBall, kind === 'bonus');
 
     if (this.breakableLeft === 0 && !this.ending) {
+      this.crumblePhoenixes();
       this.onLastBrick(x, y);
     }
     this.checkVictory();
+  }
+
+  // ------------------------------------------------------------------ special bricks
+
+  private onSpecialBrickDestroyed(brick: Brick, sourceBall?: Ball): void {
+    switch (brick.kind) {
+      case 'crystal':
+        this.splitBalls(sourceBall, [0.5]);
+        this.juice.ring(brick.x, brick.y, brick.spec.color, 0.9, 300);
+        break;
+      case 'key':
+        this.keysLeft = Math.max(0, this.keysLeft - 1);
+        this.sfx('mechanism', { x: brick.x });
+        if (this.keysLeft === 0) this.openGates();
+        break;
+      case 'phoenix':
+        if (!this.ending) {
+          this.phoenixQueue.push({ spec: brick.spec, at: this.gameTime + PHOENIX_RESPAWN_MS });
+        }
+        break;
+      case 'fuse':
+        this.igniteNeighbours(brick);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private reveal(brick: Brick): void {
+    brick.revealed = true;
+    this.tweens.killTweensOf(brick);
+    brick.setAlpha(1);
+    brick.flash(90);
+    this.sfx('mechanism', { x: brick.x });
+    this.juice.ring(brick.x, brick.y, 0xffffff, 0.6, 240);
+  }
+
+  private openGates(): void {
+    const gates = this.getBricks().filter((brick) => brick.kind === 'gate');
+    if (gates.length === 0) return;
+    if (this.mode !== 'demo') bridge.emit('notice', { kind: 'event', id: 'gatesOpen' });
+    gates
+      .sort((a, b) => a.row - b.row || a.col - b.col)
+      .forEach((gate, index) => {
+        gate.locked = false;
+        this.time.delayedCall(index * 28, () => {
+          if (gate.active && this.scene.isActive()) this.damageBrick(gate, 99, 1);
+        });
+      });
+  }
+
+  private igniteNeighbours(brick: Brick): void {
+    const neighbours = [
+      this.grid.get(brick.col + 1, brick.row),
+      this.grid.get(brick.col - 1, brick.row),
+      this.grid.get(brick.col, brick.row + 1),
+      this.grid.get(brick.col, brick.row - 1)
+    ].filter(
+      (item): item is Brick =>
+        Boolean(item) && item!.active && item!.kind === 'fuse' && !this.litFuses.has(item!)
+    );
+    if (neighbours.length === 0) {
+      // End of the fuse: boom.
+      this.explode(brick.x, brick.y, brick.spec.color, 1);
+      return;
+    }
+    neighbours.forEach((item) => {
+      this.litFuses.add(item);
+      this.fuseQueue.push({ brick: item, at: this.gameTime + FUSE_DELAY_MS });
+      this.particleSystem.sparkBurst(item.x, item.y, 0xfff2b0, 3);
+    });
+  }
+
+  private teleport(ball: Ball, entry: Brick): void {
+    const exit = this.teleportPairs.get(entry);
+    if (!exit) return;
+    const target = teleportExit(
+      { x: exit.x, y: exit.y, halfWidth: exit.spec.width / 2, halfHeight: exit.spec.height / 2 },
+      ball.vx,
+      ball.vy,
+      ball.radius
+    );
+    ball.setPosition(
+      Phaser.Math.Clamp(target.x, PLAYFIELD_LEFT + ball.radius, PLAYFIELD_RIGHT - ball.radius),
+      Math.max(PLAYFIELD_TOP + ball.radius, target.y)
+    );
+    ball.teleportReadyAt = this.gameTime + 220;
+    this.sfx('teleport', { x: exit.x });
+    this.juice.ring(entry.x, entry.y, entry.spec.color, 0.8, 260);
+    this.juice.ring(exit.x, exit.y, exit.spec.color, 1.1, 320);
+    this.particleSystem.sparkBurst(exit.x, exit.y, entry.spec.color, 8);
+  }
+
+  private bump(ball: Ball, bumper: Brick): void {
+    const speed = Math.min(this.ballManager.maxSpeed * 1.1, Math.max(ball.speed, 1) * 1.12);
+    ball.speed = speed;
+    const v = setSpeed(ball.vx, ball.vy, speed);
+    ball.vx = v.vx;
+    ball.vy = v.vy;
+    const points = this.scoreSystem.addBonus(25 * this.effects.scoreMultiplier());
+    this.juice.popup(bumper.x, bumper.y - 12, `+${points}`, '#ff9ad5', 24);
+    this.juice.ring(bumper.x, bumper.y, bumper.spec.color, 0.9, 240);
+    this.sfx('bumper', { x: bumper.x });
+    this.punch(bumper);
+  }
+
+  /** When the level is won, phoenix bricks burn out for good. */
+  private crumblePhoenixes(): void {
+    this.phoenixQueue.length = 0;
+    this.getBricks()
+      .filter((brick) => brick.kind === 'phoenix')
+      .forEach((brick) => {
+        this.grid.remove(brick);
+        this.bricks.remove(brick, false, false);
+        brick.setActive(false);
+        this.particleSystem.brickShatter(brick.x, brick.y, brick.spec.color, 6);
+        this.playBreakAnimation(brick);
+      });
+  }
+
+  private updateMechanics(deltaMs: number): void {
+    if (this.ending) return;
+    // Fuses burn one link at a time.
+    if (this.fuseQueue.length > 0) {
+      const due = this.fuseQueue.filter((item) => item.at <= this.gameTime);
+      if (due.length > 0) {
+        this.fuseQueue.splice(
+          0,
+          this.fuseQueue.length,
+          ...this.fuseQueue.filter((item) => item.at > this.gameTime)
+        );
+        due.forEach((item) => {
+          if (item.brick.active) {
+            this.sfx('fire', { x: item.brick.x });
+            this.damageBrick(item.brick, 99, 1);
+          }
+        });
+      }
+    }
+    // Phoenix bricks come back if the level is not finished yet.
+    if (this.phoenixQueue.length > 0) {
+      for (const item of this.phoenixQueue) {
+        if (item.at > this.gameTime) continue;
+        if (this.breakableLeft === 0) {
+          item.at = Infinity;
+          continue;
+        }
+        if (this.grid.get(item.spec.col, item.spec.row)) {
+          item.at = this.gameTime + 1000;
+          continue;
+        }
+        item.at = Infinity;
+        const brick = new Brick(this, item.spec);
+        this.bricks.add(brick);
+        this.grid.set(brick);
+        brick.setAlpha(0).setScale(brick.scaleX * 0.4, brick.scaleY * 0.4);
+        this.tweens.add({
+          targets: brick,
+          alpha: 1,
+          scaleX: brick.scaleX / 0.4,
+          scaleY: brick.scaleY / 0.4,
+          duration: 300,
+          ease: 'Back.easeOut'
+        });
+        this.particleSystem.sparkBurst(brick.x, brick.y, item.spec.color, 8);
+        this.sfx('fire', { x: brick.x });
+      }
+      this.phoenixQueue.splice(
+        0,
+        this.phoenixQueue.length,
+        ...this.phoenixQueue.filter((item) => item.at !== Infinity)
+      );
+    }
+    // Moving bricks slide one cell at a time.
+    this.moverClockMs += deltaMs;
+    if (this.moverClockMs >= MOVER_STEP_MS) {
+      this.moverClockMs = 0;
+      const movers = this.getBricks().filter((brick) => brick.kind === 'mover');
+      for (const mover of movers) {
+        const step = moverStep(
+          mover.col,
+          mover.moveDir,
+          this.grid.cols,
+          (col) => !this.grid.get(col, mover.row)
+        );
+        if (!step) continue;
+        this.grid.remove(mover);
+        const x = PLAYFIELD_LEFT + mover.spec.width / 2 + step.col * (mover.spec.width + BRICK_GAP);
+        const y = (mover.box.top + mover.box.bottom) / 2;
+        mover.moveToCell(step.col, mover.row, x, y);
+        mover.moveDir = step.dir;
+        this.grid.set(mover);
+        this.tweens.add({ targets: mover, x, duration: 220, ease: 'Sine.easeInOut' });
+      }
+    }
   }
 
   private punch(brick: Brick): void {
@@ -1185,7 +1442,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private checkVictory(): void {
-    if (this.ending || this.getBricks().some((brick) => brick.isBreakable)) {
+    if (this.ending || this.getBricks().some((brick) => brick.isRequired)) {
       return;
     }
     this.ending = true;

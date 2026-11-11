@@ -8,7 +8,21 @@ import { EDITOR_GRID_COLS, EDITOR_GRID_ROWS } from '../../../shared/editorGridRu
 export const COLS = EDITOR_GRID_COLS;
 export const ROWS = EDITOR_GRID_ROWS;
 export const EMPTY = '.';
-export const BREAKABLE_SYMBOLS = new Set(['1', '2', '3', 'E', 'B', 'S']);
+export const BREAKABLE_SYMBOLS = new Set([
+  '1',
+  '2',
+  '3',
+  'E',
+  'B',
+  'S',
+  'C',
+  'K',
+  'G',
+  'R',
+  'I',
+  'M',
+  'F'
+]);
 const HISTORY_LIMIT = 120;
 
 export type Tool = 'brush' | 'eraser' | 'rect' | 'line' | 'fill' | 'picker';

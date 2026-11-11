@@ -17,6 +17,8 @@ export class Ball extends Phaser.GameObjects.Image implements BallBody {
   public impact = 0;
   /** Horizontal offset from the paddle centre while attached. */
   public attachOffset = 0;
+  /** Game time before which teleporters ignore this ball (avoids bouncing between portals). */
+  public teleportReadyAt = 0;
   private attached = false;
 
   public constructor(scene: Phaser.Scene, x = 0, y = 0) {
@@ -50,6 +52,7 @@ export class Ball extends Phaser.GameObjects.Image implements BallBody {
     this.vx = 0;
     this.vy = 0;
     this.attachOffset = 0;
+    this.teleportReadyAt = 0;
     this.setActive(true).setVisible(true).setAlpha(1).setRotation(0);
     this.setDisplaySize(this.radius * 4, this.radius * 4);
     this.setPosition(x, y);

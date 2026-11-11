@@ -7,7 +7,19 @@ export type BrickKind =
   | 'explosive'
   | 'indestructible'
   | 'bonus'
-  | 'shield';
+  | 'shield'
+  | 'crystal'
+  | 'key'
+  | 'gate'
+  | 'phoenix'
+  | 'invisible'
+  | 'mover'
+  | 'bumper'
+  | 'teleporter'
+  | 'fuse';
+
+/** Kinds the ball cannot destroy (gates are handled separately: locked while keys remain). */
+export const SOLID_KINDS: readonly BrickKind[] = ['indestructible', 'bumper', 'teleporter'];
 
 export type LevelObjectiveType =
   | 'reachBalls'

@@ -31,7 +31,7 @@ import {
 } from '../game/systems/SaveSystem';
 import { clear, h, icon } from './dom';
 import { clearDraft, readDraft, writeDraft } from './editor/drafts';
-import { EditorScreen } from './editor/EditorScreen';
+import { brickSprite, EditorScreen } from './editor/EditorScreen';
 import { generateLevel, randomSeed } from './editor/generator';
 import { EngineLoader, type EngineState } from './engine';
 import {
@@ -1260,13 +1260,35 @@ export class App {
 
   private helpScreen(): HTMLElement {
     const bricks: Array<[string, MessageKey]> = [
-      ['standard', 'help.brick.standard'],
-      ['resistant', 'help.brick.resistant'],
-      ['explosive', 'help.brick.explosive'],
-      ['bonus', 'help.brick.bonus'],
-      ['shield', 'help.brick.shield'],
-      ['indestructible', 'help.brick.indestructible']
+      ['1', 'help.brick.standard'],
+      ['2', 'help.brick.resistant'],
+      ['E', 'help.brick.explosive'],
+      ['B', 'help.brick.bonus'],
+      ['S', 'help.brick.shield'],
+      ['X', 'help.brick.indestructible']
     ];
+    const mechanisms: Array<[string, MessageKey]> = [
+      ['C', 'brickinfo.crystal'],
+      ['K', 'brickinfo.key'],
+      ['G', 'brickinfo.gate'],
+      ['R', 'brickinfo.phoenix'],
+      ['I', 'brickinfo.invisible'],
+      ['M', 'brickinfo.mover'],
+      ['O', 'brickinfo.bumper'],
+      ['T', 'brickinfo.teleporter'],
+      ['F', 'brickinfo.fuse']
+    ];
+    const brickItem = ([symbol, key]: [string, MessageKey]): HTMLElement => {
+      const swatch = h('canvas', {
+        class: 'help-swatch',
+        width: '44',
+        height: '40',
+        'aria-hidden': 'true'
+      });
+      const sprite = brickSprite(symbol);
+      if (sprite) swatch.getContext('2d')?.drawImage(sprite, 0, 0);
+      return h('li', {}, swatch, t(key));
+    };
 
     return h(
       'section',
@@ -1296,18 +1318,13 @@ export class App {
           'div',
           { class: 'panel' },
           h('h2', { class: 'panel-title' }, t('help.bricks')),
-          h(
-            'ul',
-            { class: 'help-list' },
-            ...bricks.map(([kind, key]) =>
-              h(
-                'li',
-                {},
-                h('span', { class: `brick-swatch brick-${kind}`, 'aria-hidden': 'true' }),
-                t(key)
-              )
-            )
-          )
+          h('ul', { class: 'help-list' }, ...bricks.map(brickItem))
+        ),
+        h(
+          'div',
+          { class: 'panel' },
+          h('h2', { class: 'panel-title' }, t('help.mechanisms')),
+          h('ul', { class: 'help-list' }, ...mechanisms.map(brickItem))
         ),
         h(
           'div',

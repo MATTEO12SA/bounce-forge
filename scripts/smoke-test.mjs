@@ -585,6 +585,98 @@ try {
     powered
   );
 
+  // ---------------------------------------------------------------- mechanisms
+  console.log('Mechanisms');
+  const mechRows = Array.from({ length: 58 }, () => '.'.repeat(36));
+  const put = (row, col, text) => {
+    mechRows[row] = (
+      mechRows[row].slice(0, col) +
+      text +
+      mechRows[row].slice(col + text.length)
+    ).slice(0, 36);
+  };
+  put(4, 2, 'T');
+  put(4, 30, 'T');
+  put(8, 10, 'K.GGG');
+  put(10, 5, 'C.R.I');
+  put(10, 15, 'M');
+  put(10, 20, 'O');
+  put(10, 24, 'FFFF');
+  put(12, 0, '1'.repeat(36));
+  await evaluate(
+    page,
+    `(() => { window.__bounceForge.scene.getScene('GameScene').scene.restart({ mode: 'creative', levelIndex: 0, draft: { name: 'Mech', rows: ${JSON.stringify(mechRows)} } }); return true; })()`
+  );
+  await delay(900);
+  const B = `${GAME}.getBricks()`;
+  const kinds = await evaluate(page, `[...new Set(${B}.map((b) => b.kind))].sort()`);
+  check(
+    'all nine mechanisms load',
+    [
+      'bumper',
+      'crystal',
+      'fuse',
+      'gate',
+      'invisible',
+      'key',
+      'mover',
+      'phoenix',
+      'teleporter'
+    ].every((k) => kinds.includes(k)),
+    kinds
+  );
+  const ghost = await evaluate(
+    page,
+    `(() => { const s = ${GAME}; const g = s.getBricks().find((b) => b.kind === 'invisible'); const before = g.alpha; s.damageBrick(g, 1); return { before, active: g.active, after: g.alpha }; })()`
+  );
+  check(
+    'ghost brick is hidden, then revealed by the first hit',
+    ghost.before < 0.2 && ghost.active && ghost.after === 1,
+    ghost
+  );
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'key'), 1); return true; })()`
+  );
+  await delay(700);
+  const gatesLeft = await evaluate(page, `${B}.filter((b) => b.kind === 'gate').length`);
+  check('breaking the last key opens every gate', gatesLeft === 0, gatesLeft);
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'fuse'), 99); return true; })()`
+  );
+  await delay(1200);
+  const fuses = await evaluate(
+    page,
+    `({ left: ${B}.filter((b) => b.kind === 'fuse').length, explosions: ${GAME}.explosionsTriggered })`
+  );
+  check(
+    'a fuse burns down the whole line and explodes',
+    fuses.left === 0 && fuses.explosions >= 1,
+    fuses
+  );
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.damageBrick(s.getBricks().find((b) => b.kind === 'phoenix'), 1); s.gameTime += 9000; return true; })()`
+  );
+  await delay(600);
+  const phoenix = await evaluate(page, `${B}.filter((b) => b.kind === 'phoenix').length`);
+  check('a phoenix brick comes back', phoenix === 1, phoenix);
+  const moverCols = await evaluate(
+    page,
+    `new Promise((resolve) => { const seen = new Set(); const id = setInterval(() => { const m = ${B}.find((b) => b.kind === 'mover'); if (m) seen.add(m.col); }, 150); setTimeout(() => { clearInterval(id); resolve([...seen]); }, 2000); })`
+  );
+  check('a moving brick slides along its row', moverCols.length >= 2, moverCols);
+  const teleported = await evaluate(
+    page,
+    `(() => new Promise((resolve) => { const s = ${GAME}; s.launchAttachedBalls(); const [a, b] = s.getBricks().filter((x) => x.kind === 'teleporter').sort((p, q) => p.col - q.col); const ball = s.ballManager.getActiveBalls()[0]; ball.setPosition(a.x, a.y + 70); ball.vx = 0; ball.vy = -700; ball.speed = 700; setTimeout(() => resolve({ x: ball.x, exitX: b.x, entryX: a.x }), 250); }))()`
+  );
+  check(
+    'a teleporter sends the ball out of its twin',
+    Math.abs(teleported.x - teleported.exitX) < 60,
+    teleported
+  );
+
   // ---------------------------------------------------------------- workshop & editor
   console.log('Workshop');
   await goto(page, baseUrl, '#/create');

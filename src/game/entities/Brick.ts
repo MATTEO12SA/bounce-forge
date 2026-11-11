@@ -1,16 +1,24 @@
 import Phaser from 'phaser';
-import type { BrickSpec } from '../levels/levelTypes';
+import { SOLID_KINDS, type BrickKind, type BrickSpec } from '../levels/levelTypes';
 import type { GridItem } from '../physics/BrickGrid';
 import type { Box } from '../physics/geometry';
 import { ensureBrickTexture } from '../render/textures';
 import { DEPTHS } from '../utils/constants';
 
+/** Kinds that do not have to be destroyed to finish a level. */
+const OPTIONAL_KINDS = new Set<BrickKind>(['phoenix']);
+
 /** A brick sprite. Collisions are handled by the grid-based physics, not by Arcade bodies. */
 export class Brick extends Phaser.GameObjects.Image implements GridItem {
-  public readonly col: number;
-  public readonly row: number;
+  public col: number;
+  public row: number;
   public readonly box: Box;
-  public readonly solid: boolean;
+  /** Gates stay locked (solid) while keys remain. */
+  public locked = false;
+  /** Ghost bricks are hidden until the first touch. */
+  public revealed = true;
+  /** Direction of a moving brick (-1 or 1). */
+  public moveDir: 1 | -1 = 1;
   private hitPoints: number;
   private damageStage = 0;
 
@@ -21,7 +29,6 @@ export class Brick extends Phaser.GameObjects.Image implements GridItem {
     super(scene, spec.x, spec.y, ensureBrickTexture(scene, spec.kind, spec.color, 0));
     this.col = spec.col;
     this.row = spec.row;
-    this.solid = spec.kind === 'indestructible';
     this.box = {
       left: spec.x - spec.width / 2,
       right: spec.x + spec.width / 2,
@@ -34,12 +41,38 @@ export class Brick extends Phaser.GameObjects.Image implements GridItem {
     scene.add.existing(this);
   }
 
+  public get kind(): BrickKind {
+    return this.spec.kind;
+  }
+
+  /** Bounces balls and blocks explosions. */
+  public get solid(): boolean {
+    return SOLID_KINDS.includes(this.spec.kind) || this.locked;
+  }
+
   public get remainingHitPoints(): number {
     return this.hitPoints;
   }
 
   public get isBreakable(): boolean {
     return !this.solid;
+  }
+
+  /** Must be destroyed for the level to be won. */
+  public get isRequired(): boolean {
+    return !OPTIONAL_KINDS.has(this.spec.kind) && !SOLID_KINDS.includes(this.spec.kind);
+  }
+
+  /** Moves the brick (and its collision box) to another grid cell. */
+  public moveToCell(col: number, row: number, x: number, y: number): void {
+    const dx = x - (this.box.left + this.box.right) / 2;
+    const dy = y - (this.box.top + this.box.bottom) / 2;
+    this.col = col;
+    this.row = row;
+    this.box.left += dx;
+    this.box.right += dx;
+    this.box.top += dy;
+    this.box.bottom += dy;
   }
 
   /** Applies damage and returns true when the brick is destroyed. */

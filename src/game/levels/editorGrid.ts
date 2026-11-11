@@ -74,7 +74,16 @@ export const EDITOR_CELL_DEFINITIONS: Record<EditorCell, EditorCellDefinition> =
     label: 'Wall',
     color: 0x5f5f5f,
     breakable: EDITOR_CELL_RULES.X.breakable
-  }
+  },
+  C: { symbol: 'C', label: 'Crystal', color: 0x7fe8ff, breakable: true },
+  K: { symbol: 'K', label: 'Key', color: 0xffd23f, breakable: true },
+  G: { symbol: 'G', label: 'Gate', color: 0x9a7444, breakable: true },
+  R: { symbol: 'R', label: 'Phoenix', color: 0xff7a3a, breakable: true },
+  I: { symbol: 'I', label: 'Ghost', color: 0xd6e6ff, breakable: true },
+  M: { symbol: 'M', label: 'Mover', color: 0x5fb3ff, breakable: true },
+  O: { symbol: 'O', label: 'Bumper', color: 0xff5ab4, breakable: false },
+  T: { symbol: 'T', label: 'Portal', color: 0x9b6bff, breakable: false },
+  F: { symbol: 'F', label: 'Fuse', color: 0xffa94d, breakable: true }
 };
 
 export function createEmptyEditorRows(): string[] {
