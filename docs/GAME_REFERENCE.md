@@ -92,20 +92,11 @@ Difficulty is derived from the zero-based level index in [src/game/config/diffic
 - `scoreMultiplier`: `1 + levelIndex * 0.08`.
 - `initialLives`: starts at 3 and bottoms out at 2.
 
-## Pause And Options
+## Pause And Settings
 
-The pause overlay shows four buttons: `RESUME`, `RESTART`, `OPTIONS`, `MENU`. Picking `OPTIONS` from the pause stops the gameplay scene and routes to `OptionsScene`, the same screen reachable from the main menu.
+Pause opens with Esc, P, the pause button of the HUD, or automatically when the tab is hidden. The pause dialog offers `Reprendre/Resume`, `Recommencer/Restart`, a sound switch and `Quitter/Quit`; Esc resumes.
 
-`OptionsScene` exposes:
-
-- SFX volume in five steps (0%, 25%, 50%, 75%, 100%).
-- Music volume in the same five steps.
-- FX quality select: `LOW`, `MED`, `HIGH`. `LOW` disables postFX entirely and reduces particle counts; `HIGH` enables ball trails and stronger camera flashes.
-- Fullscreen toggle. Applies via the Phaser ScaleManager when toggled.
-- Sound master toggle.
-- Reset save with a two-step confirmation that wipes medals, unlocked levels, and creative slots.
-
-`SettingsSystem` reads and writes these values straight onto the v5 save schema and applies them at runtime through the `AudioSystem`, `FxManager`, and `ScaleManager`.
+The Settings screen (`#/settings`) exposes language (FR/EN), sound on/off, SFX volume, FX quality (`low`, `med`, `high`), reduced motion, fullscreen when the browser supports it, and a confirmed progress reset. Values live in the v6 save schema and apply live through `GameController.setSound` or on the next scene start.
 
 ## Visual Effects And Performance
 
@@ -208,7 +199,9 @@ src/game/config        Phaser config, difficulty, themes
 src/game/entities      Paddle, ball, brick, power-up objects with pool reset/disable
 src/game/levels        Campaign patterns, editor grid, level factory, shared types
 src/game/managers      PlayfieldRenderer and other extracted GameScene managers
-src/game/scenes        Phaser screens including OptionsScene
+src/game/scenes        Boot, preload, GameScene (all modes), level editor, local admin screens
+src/game/modes         Endless and daily wave generator
+src/ui                 HTML interface: routing, menus, HUD, dialogs, i18n, thumbnails
 src/game/systems       Save, settings, FX, levels, admin API, overrides, collisions, score, combo, input, audio, particles
 src/game/ui            HUD, buttons, progress bar, screen chrome
 src/game/utils         Constants, math, RNG, storage adapter
@@ -217,4 +210,4 @@ scripts                Dev launcher and browser diagnostics
 tests                  Vitest coverage for pure logic, settings, FX manager, and server helpers
 ```
 
-CI runs lint, tests, and build for pushes and pull requests targeting `main` or `develop`. GitHub Pages deploys only when the repository is public.
+CI runs lint, format check, unit tests, build and the browser smoke test on every branch and pull request. Pushing to `main` runs the same chain and deploys that exact build to GitHub Pages (public repositories only).

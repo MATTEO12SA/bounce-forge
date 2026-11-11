@@ -1,12 +1,28 @@
 # Architecture
 
-Bounce Forge separates Phaser runtime code, pure gameplay logic, local save state, and the small Node admin API used to publish official campaign overrides.
+Bounce Forge separates the HTML interface, the Phaser runtime, pure gameplay logic, local save state, and the small Node admin API used to publish official campaign overrides.
+
+## Interface Layer (`src/ui`)
+
+- `src/main.ts` mounts `App` (`src/ui/app.ts`) into `#app`. The interface is plain TypeScript + DOM (no framework) and owns navigation, menus, the HUD, pause and result dialogs.
+- Navigation uses URL fragments so it works on GitHub Pages without server rewrites: `#/`, `#/campaign[/chapter]`, `#/modes`, `#/create`, `#/create/edit/<slot>`, `#/help`, `#/settings`, `#/play/campaign/<n>`, `#/play/creative/<n>`, `#/play/endless`, `#/play/daily` (and `#/admin` in dev builds).
+- `ui/engine.ts` lazy-loads `game/GameApp` (and Phaser) with `import()`, reports coarse progress, and lets the player retry after a network error. The interface starts warming the engine on idle so the home preview comes alive.
+- `ui/i18n.ts` holds the French and English catalogs; `ui/preview.ts` draws level thumbnails on a 2D canvas without Phaser.
+- The single `<div class="stage">` that hosts the Phaser canvas is moved between slots (home preview card, play area, full-screen tools). A `ResizeObserver` calls `GameController.refreshLayout()` so Phaser re-fits.
+
+## Interface ↔ Engine Contract (`src/game/bridge.ts`)
+
+- `GameSession` describes what to play: `mode` (`campaign`, `creative`, `endless`, `daily`, `demo`), level index, wave, run seed, frozen UTC `dateKey`, carried score and lives.
+- `GameController` (implemented by `GameApp`) exposes `start`, `pause`, `resume`, `restart`, `quit`, `openEditor`, `openAdmin`, `setSound`, `refreshLayout`.
+- The engine emits typed events on `bridge`: `ready`, `hud` (10 Hz), `result`, `pauseRequested`, `waveCleared`, `exitToShell`, `toolOpened`.
+- `bridge.ts` never imports Phaser, so the interface can depend on it before the engine is downloaded.
 
 ## Runtime Layer
 
-- `src/main.ts` starts `GameApp`.
-- `game/config/gameConfig.ts` owns Phaser scale, physics, renderer settings, multi-touch input, and scene registration. The renderer type is `Phaser.AUTO` so the engine can fall back to Canvas if WebGL is unavailable.
-- `game/scenes/*` owns scene lifecycle and routing for boot, preload, menu, level select, gameplay, pause, victory, game over, options, creative editor, and admin screens.
+- `game/GameApp.ts` creates the Phaser game and implements `GameController`. It auto-requests a pause when the tab is hidden.
+- `game/config/gameConfig.ts` owns Phaser scale, physics, renderer settings, multi-touch input, and scene registration. The renderer type is `Phaser.AUTO` so the engine can fall back to Canvas if WebGL is unavailable. Admin scenes are registered only when `ADMIN_ENABLED` (dev build or `VITE_ENABLE_ADMIN=1`).
+- `game/scenes/*`: `BootScene` and `PreloadScene` (procedural textures, then `ready`), `GameScene` (every mode, including the attract-mode `demo` with its autopilot), `LevelEditorScene`, and the local admin screens.
+- `game/modes/waveGenerator.ts` builds endless and daily waves from the validated campaign layouts (seeded pick + mirroring), with the difficulty tier capped at the last campaign level.
 - `game/entities/*` wraps Phaser game objects for paddle, ball, bricks, and falling power-ups. Balls and power-ups expose `reset(...)` and `disable()` so they can be recycled by Phaser Groups instead of being destroyed.
 - `game/managers/*` holds focused managers extracted from the main scene. `PlayfieldRenderer` owns the procedural background, side rails, and playfield border.
 - `game/ui/*` contains reusable Phaser UI primitives (Button, Dialog, Slider, ToggleSwitch, SegmentedControl, ScrollPanel, TabBar, Tooltip, IconButton) plus a shared `roundedShapes.RoundedRect` helper. Visual scale is centralized in `game/config/designTokens.ts` (spacing, radius, shadow, typography). `Button` accepts an optional `theme` so its variant colors can derive from `themeConfig`.
@@ -21,11 +37,11 @@ Bounce Forge separates Phaser runtime code, pure gameplay logic, local save stat
 - `AdminApiSystem` wraps `/api/admin/*` requests for login, session checks, override listing, and override saves.
 - `PowerUpSystem` selects drops through injected RNG. Current power-ups are `multiBall`, `splitBall`, `widePaddle`, `stickyPaddle`, and `extraLife`.
 - `ScoreSystem` and `ComboSystem` are pure and unit-tested.
-- `SaveSystem` isolates localStorage access, migrates older saves (v1 through v4 are upgraded to v5 in place), and stores progress, medals, preferences, and local creative slots.
+- `SaveSystem` isolates localStorage access, migrates older saves (v1 through v5 are upgraded to v6 in place), and stores progress, medals, preferences (language, reduced motion…), the tutorial flag, per-mode records and local creative slots. `getSharedSaveSystem()` returns the single instance shared by the interface, the scenes and the editor; it falls back to in-memory storage when the browser blocks localStorage.
 - `SettingsSystem` is a thin facade over `SaveSystem.preferences` that exposes effective volumes, FX quality, fullscreen state, and applies fullscreen requests to the Phaser ScaleManager.
 - `FxManager` centralizes camera shake, flash, fade, combo zoom, and FPS auto-degrade. It also offers an `applyEntityFx` hook for future per-object postFX, currently a no-op so shape primitives stay cheap.
 - `AudioSystem` generates short procedural Web Audio effects after user input. It respects the per-session volume from `SettingsSystem` and detunes rapid consecutive hits to avoid forge fatigue.
-- `audioRegistry` is a tiny pub/sub helper that lets `OptionsScene` push live volume and sound-enabled changes into the active `AudioSystem` while `GameScene` is paused under a settings dialog. `GameScene` registers its `AudioSystem` on create and unregisters on shutdown.
+- `audioRegistry` is a tiny pub/sub helper kept for in-canvas tools; the interface changes sound live through `GameController.setSound`.
 - `ParticleSystem` exposes three reusable Phaser native ParticleEmitters (hit, break, explosion) over procedural textures generated in `BootScene`. Burst counts are scaled by `FxManager` quality.
 
 ## Managers
@@ -61,10 +77,10 @@ This keeps score, combo, level generation, difficulty, storage, settings, and RN
 
 ## State Boundaries
 
-- Campaign source of truth is the committed 24-level campaign in `levelPatterns.ts`, optionally overlaid by server admin data.
+- Campaign source of truth is the committed 24-level campaign in `levelPatterns.ts`, overlaid at build time by the committed `data/campaign-level-overrides.json`, and at runtime (dev only) by the admin server.
 - Creative mode is local-only and stored under `creativeLevelSlots` in `bounce-forge.save.v1`.
 - Admin saves are global for the running deployment and never rely on browser localStorage.
-- If the admin API is unavailable, the game still runs with the committed campaign and local creative slots.
+- The public build never calls `/api`; the smoke test asserts it.
 
 ## Performance Strategy
 

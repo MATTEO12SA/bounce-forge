@@ -1,245 +1,122 @@
-# Bounce Forge
+<p align="center">
+  <img src="docs/media/home.png" alt="Accueil de Bounce Forge : titre en grandes lettres ambre et aperçu du jeu en direct" width="860" />
+</p>
 
-> Brick breaker arcade en TypeScript + Phaser 4, centre sur le multi-ball massif et un editeur de niveaux integre.
+<h1 align="center">Bounce Forge</h1>
 
-[![CI](https://github.com/MATTEO12SA/bounce-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/MATTEO12SA/bounce-forge/actions/workflows/ci.yml)
-[![Browser Diagnostics](https://github.com/MATTEO12SA/bounce-forge/actions/workflows/browser-diagnostics.yml/badge.svg)](https://github.com/MATTEO12SA/bounce-forge/actions/workflows/browser-diagnostics.yml)
-[![Play Demo](https://img.shields.io/badge/Play-Demo-yellow)](https://matteo12sa.github.io/bounce-forge/)
+<p align="center">
+  <strong>Casse-briques d’arcade forgé à la main.</strong><br />
+  Multiballes, explosions en chaîne, murs d’acier — sur ordinateur comme sur mobile.
+</p>
 
-![Gameplay](docs/screenshots/gameplay.png)
+<p align="center">
+  <a href="https://matteo12sa.github.io/bounce-forge/"><strong>▶ Jouer maintenant</strong></a>
+  ·
+  <a href="README.en.md">English</a>
+  ·
+  <a href="CHANGELOG.md">Nouveautés</a>
+</p>
 
-> _Screenshot a venir : depose `gameplay.png` dans [docs/screenshots/](docs/screenshots/)._
+<p align="center">
+  <a href="https://github.com/MATTEO12SA/bounce-forge/actions/workflows/deploy-pages.yml"><img alt="Déploiement" src="https://github.com/MATTEO12SA/bounce-forge/actions/workflows/deploy-pages.yml/badge.svg" /></a>
+  <a href="LICENSE"><img alt="Licence MIT" src="https://img.shields.io/badge/licence-MIT-ffb423" /></a>
+</p>
 
-## Features
+<p align="center">
+  <img src="docs/media/gameplay.gif" alt="Animation : la balle se démultiplie et creuse un niveau entouré de murs d’acier" width="320" />
+</p>
 
-- **Campagne 24 niveaux** organisee en 4 chapitres avec medailles secondaires.
-- **Multi-ball massif** jusqu'a 96 balles, avec limite adaptative qui suit le framerate.
-- **Editeur creatif local** + mode admin protege par mot de passe pour publier des niveaux officiels.
-- **Sauvegardes localStorage** v1 a v5 avec migration automatique.
-- **FX adaptatifs** qui degradent automatiquement la qualite si le framerate chute.
-- **Tests unitaires Vitest** + diagnostics navigateur (campagne, power-ups, murs, UI).
+## Le jeu
 
-Cree par **Matteo_plmr**. Style visuel jaune/forge, physique de murs propre, alternance de niveaux ouverts, couloirs, chaines d'explosions et fins de niveau avec beaucoup de balles.
+Bounce Forge est un casse-briques original qui se joue directement dans le navigateur, sans
+installation ni compte. Une balle devient trois, puis dix, puis quarante : chaque niveau mise sur
+une idée — viser juste, déclencher des réactions en chaîne ou noyer le terrain sous les balles.
 
-## Installation
+| Campagne                                                                       | Modes                                                                                |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| ![Grille des 24 niveaux avec miniatures et médailles](docs/media/campaign.png) | ![Cartes des modes Campagne, Infini, Défi du jour et Création](docs/media/modes.png) |
 
-Node.js 24 est recommande pour le developpement local. La CI verifie aussi Node 20 et Node 22.
+## Fonctionnalités
+
+- **Campagne de 24 niveaux** en 4 chapitres — Bases de la forge, Labyrinthes d’acier, Réaction en
+  chaîne, Tempête de balles — avec une médaille d’or, d’argent ou de bronze à décrocher.
+- **Mode Infini** : des vagues sans fin, trois vies, score et vies conservés d’une vague à l’autre.
+  La difficulté plafonne au dernier palier de la campagne.
+- **Défi du jour** : trois vagues identiques pour tous les joueurs, tirées de la date UTC.
+  Essais illimités, meilleur score conservé.
+- **Éditeur de niveaux** : dessinez, testez, modifiez, puis partagez votre niveau avec un code
+  `BF2:` (accents et emoji compris).
+- **Six types de briques** reconnaissables par leur couleur _et_ leur contour : standard,
+  renforcée, explosive, bonus, bouclier, acier indestructible.
+- **Pensé pour tous les écrans** : HUD latéral sur ordinateur, HUD compact et commandes tactiles
+  sur mobile, cibles d’au moins 44 px.
+- **Accessible** : navigation au clavier, focus visible, option « Réduire les animations »,
+  français et anglais.
+- **Sauvegarde locale** de la progression, des médailles, des records et des créations (aucune
+  donnée envoyée ailleurs).
+
+## Commandes
+
+| Action               | Ordinateur                   | Mobile           |
+| -------------------- | ---------------------------- | ---------------- |
+| Déplacer la raquette | Souris, `←` `→` ou `A` `D`   | Glisser le doigt |
+| Lancer la balle      | Clic, `Espace` ou `Entrée`   | Toucher l’écran  |
+| Pause                | `Échap`, `P` ou bouton pause | Bouton pause     |
+| Recommencer          | `R`                          | Menu pause       |
+
+<p align="center">
+  <img src="docs/media/mobile.png" alt="Partie sur téléphone avec le HUD compact en haut de l’écran" width="260" />
+</p>
+
+## Démarrage rapide
+
+Il faut [Node.js](https://nodejs.org/) 20 ou plus récent (la CI utilise Node 24).
 
 ```bash
-npm install
-npm start
+git clone https://github.com/MATTEO12SA/bounce-forge.git
+cd bounce-forge
+npm ci
+npm run dev
 ```
 
-Ouvre ensuite l'URL locale affichee par Vite, en general `http://localhost:5173`.
+Le jeu s’ouvre sur <http://localhost:5173>. `npm run dev` lance aussi le petit serveur
+d’administration local qui permet de retoucher les niveaux officiels (voir
+[SECURITY.md](SECURITY.md)). Pour le jeu seul : `npm run dev:vite`.
 
-Par defaut, le jeu demarre directement au niveau 1. Ajoute `?menu=1` a l'URL pour ouvrir le menu principal en premier.
+| Commande                         | Rôle                                                                |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `npm run lint`                   | ESLint                                                              |
+| `npm test`                       | Tests unitaires (Vitest)                                            |
+| `npm run build`                  | Vérification TypeScript et build de production dans `dist/`         |
+| `npm run test:smoke`             | Parcours complet dans un vrai navigateur sans écran (après `build`) |
+| `node scripts/capture-media.mjs` | Régénère les captures et l’animation de ce README                   |
 
-## Serveur Et Admin
+## Architecture en bref
 
-Le jeu reste jouable sans compte. Le serveur admin sert uniquement a proteger les modifications officielles de campagne.
-
-En dev, `npm start` lance Vite sur `http://localhost:5173` et l'API admin sur `http://localhost:8787`. Vite proxifie `/api` vers le serveur admin.
-
-Pour activer le login admin :
-
-```bash
-Copy-Item .env.example .env
-# puis modifie .env avec ADMIN_PASSWORD=ton-mot-de-passe
-npm start
+```
+src/
+├── main.ts            Point d’entrée : monte l’interface HTML
+├── ui/                Interface HTML/CSS (accueil, menus, HUD, pause, résultats, i18n)
+└── game/
+    ├── bridge.ts      Contrat typé entre l’interface et le moteur
+    ├── GameApp.ts     Contrôleur Phaser, chargé à la demande
+    ├── scenes/        GameScene (partie), éditeur, outils admin locaux
+    ├── modes/         Générateur de vagues Infini / Défi du jour
+    ├── levels/        Motifs, fabrique de niveaux, codes de partage
+    └── systems/       Sauvegarde, score, bonus, collisions, audio…
 ```
 
-En production locale :
+L’interface (≈ 30 Ko compressés) s’affiche immédiatement ; Phaser n’est téléchargé qu’ensuite
+pour animer l’aperçu et lancer les parties. Plus de détails dans
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) et [docs/GAME_DESIGN.md](docs/GAME_DESIGN.md).
 
-```bash
-npm run build
-$env:ADMIN_PASSWORD="ton-mot-de-passe"
-npm run serve
-```
+## Contribuer
 
-Les niveaux modifies par l'admin sont sauvegardes dans `data/campaign-level-overrides.json` et restent actifs apres redemarrage serveur.
+Les idées, rapports de bug et niveaux sont les bienvenus : lisez
+[CONTRIBUTING.md](CONTRIBUTING.md), puis ouvrez une
+[issue](https://github.com/MATTEO12SA/bounce-forge/issues/new/choose).
 
-## Controles
+## Crédits et licence
 
-- Souris ou tactile : deplacer la barre.
-- Fleches ou A/D : deplacer la barre.
-- Espace ou toucher l'ecran : lancer la balle attachee.
-- P ou Echap : pause.
-- R : recommencer le niveau actuel.
-
-## Gameplay
-
-Le but est de casser toutes les briques destructibles en gardant au moins une balle en jeu.
-
-Boucle principale :
-
-- Casser les briques pour marquer des points et monter le combo.
-- Recuperer les bonus qui tombent avec la barre.
-- Utiliser les bonus `x2` et `x3` pour augmenter le nombre de balles actives.
-- Terminer le niveau pour debloquer le suivant.
-- Gagner des medailles pour les meilleurs clears.
-
-La limite active commence a `40` balles puis augmente par paliers quand le framerate reste stable, avec une securite dure a `96` balles. Si un bonus `x2` ou `x3` est pris quand la limite est atteinte, ses clones sont mis en attente et reapparaissent des que des balles sortent du jeu.
-
-## Campagne
-
-La campagne contient **24 niveaux fixes** repartis en 4 chapitres :
-
-- **Forge Basics** : layouts ouverts, debut facile, premieres briques bonus.
-- **Wall Mazes** : murs proches des murs natifs, couloirs, rebonds precis.
-- **Chain Reactor** : niveaux explosifs avec de gros combos possibles.
-- **Ball Storm** : beaucoup de briques bonus et des niveaux faits pour atteindre 20 a 40+ balles.
-
-Les niveaux de campagne sont fixes. Sauvegarder une map dans l'editeur ne remplace pas les niveaux de campagne au rechargement ou depuis la selection de niveau.
-
-## Briques
-
-Les patterns de niveau utilisent ces symboles :
-
-- `.` : case vide.
-- `1` : brique standard, 1 coup.
-- `2` : brique resistante.
-- `3` : brique plus solide.
-- `E` : brique explosive, endommage les briques destructibles proches.
-- `B` : brique bonus, drop toujours un bonus de balle (`x2` ou `x3`).
-- `S` : brique shield, plus solide et donne plus de score.
-- `X` : mur indestructible.
-
-L'interaction des murs `X` est volontairement proche du comportement des murs natifs, pour eviter que la balle se coince dans les jonctions ou les couloirs d'un bloc.
-
-## Bonus
-
-Bonus actuels :
-
-- `x3` multi-ball : ajoute 2 clones depuis la balle source.
-- `x2` split-ball : ajoute 1 clone depuis la balle source.
-- `W` wide paddle : agrandit temporairement la barre.
-- `AIM` sticky paddle : attrape temporairement la prochaine balle qui touche la barre et permet de la relancer.
-- `+1` extra life : ajoute une vie jusqu'au cap.
-
-Les bonus de balles sont largement majoritaires dans la distribution. `widePaddle` et `stickyPaddle` restent volontairement rares.
-
-## Objectifs Et Medailles
-
-Chaque niveau de campagne a un objectif secondaire affiche dans la bande HUD du haut, par exemple :
-
-- Atteindre un nombre cible de balles.
-- Declencher un nombre cible d'explosions.
-- Terminer avec assez de vies restantes.
-- Atteindre un combo cible.
-
-Les medailles sont sauvegardees par niveau :
-
-- **Bronze** : niveau termine.
-- **Silver** : niveau termine avec le nombre de vies demande.
-- **Gold** : score cible ou combo cible atteint.
-
-Les medailles sont optionnelles et ne bloquent pas la progression.
-
-## Pause Et Options
-
-L'ecran pause expose quatre actions : `RESUME`, `RESTART`, `OPTIONS`, `MENU`.
-
-L'ecran `OPTIONS` (accessible aussi depuis le menu principal) regroupe :
-
-- volume effets sonores ;
-- qualite des effets visuels (`LOW` / `MED` / `HIGH`) ;
-- bascule plein ecran ;
-- bascule son global ;
-- reinitialisation de la sauvegarde, avec dialog de confirmation.
-
-La qualite des effets visuels controle l'intensite des particules et des camera shakes. Le moteur surveille le framerate et baisse automatiquement la qualite si les FPS chutent.
-
-## Mode Creatif Et Admin
-
-Le mode creatif est separe de la progression de campagne.
-
-Mode creatif joueur :
-
-- Peindre des maps avec tous les symboles : `.`, `1`, `2`, `3`, `E`, `B`, `S`, `X`.
-- Sauvegarder des slots creatifs en local.
-- Appuyer sur `PLAY` pour jouer la map creative.
-- Ne jamais modifier la campagne officielle.
-
-Mode admin :
-
-- Accessible uniquement depuis le bouton `ADMIN` du menu principal.
-- Le mot de passe est verifie cote serveur via `/api/admin/login`.
-- L'editeur admin peut modifier un niveau campagne.
-- La sauvegarde admin est globale et persistante.
-
-La selection de niveau charge toujours la campagne officielle, avec les overrides admin serveur s'ils existent. Les slots creatifs locaux ne peuvent jamais remplacer la campagne.
-
-## Scripts
-
-- `npm start` : demarre le serveur de dev local.
-- `npm run dev` : alias de `npm start`.
-- `npm run build` : verification TypeScript et build production.
-- `npm run preview` : sert le build production.
-- `npm run serve` : sert le build avec l'API admin Node.
-- `npm run lint` : lance ESLint.
-- `npm run test` : lance les tests unitaires.
-- `npm run format:check` : verifie le formatage Prettier.
-
-Diagnostics navigateur :
-
-- `npm run test:browser` : test de jeu automatise en headless.
-- `npm run test:browser:editor` : peint, sauvegarde et joue un slot editeur.
-- `npm run test:browser:campaign` : verifie les 24 niveaux et la compatibilite editeur `B/S`.
-- `npm run test:browser:admin` : verifie le bouton admin, le mode creatif local, l'editeur admin et le remplacement campagne.
-- `npm run test:browser:ui` : capture menu, selection de niveau, editeur, gameplay, pause et victoire.
-- `npm run test:browser:corridor` : verifie qu'un lancement normal peut entrer dans un couloir.
-- `npm run test:browser:walls` : compare les rebonds murs natifs et murs placables.
-- `npm run test:browser:powerups` : verifie les chemins de pickup des bonus.
-- `npm run test:browser:powerups:diagnostic` : verifie la distribution des bonus, le clonage source-only, la limite adaptive et la file d'attente des clones au plafond.
-
-La plupart des tests navigateur creent des captures temporaires. Elles peuvent etre supprimees apres inspection et ne sont pas necessaires au jeu.
-
-## Sauvegarde
-
-La sauvegarde est stockee dans le local storage du navigateur sous `bounce-forge.save.v1`.
-
-Elle contient :
-
-- meilleur score ;
-- niveau de campagne debloque ;
-- niveaux termines ;
-- medaille par niveau de campagne ;
-- preferences :
-  - son active ;
-  - theme actif ;
-  - volume des effets sonores ;
-  - qualite des effets visuels ;
-  - plein ecran ;
-- slots creatifs de l'editeur.
-
-Le schema de sauvegarde migre automatiquement les anciennes sauvegardes (v1 a v4 vers v5). Les saves anterieures conservent leurs medailles, niveaux debloques et slots creatifs.
-
-## Structure Du Projet
-
-- `src/game/scenes` : scenes Phaser, dont `OptionsScene` pour les reglages.
-- `src/game/entities` : balle, barre, briques, bonus, avec pooling Phaser Group.
-- `src/game/systems` : sauvegarde, score, combo, niveaux, collisions, audio (`AudioSystem` + `audioRegistry` pour propager le volume au son live), bonus, FX manager, settings.
-- `src/game/managers` : `PlayfieldRenderer` et autres managers extraits de GameScene.
-- `src/game/levels` : patterns de campagne, grille editeur, factory de niveaux.
-- `src/game/config` : configuration moteur, themes (`themeConfig.ts`), design tokens partages (`designTokens.ts` : spacing, radius, shadow, typography).
-- `src/game/ui` : boutons, slider, toggle, segmented control, scroll panel, tab bar, dialogues, HUD, chrome d'ecran partage, helper `roundedShapes` pour les rectangles arrondis.
-- `scripts` : diagnostics navigateur et helpers locaux.
-- `tests` : tests unitaires Vitest.
-
-## Performance
-
-Pour rester stable jusqu'a 96 balles :
-
-- les balles et les bonus sont alloues depuis un `Phaser.Physics.Arcade.Group` avec `classType` et `maxSize`, donc recycles au lieu d'etre detruits ;
-- les particules utilisent `scene.add.particles` natif Phaser 4, avec textures procedurales generees au boot ;
-- la qualite des effets (`fxQuality`) regle l'intensite des particules et des camera shakes ;
-- un auto-degrade FPS baisse la qualite si la frame depasse 22 ms pendant 3 s, et la restaure si elle reste sous 17 ms pendant 5 s ;
-- les logs de diagnostic sont absents du chemin chaud du gameplay pour eviter les pics de frame en dev.
-
-## Notes
-
-- Le jeu utilise de la geometrie Phaser et des visuels proceduraux simples.
-- Aucun asset graphique externe n'est requis.
-- Le runtime cible Phaser 4.1.0 et choisit automatiquement entre WebGL et Canvas via `Phaser.AUTO`.
-- La direction visuelle actuelle est jaune/forge, parce qu'elle est plus lisible et correspond mieux au jeu que l'ancienne passe sci-fi bleue. Coins arrondis (`TOKENS.radius` 8/12/20 px), echelle typographique partagee et accent dore reserve aux titres et highlights, geres par `src/game/config/designTokens.ts`.
-- Les effets postFX (Bloom, Glow, Shine) sont disponibles dans le code mais desactives par defaut : ils etaient trop couteux a empiler sur 40-96 balles. La forge identity passe par les couleurs du theme, les particules teintees et les camera shakes/flashs.
+Code sous licence [MIT](LICENSE). Bibliothèques et ressources tierces listées dans
+[CREDITS.md](CREDITS.md).

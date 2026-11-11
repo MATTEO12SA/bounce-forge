@@ -1,0 +1,39 @@
+name: Bug
+description: Something does not work as expected / Quelque chose ne fonctionne pas
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Que s’est-il passé ?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Étapes pour reproduire
+      placeholder: |
+        1. Open the daily challenge
+        2. Clear wave 1
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        [Campaign / Campagne, Endless / Infini, Daily / Défi du jour, Editor / Éditeur, Menus]
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device / Navigateur et appareil
+      placeholder: Firefox 140, Windows 11 · Safari, iPhone 15
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshot or video / Capture ou vidéo
+      description: Drag and drop files here if you can.
