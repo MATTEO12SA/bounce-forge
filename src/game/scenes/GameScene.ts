@@ -90,6 +90,10 @@ const GHOST_ALPHA = 0.08;
 const MOVER_STEP_MS = 650;
 const PHOENIX_RESPAWN_MS = 8000;
 const FUSE_DELAY_MS = 130;
+/** Bricks stop coming down once they reach this row (well above the paddle). */
+const DESCEND_LIMIT_ROW = 44;
+const STORM_INTERVAL_MS = 9000;
+const BONUS_RAIN_EVERY = 25;
 /** Brick kinds introduced in v1.2: the interface explains each one the first time. */
 const NEW_KINDS: readonly BrickKind[] = [
   'crystal',
@@ -172,6 +176,11 @@ export class GameScene extends Phaser.Scene {
   private readonly phoenixQueue: Array<{ spec: BrickSpec; at: number }> = [];
   private readonly fuseQueue: Array<{ brick: Brick; at: number }> = [];
   private readonly litFuses = new Set<Brick>();
+  private descendClockMs = 0;
+  private stormClockMs = 0;
+  private lastRainCombo = 0;
+  private readonly announced = new Set<string>();
+  private lightning!: Phaser.GameObjects.Graphics;
 
   public constructor() {
     super('GameScene');
@@ -284,6 +293,10 @@ export class GameScene extends Phaser.Scene {
     this.phoenixQueue.length = 0;
     this.fuseQueue.length = 0;
     this.litFuses.clear();
+    this.descendClockMs = 0;
+    this.stormClockMs = 0;
+    this.lastRainCombo = 0;
+    this.announced.clear();
 
     new PlayfieldRenderer(this, this.theme).render();
     if (!this.reducedMotion) {
@@ -315,6 +328,10 @@ export class GameScene extends Phaser.Scene {
         (this.effects.has('fireBall') && brick.isBreakable)
     };
     this.lasers = new Lasers<Brick>(this, 0xff4d8d);
+    this.lightning = this.add
+      .graphics()
+      .setDepth(DEPTHS.ball + 4)
+      .setBlendMode(Phaser.BlendModes.ADD);
     this.shieldBar = this.add
       .rectangle(540, SHIELD_Y, PLAYFIELD_RIGHT - PLAYFIELD_LEFT - 8, 6, 0x7fe8ff, 0.85)
       .setDepth(DEPTHS.paddle - 1)
@@ -365,6 +382,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.processExplosions();
     this.updateMechanics(physicsMs);
+    this.updateLevelEvents(physicsMs);
     this.updatePowerUps(physicsMs / 1000);
     this.updateBallVisuals(frameMs);
 
@@ -391,7 +409,11 @@ export class GameScene extends Phaser.Scene {
       editorReturn: data?.editorReturn
     };
     if (mode === 'creative' && data?.draft && Array.isArray(data.draft.rows)) {
-      session.draft = { name: String(data.draft.name ?? ''), rows: [...data.draft.rows] };
+      session.draft = {
+        name: String(data.draft.name ?? ''),
+        rows: [...data.draft.rows],
+        options: data.draft.options
+      };
     }
     if (mode === 'endless' || mode === 'daily') {
       session.wave = Math.max(1, Math.floor(data?.wave ?? 1));
@@ -413,7 +435,7 @@ export class GameScene extends Phaser.Scene {
     if (this.mode === 'creative' && draft) {
       try {
         return createLevelFromPattern(
-          createPatternFromEditorRows(this.levelIndex, draft.name, draft.rows),
+          createPatternFromEditorRows(this.levelIndex, draft.name, draft.rows, draft.options),
           this.levelIndex
         );
       } catch {
@@ -858,6 +880,102 @@ export class GameScene extends Phaser.Scene {
     this.punch(bumper);
   }
 
+  // ------------------------------------------------------------------ level events
+
+  private announce(id: 'descend' | 'storm' | 'bonusRain'): void {
+    if (this.announced.has(id) || this.mode === 'demo') return;
+    this.announced.add(id);
+    bridge.emit('notice', { kind: 'event', id });
+  }
+
+  private updateLevelEvents(deltaMs: number): void {
+    const options = this.level.options;
+    if (!options || this.ending || this.getBalls().every((ball) => ball.isAttached)) return;
+
+    if (options.descendEverySec) {
+      this.descendClockMs += deltaMs;
+      if (this.descendClockMs >= options.descendEverySec * 1000) {
+        this.descendClockMs = 0;
+        this.descendBricks();
+      }
+    }
+    if (options.storm) {
+      this.stormClockMs += deltaMs;
+      if (this.stormClockMs >= STORM_INTERVAL_MS) {
+        this.stormClockMs = 0;
+        this.strikeLightning();
+      }
+    }
+    if (options.bonusRain) {
+      const streak = this.comboSystem.snapshot().streak;
+      if (streak < this.lastRainCombo) this.lastRainCombo = 0;
+      if (streak >= this.lastRainCombo + BONUS_RAIN_EVERY) {
+        this.lastRainCombo = streak - (streak % BONUS_RAIN_EVERY);
+        this.rainPowerUps();
+      }
+    }
+  }
+
+  /** Every brick moves down one row, as long as the lowest one stays above the limit. */
+  private descendBricks(): void {
+    const bricks = this.getBricks();
+    const lowest = bricks.reduce((max, brick) => Math.max(max, brick.row), 0);
+    if (bricks.length === 0 || lowest >= DESCEND_LIMIT_ROW) return;
+    this.announce('descend');
+    const pitchY = BRICK_HEIGHT + BRICK_GAP;
+    bricks
+      .sort((a, b) => b.row - a.row)
+      .forEach((brick) => {
+        this.grid.remove(brick);
+        const x = (brick.box.left + brick.box.right) / 2;
+        const y = (brick.box.top + brick.box.bottom) / 2 + pitchY;
+        brick.moveToCell(brick.col, brick.row + 1, x, y);
+        this.grid.set(brick);
+        this.tweens.add({ targets: brick, y, duration: 260, ease: 'Back.easeOut' });
+      });
+    this.sfx('mechanism', { x: 540 });
+    this.juice.shake(0.12);
+  }
+
+  private strikeLightning(): void {
+    const targets = this.getBricks().filter((brick) => brick.isBreakable);
+    const target = targets[Math.floor(Math.random() * targets.length)];
+    if (!target) return;
+    this.announce('storm');
+    const g = this.lightning;
+    g.clear();
+    g.lineStyle(4, 0xcfe8ff, 1);
+    g.beginPath();
+    let x = target.x + (Math.random() - 0.5) * 120;
+    let y = PLAYFIELD_TOP;
+    g.moveTo(x, y);
+    const steps = 7;
+    for (let index = 1; index <= steps; index += 1) {
+      const t = index / steps;
+      x = target.x + (Math.random() - 0.5) * 70 * (1 - t);
+      y = PLAYFIELD_TOP + (target.y - PLAYFIELD_TOP) * t;
+      g.lineTo(x, y);
+    }
+    g.strokePath();
+    this.tweens.add({
+      targets: g,
+      alpha: { from: 1, to: 0 },
+      duration: 260,
+      onComplete: () => g.clear()
+    });
+    this.sfx('explosion', { x: target.x, intensity: 0.35 });
+    this.juice.glow(target.x, target.y, 0xcfe8ff, 160, 160, 220, 0.9);
+    this.damageBrick(target, 1, 1, undefined, target.x, target.y);
+  }
+
+  private rainPowerUps(): void {
+    this.announce('bonusRain');
+    for (let index = 0; index < 3; index += 1) {
+      const x = PLAYFIELD_LEFT + 80 + Math.random() * (PLAYFIELD_RIGHT - PLAYFIELD_LEFT - 160);
+      this.spawnSpecificPowerUp(x, PLAYFIELD_TOP + 30, this.powerUpSystem.rollAny());
+    }
+  }
+
   /** When the level is won, phoenix bricks burn out for good. */
   private crumblePhoenixes(): void {
     this.phoenixQueue.length = 0;
@@ -1056,6 +1174,10 @@ export class GameScene extends Phaser.Scene {
     if (!type) {
       return;
     }
+    this.spawnSpecificPowerUp(x, y, type, sourceBall);
+  }
+
+  private spawnSpecificPowerUp(x: number, y: number, type: PowerUpType, sourceBall?: Ball): void {
     // AIM only makes sense with a few balls to catch.
     if (type === 'stickyPaddle' && this.ballManager.getStats().activeCount > 3) {
       return;

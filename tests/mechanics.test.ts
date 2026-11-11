@@ -121,3 +121,23 @@ describe('fire ball physics', () => {
     expect(ball.vy).toBeLessThan(0);
   });
 });
+
+describe('BF3 share codes', () => {
+  it('carries level settings and stays BF2 without them', async () => {
+    const { encodeCreativeLevelCode, decodeCreativeLevelCode } = await import(
+      '../src/game/levels/levelShare'
+    );
+    const rows = rowsWith([[3, '111K']]);
+    expect(encodeCreativeLevelCode(rows, 'Plain').startsWith('BF2:')).toBe(true);
+    const code = encodeCreativeLevelCode(rows, 'Orage', {
+      storm: true,
+      lives: 9,
+      powerUps: ['fireBall', 'nope' as never]
+    });
+    expect(code.startsWith('BF3:')).toBe(true);
+    expect(decodeCreativeLevelCode(code)).toMatchObject({
+      name: 'Orage',
+      options: { storm: true, lives: 5, powerUps: ['fireBall'] }
+    });
+  });
+});

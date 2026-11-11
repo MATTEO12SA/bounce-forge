@@ -1,3 +1,4 @@
+import { sanitizeLevelOptions, type LevelOptions } from './levelOptions';
 import type { CreativeLevelSlot, PatternDefinition } from './levelTypes';
 import {
   EDITOR_CELL_RULES,
@@ -105,7 +106,8 @@ export function isValidEditorRows(rows: readonly string[]): boolean {
 export function createPatternFromEditorRows(
   slotIndex: number,
   name: string,
-  rows: readonly string[]
+  rows: readonly string[],
+  options?: LevelOptions
 ): PatternDefinition {
   const normalizedRows = normalizeEditorRows(rows);
   const validation = validateEditorRows(normalizedRows);
@@ -114,15 +116,17 @@ export function createPatternFromEditorRows(
     throw new Error(validation.message);
   }
 
+  const cleanOptions = sanitizeLevelOptions(options);
   return {
     id: `creative-slot-${slotIndex}`,
     name,
-    rows: normalizedRows
+    rows: normalizedRows,
+    ...(cleanOptions ? { options: cleanOptions } : {})
   };
 }
 
 export function createPatternFromCreativeSlot(slot: CreativeLevelSlot): PatternDefinition {
-  return createPatternFromEditorRows(slot.slotIndex, slot.name, slot.rows);
+  return createPatternFromEditorRows(slot.slotIndex, slot.name, slot.rows, slot.options);
 }
 
 export function createPatternFromCustomOverride(override: CreativeLevelSlot): PatternDefinition {

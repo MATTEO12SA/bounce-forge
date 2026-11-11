@@ -4,6 +4,7 @@
  * This module never imports Phaser so the interface can use it before the engine is loaded.
  * The UI drives the game through `GameController` (see GameApp) and listens to the events below.
  */
+import type { LevelOptions } from './levels/levelOptions';
 import type { LevelMedal } from './systems/SaveSystem';
 
 export type GameMode = 'campaign' | 'creative' | 'endless' | 'daily' | 'demo';
@@ -25,7 +26,7 @@ export interface GameSession {
   /** UTC day of a daily challenge, frozen when the run starts so midnight never changes it. */
   dateKey?: string;
   /** Unsaved editor level played by the editor's "Test" button (the slot is not overwritten). */
-  draft?: { name: string; rows: string[] };
+  draft?: { name: string; rows: string[]; options?: LevelOptions };
   /** Score and lives carried from the previous wave. */
   carry?: { score: number; lives: number };
 }

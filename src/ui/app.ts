@@ -14,6 +14,7 @@ import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../game/levels
 import { createLevelFromPattern } from '../game/levels/levelFactory';
 import { estimateDifficulty } from '../game/levels/levelChecks';
 import { LEVEL_PATTERNS } from '../game/levels/levelPatterns';
+import type { LevelOptions } from '../game/levels/levelOptions';
 import type { LevelDefinition } from '../game/levels/levelTypes';
 import {
   createRunSeed,
@@ -1153,7 +1154,7 @@ export class App {
         throw new Error('full');
       }
       const name = decoded.name ?? t('create.slot', { n: slotIndex + 1 });
-      this.save.setCreativeLevelSlot(slotIndex, decoded.rows, name);
+      this.save.setCreativeLevelSlot(slotIndex, decoded.rows, name, Date.now(), decoded.options);
       this.toast(t('create.import.success', { name, n: slotIndex + 1 }));
       this.renderMenu('create');
     } catch (error) {
@@ -1184,7 +1185,13 @@ export class App {
       return;
     }
     const suffix = getLanguage() === 'fr' ? ' (copie)' : ' (copy)';
-    this.save.setCreativeLevelSlot(target, source.rows, `${source.name}${suffix}`);
+    this.save.setCreativeLevelSlot(
+      target,
+      source.rows,
+      `${source.name}${suffix}`,
+      Date.now(),
+      source.options
+    );
     this.toast(t('create.duplicated', { n: target + 1 }));
     this.renderMenu('create');
   }
@@ -1192,12 +1199,16 @@ export class App {
   private async shareSlot(slotIndex: number): Promise<void> {
     const slot = this.save.getCreativeLevelSlot(slotIndex);
     if (slot) {
-      await this.shareCode(slot.rows, slot.name);
+      await this.shareCode(slot.rows, slot.name, slot.options);
     }
   }
 
-  private async shareCode(rows: readonly string[], name: string): Promise<void> {
-    const code = encodeCreativeLevelCode(rows, name);
+  private async shareCode(
+    rows: readonly string[],
+    name: string,
+    options?: LevelOptions
+  ): Promise<void> {
+    const code = encodeCreativeLevelCode(rows, name, options);
     try {
       await navigator.clipboard.writeText(code);
       this.toast(t('create.copied'));
