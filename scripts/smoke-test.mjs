@@ -557,6 +557,12 @@ try {
       page,
       `(() => { ${GAME}.scene.restart({ mode: 'campaign', levelIndex: ${index} }); return true; })()`
     );
+    // Slow CI runners: measure only once the requested level is really running.
+    await waitFor(
+      page,
+      `${GAME} && ${GAME}.getSession().levelIndex === ${index} && ${GAME}.gameTime < 1500 && ${GAME}.getBricks().length > 0 && window.__bounceForge.scene.isActive('GameScene')`,
+      10000
+    );
     await delay(350);
     const before = await evaluate(
       page,
