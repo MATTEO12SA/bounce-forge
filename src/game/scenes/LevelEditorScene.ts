@@ -15,12 +15,13 @@ import { sanitizeLevelName } from '../levels/levelNames';
 import { AdminApiSystem } from '../systems/AdminApiSystem';
 import { CampaignOverrideSystem } from '../systems/CampaignOverrideSystem';
 import { LevelSystem } from '../systems/LevelSystem';
-import { SaveSystem } from '../systems/SaveSystem';
+import type { SaveSystem } from '../systems/SaveSystem';
+import { getSharedSaveSystem } from '../systems/SaveSystem';
 import { Button } from '../ui/Button';
 import { ConfirmDialog, TextAreaDialog } from '../ui/Dialog';
 import { IconButton } from '../ui/IconButton';
 import { drawPanel, drawScreenBackground } from '../ui/sceneChrome';
-import { flashUiError, startSceneWithTransition } from '../ui/uiFeedback';
+import { flashUiError, returnToShell, startSceneWithTransition } from '../ui/uiFeedback';
 import { DEPTHS, GAME_TITLE, WORLD_HEIGHT, WORLD_WIDTH } from '../utils/constants';
 import { clamp } from '../utils/math';
 
@@ -67,7 +68,7 @@ export class LevelEditorScene extends Phaser.Scene {
   }
 
   public create(data: LevelEditorSceneData): void {
-    this.saveSystem = new SaveSystem();
+    this.saveSystem = getSharedSaveSystem();
     this.levelSystem = new LevelSystem(this.saveSystem);
     this.theme = getTheme(this.saveSystem.snapshot().preferences.themeId);
     this.mode = data.mode === 'admin' ? 'admin' : 'creative';
@@ -752,7 +753,11 @@ export class LevelEditorScene extends Phaser.Scene {
       }
     }
 
-    startSceneWithTransition(this, this.mode === 'admin' ? 'AdminMenuScene' : 'MainMenuScene');
+    if (this.mode === 'admin') {
+      startSceneWithTransition(this, 'AdminMenuScene');
+      return;
+    }
+    returnToShell(this, 'editor');
   }
 
   private pushUndoSnapshot(): void {

@@ -1,5 +1,6 @@
 import { normalizeEditorRows, validateEditorRows } from '../levels/editorGrid';
 import type { AdminCampaignOverride } from '../levels/levelTypes';
+import { ADMIN_ENABLED } from '../config/features';
 
 interface AdminSessionResponse {
   authenticated: boolean;
@@ -18,6 +19,10 @@ interface AdminCampaignDeleteResponse {
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  if (!ADMIN_ENABLED) {
+    throw new Error('Admin tools are only available in the local development build.');
+  }
+
   const response = await fetch(url, {
     credentials: 'include',
     headers: {

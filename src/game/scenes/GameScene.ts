@@ -5,6 +5,21 @@ import { Brick } from '../entities/Brick';
 import { Paddle } from '../entities/Paddle';
 import { PowerUp } from '../entities/PowerUp';
 import type { LevelDefinition } from '../levels/levelTypes';
+import {
+  bridge,
+  type GameMode,
+  type GameResult,
+  type GameSession,
+  type HudSnapshot,
+  type ObjectiveKind
+} from '../bridge';
+import {
+  createWaveLevel,
+  DAILY_WAVE_COUNT,
+  ENDLESS_STARTING_LIVES,
+  getPowerUpSeed
+} from '../modes/waveGenerator';
+import { SeededRandom } from '../utils/random';
 import { AudioSystem } from '../systems/AudioSystem';
 import { registerAudioSystem, unregisterAudioSystem } from '../systems/audioRegistry';
 import { CollisionSystem } from '../systems/CollisionSystem';
@@ -12,8 +27,8 @@ import { ComboSystem } from '../systems/ComboSystem';
 import { InputSystem } from '../systems/InputSystem';
 import { LevelSystem } from '../systems/LevelSystem';
 import { ParticleSystem } from '../systems/ParticleSystem';
-import { getPowerUpDefinition, PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
-import { SaveSystem } from '../systems/SaveSystem';
+import { PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
+import { getSharedSaveSystem, type SaveSystem } from '../systems/SaveSystem';
 import type { LevelMedal } from '../systems/SaveSystem';
 import { SettingsSystem } from '../systems/SettingsSystem';
 import { FxManager } from '../systems/FxManager';
@@ -21,7 +36,6 @@ import { ScoreSystem } from '../systems/ScoreSystem';
 import { BallManager } from '../managers/BallManager';
 import { PlayfieldRenderer } from '../managers/PlayfieldRenderer';
 import { DebugOverlay, isDebugOverlayEnabled, type DebugOverlaySnapshot } from '../ui/DebugOverlay';
-import { Hud } from '../ui/Hud';
 import {
   BALL_MAX_PADDLE_ANGLE_DEGREES,
   BALL_AXIS_LOCK_MIN_SPEED,
@@ -40,26 +54,19 @@ import {
   rectangleDistance
 } from '../utils/math';
 
-interface GameSceneData {
-  levelIndex?: number;
+/** Accepts a full session, or the legacy `{ levelIndex, source }` shape used by the editor. */
+type GameSceneData = Partial<GameSession> & {
   source?: 'campaign' | 'creative';
-  editorReturn?: {
-    mode: 'creative' | 'admin';
-    slotIndex: number;
-  };
-}
+};
+
+const HUD_EMIT_INTERVAL_MS = 100;
+const WAVE_TRANSITION_MS = 900;
 
 interface BallPhysicsSnapshot {
   x: number;
   y: number;
   vx: number;
   vy: number;
-}
-
-interface PauseScenePayload {
-  levelIndex: number;
-  source: 'campaign' | 'creative';
-  editorReturn?: GameSceneData['editorReturn'];
 }
 
 export class GameScene extends Phaser.Scene {
@@ -82,12 +89,20 @@ export class GameScene extends Phaser.Scene {
   private settingsSystem!: SettingsSystem;
   private fxManager!: FxManager;
   private audioSystem!: AudioSystem;
-  private hud!: Hud;
   private debugOverlay?: DebugOverlay;
   private lives = 3;
   private levelIndex = 0;
   private levelSource: 'campaign' | 'creative' = 'campaign';
-  private editorReturn?: GameSceneData['editorReturn'];
+  private editorReturn?: GameSession['editorReturn'];
+  private session!: GameSession;
+  private mode: GameMode = 'campaign';
+  private wave = 1;
+  private runSeed = 0;
+  private bricksTotal = 0;
+  private hudElapsedMs = HUD_EMIT_INTERVAL_MS;
+  private demoLaunchMs = 0;
+  private reducedMotion = false;
+  private autopilot = false;
   private ending = false;
   private respawning = false;
   private explosionsTriggered = 0;
@@ -155,29 +170,49 @@ export class GameScene extends Phaser.Scene {
     mainCamera.setZoom(1);
     mainCamera.setScroll(0, 0);
 
-    this.levelIndex = data.levelIndex ?? 0;
-    this.levelSource = data.source ?? 'campaign';
-    this.editorReturn = data.editorReturn;
-    this.saveSystem = new SaveSystem();
+    this.session = this.normalizeSession(data);
+    this.mode = this.session.mode;
+    this.levelIndex = this.session.levelIndex;
+    this.levelSource = this.mode === 'creative' ? 'creative' : 'campaign';
+    this.editorReturn = this.session.editorReturn;
+    this.wave = this.session.wave ?? 1;
+    this.runSeed = this.session.seed ?? 0;
+    this.saveSystem = getSharedSaveSystem();
     this.settingsSystem = new SettingsSystem(this.saveSystem);
     this.levelSystem = new LevelSystem(this.saveSystem);
-    this.level = this.levelSystem.getLevel(this.levelIndex, this.levelSource);
-    this.theme = getTheme(this.saveSystem.snapshot().preferences.themeId);
+    this.level =
+      this.mode === 'endless' || this.mode === 'daily'
+        ? createWaveLevel({ mode: this.mode, runSeed: this.runSeed, wave: this.wave })
+        : this.levelSystem.getLevel(this.levelIndex, this.levelSource);
+    const preferences = this.saveSystem.snapshot().preferences;
+    this.reducedMotion = preferences.reducedMotion;
+    this.theme = getTheme(preferences.themeId);
     this.audioSystem = new AudioSystem(
-      this.saveSystem.snapshot().preferences.soundEnabled,
+      this.mode !== 'demo' && preferences.soundEnabled,
       this.settingsSystem.getVolumeSfx()
     );
     registerAudioSystem(this.audioSystem);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       unregisterAudioSystem(this.audioSystem);
     });
-    this.scoreSystem = new ScoreSystem(this.saveSystem.snapshot().bestScore);
+    this.scoreSystem = new ScoreSystem(this.getModeBestScore(), this.session.carry?.score ?? 0);
     this.comboSystem = new ComboSystem();
-    this.powerUpSystem = new PowerUpSystem();
+    this.powerUpSystem = this.isWaveMode()
+      ? new PowerUpSystem(new SeededRandom(getPowerUpSeed(this.runSeed, this.wave)))
+      : new PowerUpSystem();
     this.collisionSystem = new CollisionSystem();
     this.particleSystem = new ParticleSystem(this);
-    this.fxManager = new FxManager(this, this.particleSystem, this.settingsSystem.getFxQuality());
-    this.lives = this.level.difficulty.initialLives;
+    this.fxManager = new FxManager(
+      this,
+      this.particleSystem,
+      this.reducedMotion ? 'low' : this.settingsSystem.getFxQuality()
+    );
+    this.lives =
+      this.session.carry?.lives ??
+      (this.isWaveMode() ? ENDLESS_STARTING_LIVES : this.level.difficulty.initialLives);
+    this.hudElapsedMs = HUD_EMIT_INTERVAL_MS;
+    this.demoLaunchMs = 0;
+    this.autopilot = false;
     this.ending = false;
     this.respawning = false;
     this.explosionsTriggered = 0;
@@ -208,10 +243,12 @@ export class GameScene extends Phaser.Scene {
     });
     this.balls = this.ballManager.group;
     this.inputSystem = new InputSystem(this);
+    // Keys must keep working for the HTML interface (Tab, Space on buttons...).
+    this.input.keyboard?.disableGlobalCapture();
     this.createBricks();
+    this.bricksTotal = this.getBricks().filter((brick) => brick.isBreakable).length;
     this.ballManager.createAttachedBall();
 
-    this.hud = new Hud(this, this.buildHudState(), this.theme);
     if (isDebugOverlayEnabled()) {
       this.debugOverlay = new DebugOverlay(this);
     }
@@ -219,14 +256,37 @@ export class GameScene extends Phaser.Scene {
     this.registerSceneInput();
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownSystems, this);
+    this.emitHud();
   }
 
-  public override update(_time: number, delta: number): void {
+  public getSession(): GameSession {
+    return { ...this.session };
+  }
+
+  public isDemo(): boolean {
+    return this.mode === 'demo';
+  }
+
+  /** Lets the computer play (used for the home preview and to record README media). */
+  public setAutopilot(enabled: boolean): void {
+    this.autopilot = enabled;
+  }
+
+  public setSound(enabled: boolean, volume: number): void {
+    this.audioSystem.setEnabled(this.mode !== 'demo' && enabled);
+    this.audioSystem.setVolumeSfx(volume);
+  }
+
+  public override update(time: number, delta: number): void {
     if (this.ending) {
       return;
     }
 
-    this.inputSystem.updatePaddle(this.paddle, delta);
+    if (this.mode === 'demo' || this.autopilot) {
+      this.updateDemoPilot(time, delta);
+    } else {
+      this.inputSystem.updatePaddle(this.paddle, delta);
+    }
     if (this.ballManager.update(this.respawning)) {
       this.loseLife();
     }
@@ -236,8 +296,76 @@ export class GameScene extends Phaser.Scene {
     this.ballManager.flushPendingClones();
     this.comboSystem.update(delta);
 
-    this.hud.update(this.buildHudState());
+    this.hudElapsedMs += delta;
+    if (this.hudElapsedMs >= HUD_EMIT_INTERVAL_MS) {
+      this.emitHud();
+    }
     this.debugOverlay?.update(delta, this.buildDebugOverlaySnapshot());
+  }
+
+  private normalizeSession(data: GameSceneData | undefined): GameSession {
+    const mode: GameMode = data?.mode ?? (data?.source === 'creative' ? 'creative' : 'campaign');
+    const session: GameSession = {
+      mode,
+      levelIndex: Math.max(0, Math.floor(data?.levelIndex ?? 0)),
+      editorReturn: data?.editorReturn
+    };
+    if (mode === 'endless' || mode === 'daily') {
+      session.wave = Math.max(1, Math.floor(data?.wave ?? 1));
+      session.seed = (data?.seed ?? 0) >>> 0;
+      session.dateKey = data?.dateKey;
+    }
+    if (data?.carry) {
+      session.carry = {
+        score: Math.max(0, data.carry.score),
+        lives: Math.max(1, data.carry.lives)
+      };
+    }
+    return session;
+  }
+
+  private isWaveMode(): boolean {
+    return this.mode === 'endless' || this.mode === 'daily';
+  }
+
+  private getModeBestScore(): number {
+    const save = this.saveSystem.snapshot();
+    if (this.mode === 'endless') {
+      return save.records.endless.bestScore;
+    }
+    if (this.mode === 'daily') {
+      return save.records.daily[this.session.dateKey ?? '']?.bestScore ?? 0;
+    }
+    return save.bestScore;
+  }
+
+  /** Attract-mode autopilot used behind the home screen. */
+  private updateDemoPilot(time: number, delta: number): void {
+    const balls = this.getBalls();
+    if (balls.some((ball) => ball.isAttached)) {
+      this.demoLaunchMs += delta;
+      if (this.demoLaunchMs > 700) {
+        this.demoLaunchMs = 0;
+        this.launchAttachedBalls();
+      }
+    }
+
+    const target = balls
+      .filter((ball) => !ball.isAttached && ball.arcadeBody.velocity.y > 0)
+      .sort((a, b) => b.y - a.y)[0];
+    const aimX = target
+      ? target.x + Math.sin(time / 900) * this.paddle.activeWidth * 0.3
+      : this.paddle.x;
+    const blend = 1 - Math.pow(1 - 0.18, delta / (1000 / 60));
+    this.paddle.setCenterX(this.paddle.x + (aimX - this.paddle.x) * blend);
+  }
+
+  private emitHud(): void {
+    this.hudElapsedMs = 0;
+    if (this.mode === 'demo') {
+      return;
+    }
+    bridge.emit('hud', this.buildHudState());
   }
 
   private createBricks(): void {
@@ -388,11 +516,18 @@ export class GameScene extends Phaser.Scene {
   }
 
   private registerCollisions(): void {
-    this.collisionSystem.register(this, this.paddle, this.ballManager.group, this.bricks, this.powerUps, {
-      onBallPaddle: (ball) => this.handleBallPaddle(ball),
-      onBallBrick: (ball, brick) => this.handleBallBrick(ball, brick),
-      onPowerUpPaddle: (powerUp) => this.handlePowerUpPaddle(powerUp)
-    });
+    this.collisionSystem.register(
+      this,
+      this.paddle,
+      this.ballManager.group,
+      this.bricks,
+      this.powerUps,
+      {
+        onBallPaddle: (ball) => this.handleBallPaddle(ball),
+        onBallBrick: (ball, brick) => this.handleBallBrick(ball, brick),
+        onPowerUpPaddle: (powerUp) => this.handlePowerUpPaddle(powerUp)
+      }
+    );
   }
 
   private registerSceneInput(): void {
@@ -418,6 +553,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private unlockAndLaunch(): void {
+    if (this.mode === 'demo' || this.ending) {
+      return;
+    }
     this.audioSystem.unlock();
     this.launchAttachedBalls();
   }
@@ -756,7 +894,7 @@ export class GameScene extends Phaser.Scene {
 
     this.lives = Math.min(this.lives + 1, MAX_LIVES);
     this.fxManager.playBreak(this.paddle.x, this.paddle.y - 24, this.theme.danger, 14);
-    this.hud.update(this.buildHudState());
+    this.emitHud();
   }
 
   private applyMultiBall(sourceBall?: Ball): void {
@@ -766,7 +904,7 @@ export class GameScene extends Phaser.Scene {
       this.ballManager.duplicateBallsOrQueue(source, [-0.34, 0.34]);
     }
 
-    this.fxManager.cameraImpact(0.003, 100);
+    this.cameraImpact(0.003, 100);
   }
 
   private applySplitBall(sourceBall?: Ball): void {
@@ -776,7 +914,19 @@ export class GameScene extends Phaser.Scene {
       this.ballManager.duplicateBallsOrQueue(source, [0.7]);
     }
 
-    this.fxManager.cameraImpact(0.002, 80);
+    this.cameraImpact(0.002, 80);
+  }
+
+  private cameraImpact(intensity: number, durationMs: number): void {
+    if (!this.reducedMotion) {
+      this.fxManager.cameraImpact(intensity, durationMs);
+    }
+  }
+
+  private cameraFlash(color: number, durationMs: number): void {
+    if (!this.reducedMotion) {
+      this.fxManager.cameraFlash(color, durationMs);
+    }
   }
 
   private setTimedEffect(
@@ -796,11 +946,14 @@ export class GameScene extends Phaser.Scene {
 
   private loseLife(): void {
     this.respawning = true;
-    this.lives -= 1;
+    if (this.mode !== 'demo') {
+      this.lives -= 1;
+    }
     this.comboSystem.reset();
     this.audioSystem.danger();
-    this.fxManager.cameraImpact(0.005, 140);
-    this.fxManager.cameraFlash(this.theme.danger, 100);
+    this.cameraImpact(0.005, 140);
+    this.cameraFlash(this.theme.danger, 100);
+    this.emitHud();
 
     if (this.lives <= 0) {
       this.respawning = false;
@@ -826,31 +979,118 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.ending = true;
+
+    if (this.mode === 'demo') {
+      this.time.delayedCall(1200, () => {
+        if (this.scene.isActive()) {
+          this.scene.restart({
+            mode: 'demo',
+            levelIndex: (this.levelIndex + 1) % this.levelSystem.count
+          });
+        }
+      });
+      return;
+    }
+
+    if (this.isWaveMode()) {
+      this.completeWave();
+      return;
+    }
+
     const stateBeforeBonus = this.scoreSystem.snapshot();
+    const previousBest = this.saveSystem.snapshot().bestScore;
     this.scoreSystem.addLifeBonus(this.lives);
     const score = this.scoreSystem.snapshot().score;
     const medal = this.calculateLevelMedal(score);
+    const recordsProgress = !this.editorReturn && this.levelSource === 'campaign';
 
-    if (!this.editorReturn && this.levelSource === 'campaign') {
+    if (recordsProgress) {
       this.saveSystem.updateBestScore(score);
       this.saveSystem.completeLevel(this.levelIndex, medal);
     }
 
-    this.fxManager.cameraImpact(0.005, 200);
-    this.fxManager.cameraFlash(this.theme.primary, 140);
-    this.fxManager.cameraFadeOut(420, 0x000000);
+    this.cameraImpact(0.005, 200);
+    this.cameraFlash(this.theme.primary, 140);
+    this.emitHud();
 
-    this.time.delayedCall(520, () => {
+    this.finishWithResult({
+      outcome: 'victory',
+      score: Math.max(score, stateBeforeBonus.score),
+      medal,
+      isNewBest: recordsProgress && score > previousBest,
+      hasNext: recordsProgress && this.levelSystem.hasNext(this.levelIndex)
+    });
+  }
+
+  private completeWave(): void {
+    const score = this.scoreSystem.snapshot().score;
+    const isFinalDailyWave = this.mode === 'daily' && this.wave >= DAILY_WAVE_COUNT;
+
+    this.cameraImpact(0.004, 160);
+    this.cameraFlash(this.theme.primary, 120);
+
+    if (isFinalDailyWave) {
+      this.scoreSystem.addLifeBonus(this.lives);
+      this.finishRun('victory', this.wave);
+      return;
+    }
+
+    const nextWave = this.wave + 1;
+    bridge.emit('waveCleared', { wave: this.wave, score, nextWave });
+    this.time.delayedCall(WAVE_TRANSITION_MS, () => {
       if (!this.scene.isActive()) {
         return;
       }
-
-      this.scene.start('VictoryScene', {
-        score: Math.max(score, stateBeforeBonus.score),
-        levelIndex: this.levelIndex,
-        medal,
-        editorReturn: this.editorReturn
+      // Restarting resets balls, power-ups and timed effects; score and lives carry over.
+      this.scene.restart({
+        ...this.session,
+        wave: nextWave,
+        carry: { score, lives: this.lives }
       });
+    });
+  }
+
+  private finishRun(outcome: 'victory' | 'defeat', wavesCleared: number): void {
+    const score = this.scoreSystem.snapshot().score;
+    let isNewBest = false;
+
+    if (this.mode === 'endless') {
+      isNewBest = this.saveSystem.recordEndlessRun(score, wavesCleared);
+    } else if (this.mode === 'daily' && this.session.dateKey) {
+      isNewBest = this.saveSystem.recordDailyRun(this.session.dateKey, score, wavesCleared);
+    }
+
+    this.emitHud();
+    this.finishWithResult({
+      outcome,
+      score,
+      wave: this.wave,
+      wavesCleared,
+      dateKey: this.session.dateKey,
+      isNewBest,
+      hasNext: false
+    });
+  }
+
+  private finishWithResult(
+    result: Pick<GameResult, 'outcome' | 'score' | 'isNewBest' | 'hasNext'> &
+      Partial<Pick<GameResult, 'medal' | 'wave' | 'wavesCleared' | 'dateKey'>>
+  ): void {
+    const payload: GameResult = {
+      mode: this.mode,
+      levelIndex: this.levelIndex,
+      levelName: this.level.name,
+      editorReturn: this.editorReturn,
+      session: {
+        ...this.session,
+        carry: undefined,
+        wave: this.isWaveMode() ? 1 : undefined
+      },
+      ...result
+    };
+
+    this.time.delayedCall(this.reducedMotion ? 120 : 520, () => {
+      bridge.emit('result', payload);
     });
   }
 
@@ -874,62 +1114,106 @@ export class GameScene extends Phaser.Scene {
 
   private endGame(): void {
     this.ending = true;
+
+    if (this.isWaveMode()) {
+      this.finishRun('defeat', this.wave - 1);
+      return;
+    }
+
     const score = this.scoreSystem.snapshot().score;
-    this.saveSystem.updateBestScore(score);
+    const previousBest = this.saveSystem.snapshot().bestScore;
+    const recordsProgress = !this.editorReturn && this.levelSource === 'campaign';
+    if (recordsProgress) {
+      this.saveSystem.updateBestScore(score);
+    }
 
-    this.fxManager.cameraFadeOut(460, 0x1a0606);
-
-    this.time.delayedCall(460, () => {
-      if (!this.scene.isActive()) {
-        return;
-      }
-
-      this.scene.start('GameOverScene', {
-        score,
-        levelIndex: this.levelIndex,
-        source: this.levelSource,
-        editorReturn: this.editorReturn
-      });
+    this.emitHud();
+    this.finishWithResult({
+      outcome: 'defeat',
+      score,
+      isNewBest: recordsProgress && score > previousBest,
+      hasNext: false
     });
   }
 
   private pauseGame(): void {
-    if (this.ending) {
+    if (this.ending || this.mode === 'demo') {
       return;
     }
 
-    const payload: PauseScenePayload = {
-      levelIndex: this.levelIndex,
-      source: this.levelSource,
-      editorReturn: this.editorReturn
-    };
-
-    this.scene.launch('PauseScene', payload);
-    this.scene.pause();
+    bridge.emit('pauseRequested', undefined);
   }
 
   private restartLevel(): void {
+    if (this.mode === 'demo' || this.ending) {
+      return;
+    }
+
+    // Wave modes restart the whole run, never a single wave with carried score.
     this.scene.restart({
-      levelIndex: this.levelIndex,
-      source: this.levelSource,
-      editorReturn: this.editorReturn
+      ...this.session,
+      carry: undefined,
+      wave: this.isWaveMode() ? 1 : undefined
     });
   }
 
-  private buildHudState() {
+  private buildHudState(): HudSnapshot {
     const combo = this.comboSystem.snapshot();
     const ballStats = this.ballManager.getStats();
+    const score = this.scoreSystem.snapshot();
+    const bricksLeft = this.getBricks().filter((brick) => brick.isBreakable).length;
     return {
+      mode: this.mode,
+      levelIndex: this.levelIndex,
       levelName: this.level.name,
-      objectiveLabel: this.getObjectiveHudLabel(),
-      score: this.scoreSystem.snapshot().score,
-      lives: this.lives,
+      chapter: this.level.chapter,
+      wave: this.isWaveMode() ? this.wave : undefined,
+      waveCount: this.mode === 'daily' ? DAILY_WAVE_COUNT : undefined,
+      score: score.score,
+      bestScore: Math.max(score.bestScore, score.score),
+      lives: Math.max(0, this.lives),
+      maxLives: MAX_LIVES,
       combo: combo.streak,
       bestCombo: combo.bestStreak,
       balls: ballStats.activeCount,
+      bricksLeft,
+      bricksTotal: this.bricksTotal,
       waitingToLaunch: this.getBalls().some((ball) => ball.isAttached),
-      effectLabel: this.getActiveEffectLabel()
+      effects: [...this.activeTimers.keys()],
+      objective: this.getObjectiveProgress(bricksLeft, ballStats.maxBallsReached, combo.bestStreak)
     };
+  }
+
+  private getObjectiveProgress(
+    bricksLeft: number,
+    maxBalls: number,
+    bestCombo: number
+  ): HudSnapshot['objective'] {
+    if (this.isWaveMode()) {
+      return {
+        kind: 'clearWave',
+        current: this.bricksTotal - bricksLeft,
+        target: this.bricksTotal
+      };
+    }
+
+    const objective = this.level.objective;
+    const kind: ObjectiveKind = objective.type;
+    switch (objective.type) {
+      case 'reachBalls':
+        return { kind, current: Math.min(maxBalls, objective.target), target: objective.target };
+      case 'triggerExplosions':
+        return {
+          kind,
+          current: Math.min(this.explosionsTriggered, objective.target),
+          target: objective.target
+        };
+      case 'clearWithLives':
+        return { kind, current: this.lives, target: objective.target };
+      case 'bestCombo':
+      default:
+        return { kind, current: Math.min(bestCombo, objective.target), target: objective.target };
+    }
   }
 
   private buildDebugOverlaySnapshot(): DebugOverlaySnapshot {
@@ -953,32 +1237,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private getActiveEffectLabel(): string {
-    if (this.activeTimers.size === 0) {
-      return '';
-    }
-
-    const labels = [...this.activeTimers.keys()].map((type) => getPowerUpDefinition(type).label);
-    return labels.join('+');
-  }
-
-  private getObjectiveHudLabel(): string {
-    const objective = this.level.objective;
-    const combo = this.comboSystem.snapshot();
-
-    switch (objective.type) {
-      case 'reachBalls':
-        return `${objective.label} ${Math.min(
-          this.ballManager.getStats().maxBallsReached,
-          objective.target
-        )}/${objective.target}`;
-      case 'triggerExplosions':
-        return `${objective.label} ${Math.min(this.explosionsTriggered, objective.target)}/${objective.target}`;
-      case 'clearWithLives':
-        return objective.label;
-      case 'bestCombo':
-      default:
-        return `${objective.label} ${Math.min(combo.bestStreak, objective.target)}/${objective.target}`;
-    }
+    return [...this.activeTimers.keys()].join('+');
   }
 
   private getBalls(): Ball[] {

@@ -1,4 +1,4 @@
-import { campaignLevels } from '../levels/campaignLevels';
+import { campaignLevels, getOfficialCampaignRows } from '../levels/campaignLevels';
 import {
   createPatternFromCreativeSlot,
   createPatternFromEditorRows,
@@ -9,12 +9,12 @@ import { LEVEL_PATTERNS } from '../levels/levelPatterns';
 import type { CreativeLevelSlot, LevelDefinition, PatternDefinition } from '../levels/levelTypes';
 import { clamp } from '../utils/math';
 import { CampaignOverrideSystem } from './CampaignOverrideSystem';
-import { SaveSystem } from './SaveSystem';
+import { getSharedSaveSystem } from './SaveSystem';
 
 export type LevelSource = 'campaign' | 'creative';
 
 export class LevelSystem {
-  public constructor(private readonly saveSystem = new SaveSystem()) {}
+  public constructor(private readonly saveSystem = getSharedSaveSystem()) {}
 
   public get count(): number {
     return campaignLevels.length;
@@ -108,7 +108,7 @@ export class LevelSystem {
 
     return {
       ...fallbackPattern,
-      rows: normalizeEditorRows(fallbackPattern.rows)
+      rows: normalizeEditorRows(getOfficialCampaignRows(safeIndex) ?? fallbackPattern.rows)
     };
   }
 

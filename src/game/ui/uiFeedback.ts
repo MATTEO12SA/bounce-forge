@@ -1,8 +1,9 @@
 import type Phaser from 'phaser';
-import { SaveSystem } from '../systems/SaveSystem';
+import { bridge } from '../bridge';
+import { getSharedSaveSystem } from '../systems/SaveSystem';
 
 function getFxQuality(): string {
-  return new SaveSystem().snapshot().preferences.fxQuality;
+  return getSharedSaveSystem().snapshot().preferences.fxQuality;
 }
 
 export function startSceneWithTransition(
@@ -25,4 +26,10 @@ export function flashUiError(scene: Phaser.Scene): void {
   }
 
   scene.cameras.main.shake(90, 0.0025);
+}
+
+/** Leaves an in-canvas tool (editor, admin) and hands control back to the HTML interface. */
+export function returnToShell(scene: Phaser.Scene, from: 'editor' | 'admin'): void {
+  scene.scene.stop();
+  bridge.emit('exitToShell', { from });
 }

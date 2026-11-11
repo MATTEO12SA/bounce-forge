@@ -1,13 +1,13 @@
 import './style.css';
-import { GameApp } from './game/GameApp';
+import { App } from './ui/app';
 
-const root = document.querySelector<HTMLElement>('#game-root');
+const root = document.querySelector<HTMLElement>('#app');
 
 if (!root) {
-  throw new Error('Missing #game-root element');
+  throw new Error('Missing #app element');
 }
 
-const app = new GameApp(root);
+const app = new App(root);
 app.start();
 
 if (import.meta.hot) {

@@ -21,49 +21,49 @@ const BRICK_TEMPLATES: Record<string, BrickTemplate | undefined> = {
     kind: 'standard',
     hitPoints: 1,
     score: 100,
-    color: 0xffd31a,
+    color: 0xffb423,
     powerUpChanceMultiplier: 1
   },
   '2': {
     kind: 'resistant',
     hitPoints: 2,
     score: 170,
-    color: 0xffdc35,
+    color: 0xffcb5c,
     powerUpChanceMultiplier: 1.1
   },
   '3': {
     kind: 'resistant',
     hitPoints: 3,
     score: 240,
-    color: 0xffe76a,
+    color: 0xffe2a0,
     powerUpChanceMultiplier: 1.15
   },
   E: {
     kind: 'explosive',
     hitPoints: 1,
     score: 210,
-    color: 0xff8a3d,
+    color: 0xff6b3d,
     powerUpChanceMultiplier: 1.25
   },
   B: {
     kind: 'bonus',
     hitPoints: 1,
     score: 130,
-    color: 0x61d394,
+    color: 0x5fe0a8,
     powerUpChanceMultiplier: 3
   },
   S: {
     kind: 'shield',
     hitPoints: 3,
     score: 280,
-    color: 0x67b7e8,
+    color: 0x8fbbe0,
     powerUpChanceMultiplier: 0.75
   },
   X: {
     kind: 'indestructible',
     hitPoints: 0,
     score: 0,
-    color: 0x5f5f5f,
+    color: 0x5b5750,
     powerUpChanceMultiplier: 0
   }
 };

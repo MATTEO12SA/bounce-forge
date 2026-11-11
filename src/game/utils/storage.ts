@@ -10,10 +10,28 @@ export function getBrowserStorage(): KeyValueStorage | null {
   }
 
   try {
-    return window.localStorage;
+    const storage = window.localStorage;
+    const probe = '__bounce-forge-probe__';
+    storage.setItem(probe, '1');
+    storage.removeItem(probe);
+    return storage;
   } catch {
     return null;
   }
+}
+
+/** Volatile storage used when the browser refuses persistent storage. */
+export function createMemoryStorage(): KeyValueStorage {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+    removeItem: (key) => {
+      values.delete(key);
+    }
+  };
 }
 
 export function loadJson<T>(

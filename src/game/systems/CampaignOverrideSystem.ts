@@ -2,6 +2,7 @@ import { createPatternFromEditorRows, normalizeEditorRows } from '../levels/edit
 import { createLevelFromPattern } from '../levels/levelFactory';
 import type { AdminCampaignOverride, LevelDefinition } from '../levels/levelTypes';
 import { clamp } from '../utils/math';
+import { ADMIN_ENABLED } from '../config/features';
 import { AdminApiSystem } from './AdminApiSystem';
 
 const REFRESH_TIMEOUT_MS = 2500;
@@ -29,6 +30,11 @@ export class CampaignOverrideSystem {
   private static loaded = false;
 
   public static async refresh(api = new AdminApiSystem()): Promise<void> {
+    if (!ADMIN_ENABLED) {
+      this.loaded = false;
+      return;
+    }
+
     try {
       const overrides = await withTimeout(api.getCampaignOverrides(), REFRESH_TIMEOUT_MS);
       this.overrides.clear();
