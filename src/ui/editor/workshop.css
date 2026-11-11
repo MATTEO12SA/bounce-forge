@@ -605,3 +605,61 @@
     padding: 0 14px;
   }
 }
+
+/* ------------------------------------------------------------------ level settings */
+
+.editor-settings-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.settings-body {
+  display: grid;
+  gap: 16px;
+}
+
+.settings-row {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-label {
+  color: var(--text-faint);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.settings-power-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.settings-power {
+  min-width: 44px;
+  height: 34px;
+  border: 0;
+  cursor: pointer;
+}
+
+.settings-power[aria-pressed='false'] {
+  opacity: 0.3;
+  filter: grayscale(1);
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.settings-toggle input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--amber);
+}

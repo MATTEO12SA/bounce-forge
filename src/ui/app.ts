@@ -156,7 +156,12 @@ export class App {
   private stageSlot: HTMLElement | null = null;
   private editor: EditorScreen | null = null;
   /** Unsaved editor level to play next ("Test" never overwrites the saved slot). */
-  private pendingDraft: { slotIndex: number; name: string; rows: string[] } | null = null;
+  private pendingDraft: {
+    slotIndex: number;
+    name: string;
+    rows: string[];
+    options?: LevelOptions;
+  } | null = null;
 
   public constructor(root: HTMLElement) {
     this.root = root;
@@ -1190,11 +1195,11 @@ export class App {
           this.openDialog(title, body, actions, onEscape),
         closeOverlays: () => this.closeOverlays(),
         navigate: (hash) => this.navigate(hash),
-        testDraft: (index, name, rows) => {
-          this.pendingDraft = { slotIndex: index, name, rows };
+        testDraft: (index, name, rows, options) => {
+          this.pendingDraft = { slotIndex: index, name, rows, options };
           this.navigate(playHash('creative', index));
         },
-        shareCode: (rows, name) => void this.shareCode(rows, name)
+        shareCode: (rows, name, options) => void this.shareCode(rows, name, options)
       },
       slotIndex
     );
@@ -1700,7 +1705,7 @@ export class App {
     } else if (route.mode === 'creative') {
       session.editorReturn = { mode: 'creative', slotIndex: route.index };
       if (draft) {
-        session.draft = { name: draft.name, rows: draft.rows };
+        session.draft = { name: draft.name, rows: draft.rows, options: draft.options };
       }
     }
     this.startSession(session);

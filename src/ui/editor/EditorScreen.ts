@@ -1,5 +1,12 @@
 import { createEmptyRows } from '../../../shared/editorGridRules.mjs';
+import { getPowerUpDefinition, POWER_UP_TYPES, type PowerUpType } from '../../game/config/powerUps';
 import { estimateDifficulty, sealedBricks } from '../../game/levels/levelChecks';
+import {
+  DESCEND_CHOICES,
+  sameOptions,
+  sanitizeLevelOptions,
+  type LevelOptions
+} from '../../game/levels/levelOptions';
 import { brickLookForSymbol } from '../../game/levels/levelFactory';
 import { BRICK_H, BRICK_W, paintBrick } from '../../game/render/brickArt';
 import type { SaveSystem } from '../../game/systems/SaveSystem';
@@ -41,8 +48,8 @@ export interface EditorHost {
   ): void;
   closeOverlays(): void;
   navigate(hash: string): void;
-  testDraft(slotIndex: number, name: string, rows: string[]): void;
-  shareCode(rows: string[], name: string): void;
+  testDraft(slotIndex: number, name: string, rows: string[], options?: LevelOptions): void;
+  shareCode(rows: string[], name: string, options?: LevelOptions): void;
 }
 
 /** World units of one grid step, the same as in the game (21 × 19 bricks with a 3 px gap). */
@@ -137,6 +144,9 @@ export class EditorScreen {
   private zoom = 1;
   private fitScale = 1;
   private savedName: string;
+  private options: LevelOptions | undefined;
+  private savedOptions: LevelOptions | undefined;
+  private readonly settingsSummary: HTMLElement;
   private hover: Cell | null = null;
   private dragStart: Cell | null = null;
   private lastCell: Cell | null = null;
@@ -153,6 +163,9 @@ export class EditorScreen {
     const slot = host.save.getCreativeLevelSlot(slotIndex);
     const defaultName = t('create.slot', { n: slotIndex + 1 });
     this.savedName = slot?.name ?? defaultName;
+    this.savedOptions = sanitizeLevelOptions(slot?.options);
+    this.options = this.savedOptions;
+    this.settingsSummary = h('p', { class: 'editor-settings-summary' });
     this.model = new EditorModel(slot?.rows ?? createEmptyRows());
 
     this.canvas = h('canvas', {
@@ -243,6 +256,7 @@ export class EditorScreen {
             this.host.closeOverlays();
             this.model.markSaved();
             this.nameInput.value = this.savedName;
+            this.options = this.savedOptions;
             clearDraft(this.slotIndex);
             this.host.navigate(target);
           }
@@ -389,6 +403,22 @@ export class EditorScreen {
         { class: 'editor-group' },
         h('h2', { class: 'editor-group-title' }, t('editor.move')),
         move
+      ),
+      h(
+        'div',
+        { class: 'editor-group' },
+        h('h2', { class: 'editor-group-title' }, t('editor.settingsTitle')),
+        h(
+          'button',
+          {
+            class: 'button button-secondary button-sm',
+            type: 'button',
+            onclick: () => this.openSettings()
+          },
+          icon('settings'),
+          t('editor.settings')
+        ),
+        this.settingsSummary
       ),
       h(
         'div',
@@ -615,7 +645,11 @@ export class EditorScreen {
   }
 
   private isDirty(): boolean {
-    return this.model.isDirty || this.currentName() !== this.savedName;
+    return (
+      this.model.isDirty ||
+      this.currentName() !== this.savedName ||
+      !sameOptions(this.options, this.savedOptions)
+    );
   }
 
   private onModelChange(): void {
@@ -630,7 +664,8 @@ export class EditorScreen {
       steel: stats.steel
     });
     const rows = this.model.rows();
-    const difficulty = estimateDifficulty(rows);
+    const difficulty = estimateDifficulty(rows, this.options);
+    this.renderSettingsSummary();
     this.stars.textContent = '★'.repeat(difficulty) + '☆'.repeat(5 - difficulty);
     this.stars.setAttribute('aria-label', t('workshop.difficulty', { n: difficulty }));
 
@@ -671,10 +706,13 @@ export class EditorScreen {
     const draft = readDraft(this.slotIndex);
     if (!draft) return;
     const differs =
-      draft.rows.join('\n') !== this.model.serialize() || draft.name !== this.savedName;
+      draft.rows.join('\n') !== this.model.serialize() ||
+      draft.name !== this.savedName ||
+      !sameOptions(draft.options, this.savedOptions);
     if (!differs) return;
     this.model.replace(draft.rows);
     this.nameInput.value = draft.name;
+    this.options = sanitizeLevelOptions(draft.options);
     if (!draft.fresh && !isNewSlot) this.host.toast(t('editor.draftRestored'));
   }
 
@@ -685,7 +723,11 @@ export class EditorScreen {
 
   private flushDraft(): void {
     if (this.isDirty()) {
-      writeDraft(this.slotIndex, { name: this.currentName(), rows: this.model.rows() });
+      writeDraft(this.slotIndex, {
+        name: this.currentName(),
+        rows: this.model.rows(),
+        options: this.options
+      });
     } else {
       clearDraft(this.slotIndex);
     }
@@ -709,13 +751,20 @@ export class EditorScreen {
     if (!this.checkPlayable()) return false;
     const name = this.currentName();
     try {
-      this.host.save.setCreativeLevelSlot(this.slotIndex, this.model.rows(), name);
+      this.host.save.setCreativeLevelSlot(
+        this.slotIndex,
+        this.model.rows(),
+        name,
+        Date.now(),
+        this.options
+      );
     } catch {
       this.host.toast(t('editor.warn.empty'));
       return false;
     }
     this.savedName = this.host.save.getCreativeLevelSlot(this.slotIndex)?.name ?? name;
     this.nameInput.value = this.savedName;
+    this.savedOptions = this.options;
     this.model.markSaved();
     clearDraft(this.slotIndex);
     this.refreshStatus();
@@ -727,12 +776,164 @@ export class EditorScreen {
     if (!this.checkPlayable()) return;
     window.clearTimeout(this.draftTimer);
     this.flushDraft();
-    this.host.testDraft(this.slotIndex, this.currentName(), this.model.rows());
+    this.host.testDraft(this.slotIndex, this.currentName(), this.model.rows(), this.options);
   }
 
   private share(): void {
     if (!this.checkPlayable()) return;
-    this.host.shareCode(this.model.rows(), this.currentName());
+    this.host.shareCode(this.model.rows(), this.currentName(), this.options);
+  }
+
+  // ------------------------------------------------------------------ level settings
+
+  private setOptions(next: LevelOptions): void {
+    this.options = sanitizeLevelOptions(next);
+    this.onModelChange();
+  }
+
+  private renderSettingsSummary(): void {
+    const options = this.options ?? {};
+    const parts: string[] = [];
+    if (options.powerUps) parts.push(t('editor.set.powerUpCount', { n: options.powerUps.length }));
+    if (options.dropRate) parts.push(t(`editor.set.rate.${options.dropRate}` as MessageKey));
+    if (options.lives) parts.push(t('editor.set.livesShort', { n: options.lives }));
+    if (options.pace) parts.push(t(`editor.set.pace.${options.pace}` as MessageKey));
+    if (options.descendEverySec)
+      parts.push(t('editor.set.descendShort', { n: options.descendEverySec }));
+    if (options.bonusRain) parts.push(t('editor.set.bonusRainShort'));
+    if (options.storm) parts.push(t('editor.set.stormShort'));
+    this.settingsSummary.textContent =
+      parts.length > 0 ? parts.join(' · ') : t('editor.set.default');
+  }
+
+  /** Dialog with every level setting; changes apply immediately (and land in the draft). */
+  private openSettings(): void {
+    const segment = <T extends string | number>(
+      label: string,
+      values: Array<[T, string]>,
+      current: T,
+      onPick: (value: T) => void
+    ): HTMLElement => {
+      const group = h('div', { class: 'editor-seg', role: 'group', 'aria-label': label });
+      const buttons = values.map(([value, text]) => {
+        const button = h(
+          'button',
+          {
+            class: 'editor-seg-item',
+            type: 'button',
+            'aria-pressed': String(value === current),
+            onclick: () => {
+              buttons.forEach((item) => item.setAttribute('aria-pressed', 'false'));
+              button.setAttribute('aria-pressed', 'true');
+              onPick(value);
+            }
+          },
+          text
+        );
+        return button;
+      });
+      group.append(...buttons);
+      return h(
+        'div',
+        { class: 'settings-row' },
+        h('span', { class: 'settings-label' }, label),
+        group
+      );
+    };
+    const toggle = (
+      label: string,
+      checked: boolean,
+      onChange: (value: boolean) => void
+    ): HTMLElement => {
+      const input = h('input', { type: 'checkbox' });
+      input.checked = checked;
+      input.addEventListener('change', () => onChange(input.checked));
+      return h('label', { class: 'settings-toggle' }, input, h('span', {}, label));
+    };
+    const current = (): LevelOptions => ({ ...(this.options ?? {}) });
+
+    const allowed = new Set<PowerUpType>(this.options?.powerUps ?? POWER_UP_TYPES);
+    const chips = POWER_UP_TYPES.map((type) => {
+      const definition = getPowerUpDefinition(type);
+      const name = t(`power.${type}` as MessageKey).split(' — ')[0] ?? type;
+      const chip = h(
+        'button',
+        {
+          class: `power-chip effect-chip settings-power${definition.risk ? ' is-risk' : ''}`,
+          type: 'button',
+          title: name,
+          'aria-label': name,
+          'aria-pressed': String(allowed.has(type)),
+          style: `--chip: #${definition.color.toString(16).padStart(6, '0')}; --ratio: 1`,
+          onclick: () => {
+            if (allowed.has(type)) allowed.delete(type);
+            else allowed.add(type);
+            chip.setAttribute('aria-pressed', String(allowed.has(type)));
+            this.setOptions({
+              ...current(),
+              powerUps: allowed.size === POWER_UP_TYPES.length ? undefined : [...allowed]
+            });
+          }
+        },
+        definition.icon
+      );
+      return chip;
+    });
+
+    const body = [
+      h(
+        'div',
+        { class: 'settings-row settings-powers' },
+        h('span', { class: 'settings-label' }, t('editor.set.powerUps')),
+        h('div', { class: 'settings-power-grid' }, ...chips)
+      ),
+      segment(
+        t('editor.set.dropRate'),
+        [
+          ['low', t('editor.set.rate.low')],
+          ['normal', t('editor.set.rate.normal')],
+          ['high', t('editor.set.rate.high')]
+        ],
+        this.options?.dropRate ?? 'normal',
+        (value) => this.setOptions({ ...current(), dropRate: value })
+      ),
+      segment(
+        t('editor.set.lives'),
+        [1, 2, 3, 4, 5].map((n) => [n, String(n)] as [number, string]),
+        this.options?.lives ?? 3,
+        (value) => this.setOptions({ ...current(), lives: value === 3 ? undefined : value })
+      ),
+      segment(
+        t('editor.set.paceLabel'),
+        [
+          ['slow', t('editor.set.pace.slow')],
+          ['normal', t('editor.set.pace.normal')],
+          ['fast', t('editor.set.pace.fast')]
+        ],
+        this.options?.pace ?? 'normal',
+        (value) => this.setOptions({ ...current(), pace: value })
+      ),
+      segment(
+        t('editor.set.descend'),
+        DESCEND_CHOICES.map(
+          (n) => [n, n === 0 ? t('editor.set.descendOff') : `${n} s`] as [number, string]
+        ),
+        this.options?.descendEverySec ?? 0,
+        (value) => this.setOptions({ ...current(), descendEverySec: value || undefined })
+      ),
+      toggle(t('editor.set.bonusRain'), Boolean(this.options?.bonusRain), (value) =>
+        this.setOptions({ ...current(), bonusRain: value || undefined })
+      ),
+      toggle(t('editor.set.storm'), Boolean(this.options?.storm), (value) =>
+        this.setOptions({ ...current(), storm: value || undefined })
+      )
+    ];
+    this.host.openDialog(
+      t('editor.settingsTitle'),
+      [h('div', { class: 'settings-body' }, ...body)],
+      [{ label: t('common.close'), variant: 'primary', action: () => this.host.closeOverlays() }],
+      () => this.host.closeOverlays()
+    );
   }
 
   private surprise(): void {

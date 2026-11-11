@@ -715,11 +715,21 @@ try {
   );
   await evaluate(
     page,
+    `(() => { [...document.querySelectorAll('.editor-side .button')].find((b) => b.textContent.includes('Réglages du niveau')).click(); const toggles = document.querySelectorAll('.settings-toggle input'); toggles[toggles.length - 1].click(); document.querySelector('.dialog .button-primary').click(); return true; })()`
+  );
+  await delay(500);
+  const settingsDraft = await evaluate(
+    page,
+    `JSON.parse(localStorage.getItem('bounce-forge.editor-draft.v1.${slotIndex}') || '{}').options`
+  );
+  check('level settings land in the draft', settingsDraft?.storm === true, settingsDraft);
+  await evaluate(
+    page,
     `[...document.querySelectorAll('.editor-bar .button')].find((b) => b.textContent.includes('Tester')).click(); true`
   );
   const testing = await waitFor(
     page,
-    `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().mode === 'creative' && Boolean(${GAME}.getSession().draft)`,
+    `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().mode === 'creative' && ${GAME}.getSession().draft?.options?.storm === true`,
     10000
   );
   const slotUntouched = await evaluate(
