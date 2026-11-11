@@ -24,6 +24,8 @@ export interface GameSession {
   seed?: number;
   /** UTC day of a daily challenge, frozen when the run starts so midnight never changes it. */
   dateKey?: string;
+  /** Unsaved editor level played by the editor's "Test" button (the slot is not overwritten). */
+  draft?: { name: string; rows: string[] };
   /** Score and lives carried from the previous wave. */
   carry?: { score: number; lives: number };
 }

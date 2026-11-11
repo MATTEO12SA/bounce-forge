@@ -214,6 +214,26 @@ try {
   await delay(600);
   await shot(page, `${shots}/modes.png`);
 
+  // The Workshop and the editor, opened on a "Surprise!" level.
+  await evaluate(page, `location.hash = '#/create'; true`);
+  await delay(800);
+  await shot(page, `${shots}/workshop.png`);
+  await evaluate(page, `document.querySelector('.start-card').click(); true`);
+  await waitFor(page, `document.querySelector('.editor-canvas') !== null`);
+  await delay(900);
+  await shot(page, `${shots}/editor.png`);
+  if (process.env.CAPTURE_EDITOR_MOBILE) {
+    await viewport(page, 390, 844, true);
+    await delay(900);
+    await shot(page, `${process.env.CAPTURE_EDITOR_MOBILE}`);
+    await viewport(page, 1440, 900);
+  }
+  await evaluate(
+    page,
+    `localStorage.removeItem('bounce-forge.editor-draft.v1.0'); location.hash = '#/'; true`
+  );
+  await delay(600);
+
   // Gameplay: a lively multiball moment, autopiloted so the GIF shows real play.
   await evaluate(page, `location.hash = '#/play/campaign/4'; true`);
   await waitFor(page, `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === 3`);

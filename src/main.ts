@@ -1,4 +1,5 @@
 import './style.css';
+import './ui/editor/workshop.css';
 import { App } from './ui/app';
 
 const root = document.querySelector<HTMLElement>('#app');

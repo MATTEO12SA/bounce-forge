@@ -1,38 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { EDITOR_GRID_COLS, EDITOR_GRID_ROWS } from '../shared/editorGridRules.mjs';
+import { estimateDifficulty, reachableCells, sealedBricks } from '../src/game/levels/levelChecks';
 import { LEVEL_PATTERNS } from '../src/game/levels/levelPatterns';
 
 const BREAKABLE = /[123EBS]/;
-
-/** Cells reachable from the bottom row without crossing steel (breakable bricks can be broken). */
-function reachable(rows: string[]): boolean[][] {
-  const seen = rows.map((row) => [...row].map(() => false));
-  const queue: Array<[number, number]> = [];
-  const bottom = rows.length - 1;
-  for (let col = 0; col < EDITOR_GRID_COLS; col += 1) {
-    if (rows[bottom]?.[col] !== 'X') {
-      seen[bottom]![col] = true;
-      queue.push([bottom, col]);
-    }
-  }
-  while (queue.length > 0) {
-    const [row, col] = queue.shift()!;
-    for (const [dr, dc] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1]
-    ] as const) {
-      const r = row + dr;
-      const c = col + dc;
-      if (r < 0 || r >= rows.length || c < 0 || c >= EDITOR_GRID_COLS) continue;
-      if (seen[r]![c] || rows[r]![c] === 'X') continue;
-      seen[r]![c] = true;
-      queue.push([r, c]);
-    }
-  }
-  return seen;
-}
 
 describe('campaign level design', () => {
   it('has 24 distinct levels in 4 chapters of 6', () => {
@@ -54,7 +25,8 @@ describe('campaign level design', () => {
       expect(level.rows.slice(0, 3).join('')).toMatch(/^\.+$/);
       expect(level.rows.slice(30).join('')).toMatch(/^\.+$/);
 
-      const seen = reachable(level.rows);
+      expect(sealedBricks(level.rows)).toEqual([]);
+      const seen = reachableCells(level.rows);
       let breakable = 0;
       level.rows.forEach((row, r) =>
         [...row].forEach((symbol, c) => {
@@ -66,6 +38,7 @@ describe('campaign level design', () => {
       );
       expect(breakable).toBeGreaterThan(100);
       expect(level.medalTargets?.goldScore).toBeGreaterThan(0);
+      expect(estimateDifficulty(level.rows)).toBeGreaterThanOrEqual(1);
     }
   );
 });

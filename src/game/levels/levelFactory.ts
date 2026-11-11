@@ -68,6 +68,12 @@ const BRICK_TEMPLATES: Record<string, BrickTemplate | undefined> = {
   }
 };
 
+/** Kind and colour a level symbol turns into (used by the HTML editor to draw real bricks). */
+export function brickLookForSymbol(symbol: string): { kind: BrickKind; color: number } | null {
+  const template = BRICK_TEMPLATES[symbol];
+  return template ? { kind: template.kind, color: template.color } : null;
+}
+
 export function createLevelFromPattern(
   pattern: PatternDefinition,
   levelIndex: number

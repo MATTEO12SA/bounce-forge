@@ -13,6 +13,8 @@ import type { Ball } from '../entities/Ball';
 import { Brick } from '../entities/Brick';
 import { Paddle } from '../entities/Paddle';
 import { POWER_UP_HALF_HEIGHT, POWER_UP_HALF_WIDTH, PowerUp } from '../entities/PowerUp';
+import { createPatternFromEditorRows } from '../levels/editorGrid';
+import { createLevelFromPattern } from '../levels/levelFactory';
 import type { LevelDefinition } from '../levels/levelTypes';
 import { BallManager } from '../managers/BallManager';
 import { PlayfieldRenderer } from '../managers/PlayfieldRenderer';
@@ -190,7 +192,7 @@ export class GameScene extends Phaser.Scene {
     this.level =
       this.mode === 'endless' || this.mode === 'daily'
         ? createWaveLevel({ mode: this.mode, runSeed: this.runSeed, wave: this.wave })
-        : this.levelSystem.getLevel(this.levelIndex, this.levelSource);
+        : this.createSessionLevel();
 
     const preferences = this.saveSystem.snapshot().preferences;
     this.reducedMotion = preferences.reducedMotion;
@@ -315,6 +317,9 @@ export class GameScene extends Phaser.Scene {
       levelIndex: Math.max(0, Math.floor(data?.levelIndex ?? 0)),
       editorReturn: data?.editorReturn
     };
+    if (mode === 'creative' && data?.draft && Array.isArray(data.draft.rows)) {
+      session.draft = { name: String(data.draft.name ?? ''), rows: [...data.draft.rows] };
+    }
     if (mode === 'endless' || mode === 'daily') {
       session.wave = Math.max(1, Math.floor(data?.wave ?? 1));
       session.seed = (data?.seed ?? 0) >>> 0;
@@ -327,6 +332,22 @@ export class GameScene extends Phaser.Scene {
       };
     }
     return session;
+  }
+
+  /** Campaign or creative level, or the editor's unsaved draft when testing it. */
+  private createSessionLevel(): LevelDefinition {
+    const draft = this.session.draft;
+    if (this.mode === 'creative' && draft) {
+      try {
+        return createLevelFromPattern(
+          createPatternFromEditorRows(this.levelIndex, draft.name, draft.rows),
+          this.levelIndex
+        );
+      } catch {
+        // Invalid draft: fall back to the saved slot.
+      }
+    }
+    return this.levelSystem.getLevel(this.levelIndex, this.levelSource);
   }
 
   private createBricks(): void {

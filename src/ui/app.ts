@@ -9,6 +9,9 @@ import { audio } from '../game/audio/AudioEngine';
 import { ADMIN_ENABLED } from '../game/config/features';
 import { campaignLevels } from '../game/levels/campaignLevels';
 import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../game/levels/levelShare';
+import { createLevelFromPattern } from '../game/levels/levelFactory';
+import { estimateDifficulty } from '../game/levels/levelChecks';
+import { LEVEL_PATTERNS } from '../game/levels/levelPatterns';
 import type { LevelDefinition } from '../game/levels/levelTypes';
 import {
   createRunSeed,
@@ -25,6 +28,9 @@ import {
   type SaveData
 } from '../game/systems/SaveSystem';
 import { clear, h, icon } from './dom';
+import { clearDraft, readDraft, writeDraft } from './editor/drafts';
+import { EditorScreen } from './editor/EditorScreen';
+import { generateLevel, randomSeed } from './editor/generator';
 import { EngineLoader, type EngineState } from './engine';
 import {
   formatDate,
@@ -48,7 +54,7 @@ const CHAPTER_SLUG: Record<string, string> = {
 };
 const SLOT_COUNT = campaignLevels.length;
 
-type View = 'home' | 'menu' | 'play' | 'tool';
+type View = 'home' | 'menu' | 'play' | 'tool' | 'editor';
 type MenuScreen = 'campaign' | 'modes' | 'create' | 'help' | 'settings';
 
 type Route =
@@ -124,6 +130,9 @@ export class App {
   private readonly cleanups: Array<() => void> = [];
   private resizeObserver: ResizeObserver | null = null;
   private stageSlot: HTMLElement | null = null;
+  private editor: EditorScreen | null = null;
+  /** Unsaved editor level to play next ("Test" never overwrites the saved slot). */
+  private pendingDraft: { slotIndex: number; name: string; rows: string[] } | null = null;
 
   public constructor(root: HTMLElement) {
     this.root = root;
@@ -228,6 +237,10 @@ export class App {
     const route = parseRoute(window.location.hash);
     this.route = route;
     this.closeOverlays();
+    if (this.editor) {
+      this.editor.destroy();
+      this.editor = null;
+    }
 
     if (route.name !== 'play' && this.activeSessionKey) {
       this.activeSessionKey = null;
@@ -253,12 +266,7 @@ export class App {
         this.startFromRoute(route);
         break;
       case 'edit':
-        this.demoRunning = false;
-        this.setView('tool');
-        this.renderTool();
-        void this.engine
-          .load()
-          .then((engine) => engine.openEditor({ mode: 'creative', slotIndex: route.slot }));
+        this.renderEditor(route.slot);
         break;
       case 'admin':
         this.demoRunning = false;
@@ -275,7 +283,7 @@ export class App {
     this.view = view;
     this.root.dataset.view = view;
     const controller = this.engine.controller;
-    if (controller && view === 'menu' && !this.activeSessionKey) {
+    if (controller && (view === 'menu' || view === 'editor') && !this.activeSessionKey) {
       controller.pause();
     } else if (controller && view === 'home') {
       controller.resume();
@@ -543,6 +551,16 @@ export class App {
     if (kind === 'creative') {
       return this.levelSystem.getCreativeLevel(index);
     }
+    if (kind === 'draft') {
+      const draft = readDraft(index);
+      return draft
+        ? createLevelFromPattern({ id: `draft-${index}`, name: draft.name, rows: draft.rows }, 0)
+        : null;
+    }
+    if (kind === 'pattern') {
+      const pattern = LEVEL_PATTERNS[index];
+      return pattern ? createLevelFromPattern(pattern, index) : null;
+    }
     return null;
   }
 
@@ -796,6 +814,7 @@ export class App {
 
   private createScreen(): HTMLElement {
     const data = this.save.snapshot();
+    const empty = this.firstEmptySlot(data);
     const status = h('p', { class: 'form-status', role: 'status', 'aria-live': 'polite' });
     const textarea = h('textarea', {
       id: 'import-code',
@@ -828,13 +847,58 @@ export class App {
       status
     );
 
+    const startCard = (
+      accent: string,
+      iconName: string,
+      title: string,
+      body: string,
+      action: () => void
+    ): HTMLElement =>
+      h(
+        'li',
+        {},
+        h(
+          'button',
+          {
+            class: `start-card accent-${accent}`,
+            type: 'button',
+            disabled: empty === null,
+            onclick: action
+          },
+          h('span', { class: 'start-card-icon' }, icon(iconName)),
+          h('span', { class: 'start-card-title' }, title),
+          h('span', { class: 'start-card-body' }, body)
+        )
+      );
+
+    const starts = h(
+      'ul',
+      { class: 'start-grid', role: 'list' },
+      startCard('storm', 'dice', t('workshop.surprise.title'), t('workshop.surprise.body'), () =>
+        this.startWorkshopLevel({
+          name: `${t('workshop.surprise.title').replace(/\s*!$/, '')} ${Math.floor(Math.random() * 900) + 100}`,
+          rows: generateLevel(randomSeed())
+        })
+      ),
+      startCard('forge', 'grid', t('workshop.campaign.title'), t('workshop.campaign.body'), () =>
+        this.openCampaignPicker()
+      ),
+      startCard('steel', 'pencil', t('workshop.blank.title'), t('workshop.blank.body'), () =>
+        this.startWorkshopLevel(null)
+      )
+    );
+
     const slots = Object.values(data.creativeLevelSlots).sort((a, b) => a.slotIndex - b.slotIndex);
-    const empty = this.firstEmptySlot(data);
+    const draftOnly: number[] = [];
+    for (let index = 0; index < SLOT_COUNT; index += 1) {
+      if (!data.creativeLevelSlots[String(index)] && readDraft(index)) {
+        draftOnly.push(index);
+      }
+    }
 
     const cards = slots.map((slot) => {
-      const level = this.levelSystem.getCreativeLevel(slot.slotIndex);
-      const breakable =
-        level?.bricks.filter((brick) => brick.kind !== 'indestructible').length ?? 0;
+      const difficulty = estimateDifficulty(slot.rows);
+      const hasDraft = readDraft(slot.slotIndex) !== null;
       return h(
         'li',
         {},
@@ -842,14 +906,18 @@ export class App {
           'article',
           { class: 'level-card creation-card accent-steel' },
           h(
-            'div',
-            { class: 'card-visual' },
-            h('canvas', { 'data-level': `creative:${slot.slotIndex}`, 'aria-hidden': 'true' })
+            'a',
+            {
+              class: 'card-visual',
+              href: `#/create/edit/${slot.slotIndex}`,
+              'aria-label': `${t('create.edit')} — ${slot.name}`
+            },
+            h('canvas', { 'data-level': `creative:${slot.slotIndex}`, 'aria-hidden': 'true' }),
+            hasDraft ? h('span', { class: 'draft-badge' }, t('editor.unsaved')) : null
           ),
           h(
             'div',
             { class: 'card-meta' },
-            h('span', { class: 'card-index' }, String(slot.slotIndex + 1).padStart(2, '0')),
             h(
               'span',
               { class: 'card-text' },
@@ -857,7 +925,7 @@ export class App {
               h(
                 'span',
                 { class: 'card-sub' },
-                `${t('create.bricks', { n: breakable })} · ${t('create.updated', { date: formatDate(slot.updatedAt) })}`
+                `${'★'.repeat(difficulty)}${'☆'.repeat(5 - difficulty)} · ${t('create.updated', { date: formatDate(slot.updatedAt) })}`
               )
             )
           ),
@@ -920,29 +988,157 @@ export class App {
       );
     });
 
+    const draftCards = draftOnly.map((slotIndex) => {
+      const draft = readDraft(slotIndex);
+      const name = draft?.name ?? t('create.slot', { n: slotIndex + 1 });
+      return h(
+        'li',
+        {},
+        h(
+          'article',
+          { class: 'level-card creation-card is-draft accent-storm' },
+          h(
+            'a',
+            {
+              class: 'card-visual',
+              href: `#/create/edit/${slotIndex}`,
+              'aria-label': `${t('create.edit')} — ${name}`
+            },
+            h('canvas', { 'data-level': `draft:${slotIndex}`, 'aria-hidden': 'true' }),
+            h('span', { class: 'draft-badge' }, t('editor.unsaved'))
+          ),
+          h(
+            'div',
+            { class: 'card-meta' },
+            h('span', { class: 'card-text' }, h('span', { class: 'card-title' }, name))
+          ),
+          h(
+            'div',
+            { class: 'card-actions' },
+            h(
+              'a',
+              { class: 'button button-primary button-sm', href: `#/create/edit/${slotIndex}` },
+              icon('pencil'),
+              t('create.edit')
+            ),
+            h(
+              'button',
+              {
+                class: 'icon-button icon-button-danger',
+                type: 'button',
+                title: t('create.delete'),
+                'aria-label': `${t('create.delete')} — ${name}`,
+                onclick: () => {
+                  clearDraft(slotIndex);
+                  this.renderMenu('create');
+                }
+              },
+              icon('trash')
+            )
+          )
+        )
+      );
+    });
+
+    const mine = [...draftCards, ...cards];
     return h(
       'section',
-      { class: 'screen', 'aria-labelledby': 'screen-title' },
-      this.screenHeader(
-        t('create.title'),
-        t('create.subtitle'),
-        empty === null
-          ? undefined
-          : h(
-              'a',
-              { class: 'button button-primary', href: `#/create/edit/${empty}` },
-              icon('plus'),
-              t('create.new')
-            )
-      ),
+      { class: 'screen workshop', 'aria-labelledby': 'screen-title' },
+      this.screenHeader(t('workshop.title'), t('workshop.subtitle')),
+      h('h2', { class: 'section-title' }, t('workshop.start')),
+      empty === null ? h('p', { class: 'form-status is-error' }, t('create.import.full')) : null,
+      starts,
+      h('h2', { class: 'section-title' }, t('workshop.mine')),
+      mine.length > 0
+        ? h('ul', { class: 'card-grid', role: 'list' }, ...mine)
+        : h('p', { class: 'empty-note' }, t('workshop.mineEmpty')),
       h(
-        'div',
-        { class: 'panel' },
-        h('h2', { class: 'panel-title' }, t('create.import.title')),
+        'details',
+        { class: 'panel import-panel' },
+        h('summary', { class: 'panel-title' }, icon('download'), t('workshop.importToggle')),
         importForm
-      ),
-      h('ul', { class: 'card-grid', role: 'list' }, ...cards)
+      )
     );
+  }
+
+  /** Opens the editor on a free slot, pre-filled with a draft (template or surprise). */
+  private startWorkshopLevel(draft: { name: string; rows: string[] } | null): void {
+    const slotIndex = this.firstEmptySlot();
+    if (slotIndex === null) {
+      this.toast(t('create.import.full'));
+      return;
+    }
+    if (draft) {
+      writeDraft(slotIndex, { ...draft, fresh: true });
+    } else {
+      clearDraft(slotIndex);
+    }
+    this.navigate(`#/create/edit/${slotIndex}`);
+  }
+
+  private openCampaignPicker(): void {
+    const grid = h(
+      'ul',
+      { class: 'picker-grid', role: 'list' },
+      ...LEVEL_PATTERNS.map((pattern, index) =>
+        h(
+          'li',
+          {},
+          h(
+            'button',
+            {
+              class: 'picker-item',
+              type: 'button',
+              onclick: () => {
+                this.closeOverlays();
+                this.startWorkshopLevel({
+                  name: levelDisplayName(pattern.name),
+                  rows: [...pattern.rows]
+                });
+              }
+            },
+            h('canvas', { 'data-level': `pattern:${index}`, 'aria-hidden': 'true' }),
+            h('span', {}, `${index + 1}. ${levelDisplayName(pattern.name)}`)
+          )
+        )
+      )
+    );
+    this.openDialog(
+      t('workshop.pickTitle'),
+      [grid],
+      [{ label: t('common.cancel'), variant: 'secondary', action: () => this.closeOverlays() }],
+      () => this.closeOverlays(),
+      'dialog-wide'
+    );
+    grid.querySelectorAll<HTMLCanvasElement>('canvas[data-level]').forEach((canvas) => {
+      const level = this.resolvePreviewLevel(canvas.dataset.level ?? '');
+      if (level) drawLevelPreview(canvas, level);
+    });
+  }
+
+  private renderEditor(slotIndex: number): void {
+    this.demoRunning = false;
+    this.setView('editor');
+    clear(this.topbar);
+    this.mountStage(null);
+    clear(this.main);
+    this.editor = new EditorScreen(
+      {
+        save: this.save,
+        toast: (message) => this.toast(message),
+        openDialog: (title, body, actions, onEscape) =>
+          this.openDialog(title, body, actions, onEscape),
+        closeOverlays: () => this.closeOverlays(),
+        navigate: (hash) => this.navigate(hash),
+        testDraft: (index, name, rows) => {
+          this.pendingDraft = { slotIndex: index, name, rows };
+          this.navigate(playHash('creative', index));
+        },
+        shareCode: (rows, name) => void this.shareCode(rows, name)
+      },
+      slotIndex
+    );
+    this.main.append(this.editor.element);
   }
 
   private importLevel(code: string, status: HTMLElement): void {
@@ -992,10 +1188,13 @@ export class App {
 
   private async shareSlot(slotIndex: number): Promise<void> {
     const slot = this.save.getCreativeLevelSlot(slotIndex);
-    if (!slot) {
-      return;
+    if (slot) {
+      await this.shareCode(slot.rows, slot.name);
     }
-    const code = encodeCreativeLevelCode(slot.rows, slot.name);
+  }
+
+  private async shareCode(rows: readonly string[], name: string): Promise<void> {
+    const code = encodeCreativeLevelCode(rows, name);
     try {
       await navigator.clipboard.writeText(code);
       this.toast(t('create.copied'));
@@ -1343,7 +1542,12 @@ export class App {
       this.navigate('#/campaign');
       return;
     }
-    if (route.mode === 'creative' && !data.creativeLevelSlots[String(route.index)]) {
+    const draft =
+      route.mode === 'creative' && this.pendingDraft?.slotIndex === route.index
+        ? this.pendingDraft
+        : null;
+    this.pendingDraft = null;
+    if (route.mode === 'creative' && !draft && !data.creativeLevelSlots[String(route.index)]) {
       this.navigate('#/create');
       return;
     }
@@ -1359,6 +1563,9 @@ export class App {
       session.seed = dailySeed(dateKey);
     } else if (route.mode === 'creative') {
       session.editorReturn = { mode: 'creative', slotIndex: route.index };
+      if (draft) {
+        session.draft = { name: draft.name, rows: draft.rows };
+      }
     }
     this.startSession(session);
   }

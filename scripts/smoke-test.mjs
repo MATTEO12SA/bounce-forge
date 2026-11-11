@@ -549,6 +549,88 @@ try {
   );
 
   // ---------------------------------------------------------------- sharing with Unicode
+  // ---------------------------------------------------------------- workshop & editor
+  console.log('Workshop');
+  await goto(page, baseUrl, '#/create');
+  await waitFor(page, `document.querySelectorAll('.start-card').length === 3`);
+  await evaluate(page, `document.querySelector('.start-card').click(); true`);
+  const editorOpen = await waitFor(page, `document.querySelector('.editor-canvas') !== null`, 6000);
+  check('Surprise opens the editor on a generated level', editorOpen);
+  const surprise = await evaluate(
+    page,
+    `({ dirty: document.querySelector('.editor-status').classList.contains('is-dirty'), name: document.querySelector('.editor-name').value, hash: location.hash, stats: document.querySelector('.editor-stats').textContent })`
+  );
+  check(
+    'surprise level is a playable unsaved draft',
+    surprise.dirty && /^#\/create\/edit\/\d+$/.test(surprise.hash) && !/^0 /.test(surprise.stats),
+    surprise
+  );
+  const slotIndex = Number(surprise.hash.split('/').pop());
+  const painted = await evaluate(
+    page,
+    `(() => {
+      const canvas = document.querySelector('.editor-canvas');
+      const rect = canvas.getBoundingClientRect();
+      const x = rect.left + rect.width * (1.5 / 36);
+      const y = rect.top + rect.height * ((40.5 * 22) / (58 * 22 + 96));
+      const before = document.querySelector('.editor-stats').textContent;
+      const opts = { bubbles: true, pointerId: 7, button: 0, buttons: 1, clientX: x, clientY: y, pointerType: 'mouse' };
+      canvas.dispatchEvent(new PointerEvent('pointerdown', opts));
+      canvas.dispatchEvent(new PointerEvent('pointerup', { ...opts, buttons: 0 }));
+      return new Promise((resolve) => requestAnimationFrame(() => resolve({ before, after: document.querySelector('.editor-stats').textContent, undo: !document.querySelector('[aria-label^="${'Annuler'}"]').disabled })));
+    })()`
+  );
+  check(
+    'painting adds bricks and can be undone',
+    painted.before !== painted.after && painted.undo,
+    painted
+  );
+  await evaluate(
+    page,
+    `[...document.querySelectorAll('.editor-bar .button')].find((b) => b.textContent.includes('Tester')).click(); true`
+  );
+  const testing = await waitFor(
+    page,
+    `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().mode === 'creative' && Boolean(${GAME}.getSession().draft)`,
+    10000
+  );
+  const slotUntouched = await evaluate(
+    page,
+    `!JSON.parse(localStorage.getItem('bounce-forge.save.v1')).creativeLevelSlots['${slotIndex}']`
+  );
+  check('Test plays the draft without saving it', testing && slotUntouched, {
+    testing,
+    slotUntouched
+  });
+  await goto(page, baseUrl, `#/create/edit/${slotIndex}`);
+  await waitFor(page, `document.querySelector('.editor-canvas') !== null`);
+  const restored = await evaluate(
+    page,
+    `({ dirty: document.querySelector('.editor-status').classList.contains('is-dirty'), stats: document.querySelector('.editor-stats').textContent })`
+  );
+  check(
+    'returning to the editor restores the draft',
+    restored.dirty && restored.stats === painted.after,
+    restored
+  );
+  await evaluate(
+    page,
+    `[...document.querySelectorAll('.editor-bar .button')].find((b) => b.textContent.includes('Enregistrer')).click(); true`
+  );
+  const saved = await waitFor(
+    page,
+    `Boolean(JSON.parse(localStorage.getItem('bounce-forge.save.v1')).creativeLevelSlots['${slotIndex}']) && !document.querySelector('.editor-status').classList.contains('is-dirty') && localStorage.getItem('bounce-forge.editor-draft.v1.${slotIndex}') === null`,
+    4000
+  );
+  check('Save stores the level and clears the draft', saved);
+  await goto(page, baseUrl, '#/create');
+  const listed = await waitFor(
+    page,
+    `document.querySelectorAll('.creation-card:not(.is-draft)').length === 1`,
+    4000
+  );
+  check('saved level appears in the workshop', listed);
+
   console.log('Sharing');
   const name = 'Forgé à chaud 🔥 ñ';
   await goto(page, baseUrl, '#/create');
