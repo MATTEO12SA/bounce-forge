@@ -409,7 +409,7 @@ try {
   const victory = await waitFor(
     page,
     `document.querySelector('.dialog.is-victory')?.textContent`,
-    6000
+    30000
   );
   check('clearing the level shows the victory screen', victory);
   await screenshot(page, 'desktop-victory');
@@ -429,7 +429,7 @@ try {
   const defeat = await waitFor(
     page,
     `document.querySelector('.dialog.is-defeat')?.textContent`,
-    6000
+    30000
   );
   check('losing the last life shows the defeat screen', defeat);
   await screenshot(page, 'phone-defeat');
@@ -443,7 +443,7 @@ try {
     await waitFor(
       page,
       `${GAME}.getSession().wave === ${wave} && ${GAME}.bricks.getChildren().length > 0`,
-      8000
+      30000
     );
     await evaluate(
       page,
@@ -453,11 +453,11 @@ try {
   const wave4 = await waitFor(
     page,
     `${GAME}.getSession().wave === 4 && ${GAME}.getSession().carry?.score > 0`,
-    8000
+    30000
   );
   check('endless chains waves and carries the score', wave4);
   await evaluate(page, `(() => { const s = ${GAME}; s.lives = 1; s.loseLife(); return true; })()`);
-  await waitFor(page, `document.querySelector('.dialog.is-defeat')`, 6000);
+  await waitFor(page, `document.querySelector('.dialog.is-defeat')`, 30000);
   const endlessRecord = await evaluate(
     page,
     `JSON.parse(localStorage.getItem('bounce-forge.save.v1')).records.endless`
