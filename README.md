@@ -32,9 +32,10 @@ Bounce Forge est un casse-briques original qui se joue directement dans le navig
 installation ni compte. Une balle devient trois, puis dix, puis quarante : chaque niveau mise sur
 une idée — viser juste, déclencher des réactions en chaîne ou noyer le terrain sous les balles.
 
-| Campagne                                                                       | Modes                                                                                |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| ![Grille des 24 niveaux avec miniatures et médailles](docs/media/campaign.png) | ![Cartes des modes Campagne, Infini, Défi du jour et Création](docs/media/modes.png) |
+| Campagne                                                                           | Modes                                                                                        |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| ![Grille des 24 niveaux avec miniatures et médailles](docs/media/campaign.png)     | ![Cartes des modes Campagne, Infini, Défi du jour et Création](docs/media/modes.png)         |
+| ![L’Atelier : Surprise, depuis la campagne, page blanche](docs/media/workshop.png) | ![Éditeur avec les vraies briques, outils à gauche, palette à droite](docs/media/editor.png) |
 
 ## Fonctionnalités
 
@@ -44,10 +45,18 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
   La difficulté plafonne au dernier palier de la campagne.
 - **Défi du jour** : trois vagues identiques pour tous les joueurs, tirées de la date UTC.
   Essais illimités, meilleur score conservé.
-- **Éditeur de niveaux** : dessinez, testez, modifiez, puis partagez votre niveau avec un code
-  `BF2:` (accents et emoji compris).
-- **Six types de briques** reconnaissables par leur couleur _et_ leur contour : standard,
-  renforcée, explosive, bonus, bouclier, acier indestructible.
+- **L’Atelier** : créez un niveau en 30 secondes à partir d’une **Surprise** (niveau symétrique
+  généré), d’un niveau de la campagne ou d’une page blanche. L’éditeur affiche les vraies briques
+  du jeu : pinceau 1×1 à 3×3, rectangle, ligne, remplissage, pipette, tampons, texte en briques,
+  symétrie miroir ou 4 quarts, annuler/rétablir, zoom et pincement. Il estime la difficulté,
+  signale les briques enfermées dans l’acier, garde un brouillon automatique et **teste sans
+  écraser** votre niveau enregistré. Partage par code `BF2:` (accents et emoji compris).
+- **Sensations soignées** : sons synthétisés (note qui monte avec le combo, explosions, bonus),
+  physique sans traversée ni double impact, rebond courbe sur la raquette, secousses, éclats,
+  ralenti sur la dernière brique.
+- **Six types de briques** reconnaissables par leur couleur _et_ leur symbole : standard,
+  renforcée (rose ×2, violette ×3, fissures à chaque coup), explosive, bonus, bouclier, acier
+  indestructible.
 - **Pensé pour tous les écrans** : HUD latéral sur ordinateur, HUD compact et commandes tactiles
   sur mobile, cibles d’au moins 44 px.
 - **Accessible** : navigation au clavier, focus visible, option « Réduire les animations »,
@@ -57,12 +66,12 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
 
 ## Commandes
 
-| Action               | Ordinateur                   | Mobile           |
-| -------------------- | ---------------------------- | ---------------- |
-| Déplacer la raquette | Souris, `←` `→` ou `A` `D`   | Glisser le doigt |
-| Lancer la balle      | Clic, `Espace` ou `Entrée`   | Toucher l’écran  |
-| Pause                | `Échap`, `P` ou bouton pause | Bouton pause     |
-| Recommencer          | `R`                          | Menu pause       |
+| Action               | Ordinateur                                                | Mobile                     |
+| -------------------- | --------------------------------------------------------- | -------------------------- |
+| Déplacer la raquette | Souris, `←` `→` ou `A` `D`                                | Glisser le doigt           |
+| Viser puis lancer    | Maintenir le clic, viser à la souris, relâcher · `Espace` | Maintenir, viser, relâcher |
+| Pause                | `Échap`, `P` ou bouton pause                              | Bouton pause               |
+| Recommencer          | `R`                                                       | Menu pause                 |
 
 <p align="center">
   <img src="docs/media/mobile.png" alt="Partie sur téléphone avec le HUD compact en haut de l’écran" width="260" />
@@ -97,13 +106,17 @@ d’administration local qui permet de retoucher les niveaux officiels (voir
 src/
 ├── main.ts            Point d’entrée : monte l’interface HTML
 ├── ui/                Interface HTML/CSS (accueil, menus, HUD, pause, résultats, i18n)
+│   └── editor/        L’Atelier : éditeur, outils, tampons, générateur Surprise
 └── game/
     ├── bridge.ts      Contrat typé entre l’interface et le moteur
     ├── GameApp.ts     Contrôleur Phaser, chargé à la demande
-    ├── scenes/        GameScene (partie), éditeur, outils admin locaux
+    ├── scenes/        GameScene (partie), outils admin locaux
+    ├── physics/       Collisions balle/briques sur grille, rebonds, visée
+    ├── audio/         Moteur de sons synthétisés (Web Audio)
+    ├── render/        Textures « Forge lumineuse » et effets
     ├── modes/         Générateur de vagues Infini / Défi du jour
     ├── levels/        Motifs, fabrique de niveaux, codes de partage
-    └── systems/       Sauvegarde, score, bonus, collisions, audio…
+    └── systems/       Sauvegarde, score, bonus, particules…
 ```
 
 L’interface (≈ 30 Ko compressés) s’affiche immédiatement ; Phaser n’est téléchargé qu’ensuite

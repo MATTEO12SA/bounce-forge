@@ -3,6 +3,40 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.1.0] — 2026-11-11
+
+### Added
+
+- **The Workshop**, a rebuilt creative mode: start from a **Surprise!** level (seeded symmetric
+  generator), a campaign level or a blank page; drafts and saved levels with previews and
+  difficulty stars.
+- Full-screen **HTML level editor** drawing the game's own bricks: brush 1×1 to 3×3, eraser,
+  rectangle, line, fill, picker, stamps, pixel-font text, mirror and quarter symmetry, move,
+  undo/redo, zoom and pinch, keyboard shortcuts. Live difficulty estimate and warnings (no
+  breakable brick, bricks sealed in steel, bricks near the paddle). Drafts autosave and
+  **Test** plays the draft without overwriting the saved level.
+- **Sound effects** from a single Web Audio engine: pentatonic notes rising with the combo,
+  metallic hits, explosions, power-up arpeggios, life lost, level clear; stereo by position.
+- **Hold to aim**: hold the click (or finger), aim with a dotted path and arrow, release to
+  launch — also for the first ball.
+- Juice: hit-stop, trauma screen shake, shards and sparks, score popups, combo label, slow
+  motion on the last brick, bricks dropping in at level start (all respect “Reduce motion”).
+
+### Changed
+
+- **24 redesigned campaign levels** drawn as pixel art (anvil, heart, castle, vault, volcano,
+  target, fortress…), with French names; every brick is guaranteed reachable.
+- Custom deterministic ball physics on the brick grid: swept collisions (no tunnelling, one
+  brick per step, no seam kicks), curved paddle bounce with spin, gentle speed ramp.
+- “Forge lumineuse” visuals: bevelled bricks with symbols and crack stages, glowing ball with a
+  light trail, metal walls, embers, danger glow; reinforced bricks are now pink (×2) and purple (×3).
+- Falling power-ups no longer overlap; the AIM (sticky) power-up is rare and only drops with
+  three balls or fewer.
+
+### Removed
+
+- The canvas creative editor (kept only for the local admin tool).
+
 ## [1.0.0] — 2026-11-11
 
 ### Added
