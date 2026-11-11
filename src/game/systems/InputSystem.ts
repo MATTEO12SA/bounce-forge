@@ -27,7 +27,9 @@ export class InputSystem {
     }
 
     if (this.pointerTargetX !== null) {
-      paddle.setCenterX(lerp(paddle.x, this.pointerTargetX, 0.42));
+      // Frame-rate independent smoothing: same feel at 30, 60 or 144 Hz.
+      const blend = 1 - Math.pow(1 - 0.42, Math.max(0, deltaMs) / (1000 / 60));
+      paddle.setCenterX(lerp(paddle.x, this.pointerTargetX, Math.min(1, blend)));
     }
   }
 
