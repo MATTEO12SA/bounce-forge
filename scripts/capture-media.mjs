@@ -103,6 +103,10 @@ async function viewport(page, width, height, mobile = false) {
 }
 
 async function shot(page, file, clip) {
+  if (!clip) {
+    await page.send('Runtime.evaluate', { expression: 'window.scrollTo(0, 0)' });
+    await delay(150);
+  }
   const { data } = await page.send('Page.captureScreenshot', {
     format: 'png',
     ...(clip ? { clip } : {})
@@ -168,7 +172,7 @@ try {
   await waitFor(page, `document.querySelector('.home') !== null`);
   await evaluate(
     page,
-    `localStorage.setItem('bounce-forge.save.v1', JSON.stringify({ version: 6, bestScore: 48210, unlockedLevel: ${process.env.CAPTURE_LEVELS ? 29 : 9}, completedLevels: [0,1,2,3,4,5,6,7,8], levelMedals: {'0':'gold','1':'gold','2':'silver','3':'gold','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, preferences: { soundEnabled: true, themeId: 'forge', volumeSfx: 0.6, volumeMusic: 0.5, fxQuality: 'high', fullscreen: false, language: '${process.env.MEDIA_LANG ?? 'fr'}', reducedMotion: ${process.env.CAPTURE_LEVELS ? 'true' : 'false'} }, creativeLevelSlots: {}, tutorialSeen: true, records: { endless: { bestScore: 61250, bestWave: 14 }, daily: {} } })); true`
+    `localStorage.setItem('bounce-forge.save.v1', JSON.stringify({ version: 7, bestScore: 48210, unlockedLevel: ${process.env.CAPTURE_LEVELS ? 29 : 9}, completedLevels: [0,1,2,3,4,5,6,7,8], levelMedals: {'0':'gold','1':'gold','2':'silver','3':'gold','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, preferences: { soundEnabled: true, themeId: 'forge', volumeSfx: 0.6, volumeMusic: 0.5, fxQuality: 'high', fullscreen: false, language: '${process.env.MEDIA_LANG ?? 'fr'}', reducedMotion: ${process.env.CAPTURE_LEVELS ? 'true' : 'false'} }, creativeLevelSlots: {}, tutorialSeen: true, records: { endless: { bestScore: 61250, bestWave: 14 }, daily: {} } })); true`
   );
   await page.send('Page.reload', {});
 

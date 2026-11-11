@@ -34,13 +34,21 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
 
 | Campagne                                                                           | Modes                                                                                        |
 | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| ![Grille des 24 niveaux avec miniatures et médailles](docs/media/campaign.png)     | ![Cartes des modes Campagne, Infini, Défi du jour et Création](docs/media/modes.png)         |
+| ![Grille des 30 niveaux avec miniatures et médailles](docs/media/campaign.png)     | ![Cartes des modes Campagne, Infini, Défi du jour et Création](docs/media/modes.png)         |
 | ![L’Atelier : Surprise, depuis la campagne, page blanche](docs/media/workshop.png) | ![Éditeur avec les vraies briques, outils à gauche, palette à droite](docs/media/editor.png) |
 
 ## Fonctionnalités
 
-- **Campagne de 24 niveaux** en 4 chapitres — Bases de la forge, Labyrinthes d’acier, Réaction en
-  chaîne, Tempête de balles — avec une médaille d’or, d’argent ou de bronze à décrocher.
+- **Campagne de 30 niveaux** en 5 chapitres — Bases de la forge, Labyrinthes d’acier, Réaction en
+  chaîne, Tempête de balles, Mécanismes — dessinés en pixel art. Chaque niveau présente une idée
+  seule avant de la mélanger aux autres, avec une médaille d’or, d’argent ou de bronze à décrocher.
+- **15 bonus** débloqués au fil des chapitres : multiballe, boule de feu, balle explosive, grosse
+  balle, canons laser, aimant, bouclier, ralenti, fièvre… et des capsules rouges « risque »
+  (turbo, rétrécir) qui rapportent plus de points. Certains se **combinent** (Météore, Soleil,
+  lasers explosifs).
+- **Mécanismes** : cristaux qui divisent la balle, clés et portes, briques phénix qui renaissent,
+  fantômes invisibles, briques mobiles, bumpers, téléporteurs, mèches ; événements de niveau
+  (pluie de bonus, orage, mur qui descend).
 - **Mode Infini** : des vagues sans fin, trois vies, score et vies conservés d’une vague à l’autre.
   La difficulté plafonne au dernier palier de la campagne.
 - **Défi du jour** : trois vagues identiques pour tous les joueurs, tirées de la date UTC.
@@ -50,13 +58,13 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
   du jeu : pinceau 1×1 à 3×3, rectangle, ligne, remplissage, pipette, tampons, texte en briques,
   symétrie miroir ou 4 quarts, annuler/rétablir, zoom et pincement. Il estime la difficulté,
   signale les briques enfermées dans l’acier, garde un brouillon automatique et **teste sans
-  écraser** votre niveau enregistré. Partage par code `BF2:` (accents et emoji compris).
+  écraser** votre niveau enregistré. Tous les mécanismes et des **réglages par niveau** (bonus
+  autorisés, fréquence, vies, vitesse, événements). Partage par code `BF3:`.
 - **Sensations soignées** : sons synthétisés (note qui monte avec le combo, explosions, bonus),
   physique sans traversée ni double impact, rebond courbe sur la raquette, secousses, éclats,
   ralenti sur la dernière brique.
-- **Six types de briques** reconnaissables par leur couleur _et_ leur symbole : standard,
-  renforcée (rose ×2, violette ×3, fissures à chaque coup), explosive, bonus, bouclier, acier
-  indestructible.
+- **Quinze briques et obstacles** reconnaissables par leur couleur _et_ leur symbole : standard,
+  renforcée (rose ×2, violette ×3), explosive, bonus, bouclier, acier, et les neuf mécanismes.
 - **Pensé pour tous les écrans** : HUD latéral sur ordinateur, HUD compact et commandes tactiles
   sur mobile, cibles d’au moins 44 px.
 - **Accessible** : navigation au clavier, focus visible, option « Réduire les animations »,

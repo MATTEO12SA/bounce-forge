@@ -99,3 +99,14 @@
   align-items: center;
   gap: 6px;
 }
+
+/* Long titles, badges or a preview canvas must never widen a card and push the medal out. */
+.level-card,
+.card-text {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.card-visual canvas {
+  display: block;
+  max-width: 100%;
+}

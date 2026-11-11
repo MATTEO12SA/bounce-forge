@@ -3,6 +3,34 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.2.0] — 2026-11-11
+
+### Added
+
+- **15 power-ups** in one registry, unlocked chapter by chapter: fire ball (burns through
+  bricks), explosive ball (charges), big ball, paddle lasers, magnet, shield (saves a ball),
+  slow motion, fever (×2 points) and red **risk capsules** (turbo, shrink) that trade a drawback
+  for more points. Stacking with caps, opposites cancel, and **combos**: Meteor (fire +
+  explosive), Sun (fire + big ball), explosive lasers.
+- **Nine mechanisms**: crystal (splits the ball), key + gate, phoenix (respawns, never blocks a
+  win), ghost (hidden until touched), mover (slides in its row), bumper, teleporter pairs, fuse
+  (burns along its line, then explodes).
+- **Level events**: power-up rain, storm (lightning), descending wall.
+- HUD chips for active effects (icon, colour, time gauge, charges), first-time hints for every
+  power-up and mechanism, help screen with the real brick artwork, combos and mechanisms.
+- **Workshop**: mechanism palette and per-level settings (allowed power-ups, frequency, lives,
+  ball speed, events), saved with the level, applied by Test, shared with `BF3:` codes.
+- Balance report test and a smoke run that plays all 30 campaign levels.
+
+### Changed
+
+- **30-level campaign in 5 chapters**, redesigned around the new mechanics: each level
+  introduces one idea before later levels combine them; chapter 5 "Mechanisms" is the mastery
+  chapter. "New: …" badges and chapter introductions on the campaign screen.
+- Gentler pacing: slower speed ramp, three lives everywhere, reinforced bricks keep exactly 2 or
+  3 hits; fewer capsules (16–22 % of bricks) so the screen never floods.
+- Save format v7 (discoveries, level settings on creative slots); older saves migrate.
+
 ## [1.1.0] — 2026-11-11
 
 ### Added
