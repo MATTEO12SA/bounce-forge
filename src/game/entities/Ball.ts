@@ -8,7 +8,9 @@ import type { Paddle } from './Paddle';
 export class Ball extends Phaser.GameObjects.Image implements BallBody {
   public vx = 0;
   public vy = 0;
-  public readonly radius = BALL_RADIUS;
+  public radius = BALL_RADIUS;
+  /** Visual tint of the current ball effect (fire...), or null. */
+  private glowTint: number | null = null;
   /** Current travel speed (ramps up with paddle hits). */
   public speed = 0;
   /** 0..1 squash impulse set on impact, decays every frame. */
@@ -29,6 +31,19 @@ export class Ball extends Phaser.GameObjects.Image implements BallBody {
     return this.attached;
   }
 
+  /** Big-ball effect: scales the collision radius and the sprite. */
+  public setSizeScale(scale: number): void {
+    this.radius = BALL_RADIUS * scale;
+  }
+
+  /** Colours the ball for an effect (fire, explosive...). */
+  public setEffectTint(color: number | null): void {
+    if (color === this.glowTint) return;
+    this.glowTint = color;
+    if (color === null) this.clearTint();
+    else this.setTint(color);
+  }
+
   public reset(x: number, y: number): void {
     this.attached = false;
     this.impact = 0;
@@ -36,7 +51,7 @@ export class Ball extends Phaser.GameObjects.Image implements BallBody {
     this.vy = 0;
     this.attachOffset = 0;
     this.setActive(true).setVisible(true).setAlpha(1).setRotation(0);
-    this.setDisplaySize(BALL_RADIUS * 4, BALL_RADIUS * 4);
+    this.setDisplaySize(this.radius * 4, this.radius * 4);
     this.setPosition(x, y);
   }
 
@@ -69,7 +84,7 @@ export class Ball extends Phaser.GameObjects.Image implements BallBody {
   /** Squash and stretch along the direction of travel. */
   public updateLook(deltaMs: number): void {
     this.impact = Math.max(0, this.impact - deltaMs / 140);
-    const base = BALL_RADIUS * 4;
+    const base = this.radius * 4;
     if (this.attached) {
       this.setDisplaySize(base, base).setRotation(0);
       return;

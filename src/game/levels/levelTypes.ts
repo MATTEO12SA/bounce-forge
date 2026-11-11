@@ -1,4 +1,5 @@
 import type { DifficultyConfig } from '../config/difficultyConfig';
+import type { LevelOptions } from './levelOptions';
 
 export type BrickKind =
   | 'standard'
@@ -53,6 +54,7 @@ export interface LevelDefinition {
   difficulty: DifficultyConfig;
   objective: LevelObjective;
   medalTargets: LevelMedalTargets;
+  options?: LevelOptions;
 }
 
 export interface PatternDefinition {
@@ -62,6 +64,7 @@ export interface PatternDefinition {
   rows: string[];
   objective?: LevelObjective;
   medalTargets?: LevelMedalTargets;
+  options?: LevelOptions;
 }
 
 export interface CreativeLevelSlot {
@@ -69,6 +72,7 @@ export interface CreativeLevelSlot {
   name: string;
   rows: string[];
   updatedAt: number;
+  options?: LevelOptions;
 }
 
 export interface AdminCampaignOverride {

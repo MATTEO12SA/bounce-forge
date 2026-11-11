@@ -15,7 +15,15 @@ export type SfxName =
   | 'waveClear'
   | 'lastBrick'
   | 'comboMilestone'
-  | 'ballSplit';
+  | 'ballSplit'
+  | 'laser'
+  | 'shield'
+  | 'fire'
+  | 'bumper'
+  | 'teleport'
+  | 'powerCombo'
+  | 'risk'
+  | 'mechanism';
 
 export interface SfxOptions {
   /** World x of the event, used for subtle stereo panning. */
@@ -44,7 +52,15 @@ const RETRIGGER: Record<SfxName, number> = {
   waveClear: 0.5,
   lastBrick: 0.5,
   comboMilestone: 0.15,
-  ballSplit: 0.05
+  ballSplit: 0.05,
+  laser: 0.05,
+  shield: 0.15,
+  fire: 0.03,
+  bumper: 0.05,
+  teleport: 0.08,
+  powerCombo: 0.4,
+  risk: 0.1,
+  mechanism: 0.08
 };
 
 type AudioContextConstructor = typeof AudioContext;
@@ -397,6 +413,123 @@ export class AudioEngine {
           decay: 0.12
         });
         return 0.14;
+      }
+      case 'laser': {
+        this.tone(ctx, out, t, {
+          type: 'sawtooth',
+          frequency: 1900,
+          endFrequency: 620,
+          gain: 0.06,
+          decay: 0.09
+        });
+        return 0.1;
+      }
+      case 'shield': {
+        this.tone(ctx, out, t, {
+          type: 'sine',
+          frequency: 520,
+          endFrequency: 1040,
+          gain: 0.2,
+          decay: 0.2
+        });
+        this.tone(ctx, out, t + 0.02, {
+          type: 'triangle',
+          frequency: 1560,
+          gain: 0.07,
+          decay: 0.25
+        });
+        this.noiseBurst(ctx, out, t, {
+          filter: 'highpass',
+          frequency: 5000,
+          gain: 0.06,
+          decay: 0.12
+        });
+        return 0.3;
+      }
+      case 'fire': {
+        // Short crackle while a fire ball burns through bricks.
+        this.noiseBurst(ctx, out, t, {
+          filter: 'bandpass',
+          frequency: 1400,
+          endFrequency: 500,
+          q: 0.7,
+          gain: 0.14,
+          decay: 0.09
+        });
+        this.tone(ctx, out, t, {
+          type: 'sine',
+          frequency: 180,
+          endFrequency: 90,
+          gain: 0.12,
+          decay: 0.08
+        });
+        return 0.12;
+      }
+      case 'bumper': {
+        this.tone(ctx, out, t, {
+          type: 'square',
+          frequency: 660,
+          endFrequency: 1320,
+          gain: 0.08,
+          decay: 0.08
+        });
+        this.tone(ctx, out, t + 0.04, { type: 'sine', frequency: 1320, gain: 0.1, decay: 0.12 });
+        return 0.18;
+      }
+      case 'teleport': {
+        this.tone(ctx, out, t, {
+          type: 'sine',
+          frequency: 300,
+          endFrequency: 1800,
+          gain: 0.14,
+          decay: 0.16
+        });
+        this.tone(ctx, out, t + 0.08, {
+          type: 'sine',
+          frequency: 1800,
+          endFrequency: 600,
+          gain: 0.08,
+          decay: 0.12
+        });
+        return 0.24;
+      }
+      case 'powerCombo': {
+        [0, 7, 12, 19, 24].forEach((semitone, index) => {
+          this.tone(ctx, out, t + index * 0.045, {
+            type: 'square',
+            frequency: 392 * semitonesToRatio(semitone),
+            gain: 0.06,
+            decay: 0.18
+          });
+        });
+        this.noiseBurst(ctx, out, t, { filter: 'lowpass', frequency: 900, gain: 0.12, decay: 0.3 });
+        return 0.5;
+      }
+      case 'risk': {
+        // A dissonant pickup: the player knows they took a risk.
+        this.tone(ctx, out, t, { type: 'sawtooth', frequency: 440, gain: 0.08, decay: 0.16 });
+        this.tone(ctx, out, t, { type: 'sawtooth', frequency: 466.2, gain: 0.08, decay: 0.16 });
+        this.tone(ctx, out, t + 0.1, { type: 'sine', frequency: 880, gain: 0.12, decay: 0.2 });
+        return 0.32;
+      }
+      case 'mechanism': {
+        // Click-clack of keys, gates and moving parts.
+        this.noiseBurst(ctx, out, t, {
+          filter: 'bandpass',
+          frequency: 2600,
+          q: 4,
+          gain: 0.12,
+          decay: 0.03
+        });
+        this.noiseBurst(ctx, out, t + 0.06, {
+          filter: 'bandpass',
+          frequency: 1700,
+          q: 4,
+          gain: 0.1,
+          decay: 0.04
+        });
+        this.tone(ctx, out, t + 0.06, { type: 'triangle', frequency: 784, gain: 0.1, decay: 0.12 });
+        return 0.2;
       }
       case 'powerMiss': {
         this.noiseBurst(ctx, out, t, {

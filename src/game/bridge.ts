@@ -37,6 +37,19 @@ export type ObjectiveKind =
   | 'bestCombo'
   | 'clearWave';
 
+/** An active effect shown in the HUD: a timed one (ratio of time left) or charges (count). */
+export interface HudEffect {
+  type: string;
+  ratio: number;
+  count?: number;
+}
+
+/** One-off messages from the game that the interface shows as toasts. */
+export type GameNotice =
+  | { kind: 'discovery'; id: string }
+  | { kind: 'combo'; id: 'meteor' | 'explosiveLasers' | 'sun' }
+  | { kind: 'event'; id: 'descend' | 'storm' | 'bonusRain' | 'gatesOpen' };
+
 export interface HudSnapshot {
   mode: GameMode;
   levelIndex: number;
@@ -54,7 +67,7 @@ export interface HudSnapshot {
   bricksLeft: number;
   bricksTotal: number;
   waitingToLaunch: boolean;
-  effects: string[];
+  effects: HudEffect[];
   objective: { kind: ObjectiveKind; current: number; target: number };
 }
 
@@ -82,6 +95,7 @@ export interface BridgeEvents {
   /** The player pressed Esc/P or the page went to background. */
   pauseRequested: undefined;
   waveCleared: { wave: number; score: number; nextWave: number };
+  notice: GameNotice;
   /** An in-canvas tool (editor, admin) asked to return to the interface. */
   exitToShell: { from: 'editor' | 'admin' };
   /** The engine is showing a canvas tool and the interface must step aside. */

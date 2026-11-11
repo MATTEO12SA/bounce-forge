@@ -2,11 +2,13 @@ import {
   bridge,
   type GameMode,
   type GameResult,
+  type GameNotice,
   type GameSession,
   type HudSnapshot
 } from '../game/bridge';
 import { audio } from '../game/audio/AudioEngine';
 import { ADMIN_ENABLED } from '../game/config/features';
+import { getPowerUpDefinition, POWER_UP_TYPES } from '../game/config/powerUps';
 import { campaignLevels } from '../game/levels/campaignLevels';
 import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../game/levels/levelShare';
 import { createLevelFromPattern } from '../game/levels/levelFactory';
@@ -168,6 +170,7 @@ export class App {
       bridge.on('result', (result) => this.onResult(result)),
       bridge.on('pauseRequested', () => this.pauseGame()),
       bridge.on('waveCleared', ({ wave }) => this.toast(t('wave.cleared', { n: wave }))),
+      bridge.on('notice', (notice) => this.onNotice(notice)),
       bridge.on('exitToShell', ({ from }) => this.navigate(from === 'admin' ? '#/' : '#/create')),
       bridge.on('toolOpened', () => this.setView('tool')),
       this.engine.onState((state) => this.onEngineState(state)),
@@ -1222,6 +1225,39 @@ export class App {
     }
   }
 
+  /** HUD chip of an active effect: icon, colour, time gauge and charges. */
+  private effectChip(effect: { type: string; ratio: number; count?: number }): HTMLElement {
+    const known = POWER_UP_TYPES.find((type) => type === effect.type);
+    const definition = known ? getPowerUpDefinition(known) : null;
+    const color = definition ? `#${definition.color.toString(16).padStart(6, '0')}` : '#ffb423';
+    const label = known ? (t(`power.${known}` as MessageKey).split(' — ')[0] ?? '') : effect.type;
+    return h(
+      'li',
+      {
+        class: `power-chip effect-chip${definition?.risk ? ' is-risk' : ''}`,
+        'data-effect': effect.type,
+        style: `--chip: ${color}; --ratio: ${effect.ratio.toFixed(3)}`,
+        title: label,
+        'aria-label': effect.count ? `${label} ×${effect.count}` : label
+      },
+      definition?.icon ?? '?',
+      effect.count ? h('small', {}, `×${effect.count}`) : null
+    );
+  }
+
+  private onNotice(notice: GameNotice): void {
+    if (notice.kind === 'discovery') {
+      const [group, id] = notice.id.split(':');
+      const key = `${group === 'power' ? 'power' : 'brickinfo'}.${id}`;
+      if (hasMessage(key)) {
+        this.toast(t('notice.discovery', { text: t(key) }));
+      }
+      return;
+    }
+    const key = `notice.${notice.kind}.${notice.id}`;
+    if (hasMessage(key)) this.toast(t(key));
+  }
+
   private helpScreen(): HTMLElement {
     const bricks: Array<[string, MessageKey]> = [
       ['standard', 'help.brick.standard'],
@@ -1231,13 +1267,7 @@ export class App {
       ['shield', 'help.brick.shield'],
       ['indestructible', 'help.brick.indestructible']
     ];
-    const powers: Array<[string, string, MessageKey]> = [
-      ['multi', '×3', 'help.power.multiBall'],
-      ['split', '×2', 'help.power.splitBall'],
-      ['wide', 'W', 'help.power.widePaddle'],
-      ['sticky', 'AIM', 'help.power.stickyPaddle'],
-      ['life', '+1', 'help.power.extraLife']
-    ];
+
     return h(
       'section',
       { class: 'screen', 'aria-labelledby': 'screen-title' },
@@ -1286,14 +1316,36 @@ export class App {
           h(
             'ul',
             { class: 'help-list' },
-            ...powers.map(([kind, label, key]) =>
-              h(
+            ...POWER_UP_TYPES.map((type) => {
+              const definition = getPowerUpDefinition(type);
+              return h(
                 'li',
                 {},
-                h('span', { class: `power-chip power-${kind}`, 'aria-hidden': 'true' }, label),
-                t(key)
-              )
-            )
+                h(
+                  'span',
+                  {
+                    class: `power-chip effect-chip${definition.risk ? ' is-risk' : ''}`,
+                    style: `--chip: #${definition.color.toString(16).padStart(6, '0')}; --ratio: 1`,
+                    'aria-hidden': 'true'
+                  },
+                  definition.icon
+                ),
+                t(`power.${type}` as MessageKey)
+              );
+            })
+          ),
+          h('p', { class: 'help-note' }, t('help.risk'))
+        ),
+        h(
+          'div',
+          { class: 'panel' },
+          h('h2', { class: 'panel-title' }, t('help.combos')),
+          h(
+            'ul',
+            { class: 'help-list' },
+            ...(
+              ['help.combo.meteor', 'help.combo.explosiveLasers', 'help.combo.sun'] as MessageKey[]
+            ).map((key) => h('li', {}, t(key)))
           )
         )
       )
@@ -1825,22 +1877,20 @@ export class App {
 
     const effects = r.effects;
     if (effects) {
-      const signature = hud.effects.join(',');
+      const signature = hud.effects
+        .map((effect) => `${effect.type}:${effect.count ?? ''}`)
+        .join(',');
       if (effects.dataset.signature !== signature) {
         effects.dataset.signature = signature;
         clear(effects);
-        hud.effects.forEach((effect) => {
-          const label = effect === 'widePaddle' ? 'W' : effect === 'stickyPaddle' ? 'AIM' : effect;
-          effects.append(
-            h(
-              'li',
-              { class: `power-chip power-${effect === 'widePaddle' ? 'wide' : 'sticky'}` },
-              label
-            )
-          );
-        });
+        hud.effects.forEach((effect) => effects.append(this.effectChip(effect)));
       }
     }
+
+    effects?.querySelectorAll<HTMLElement>('[data-effect]').forEach((chip) => {
+      const effect = hud.effects.find((item) => item.type === chip.dataset.effect);
+      if (effect) chip.style.setProperty('--ratio', effect.ratio.toFixed(3));
+    });
 
     const hint = r.launchHint;
     if (hint) {

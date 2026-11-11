@@ -1,170 +1,84 @@
+import {
+  CHAPTER_COUNT,
+  getPowerUpDefinition,
+  POWER_UPS,
+  POWER_UP_TYPES,
+  type PowerUpDefinition,
+  type PowerUpType
+} from '../config/powerUps';
+import type { DropRate } from '../levels/levelOptions';
 import { chance, nativeRandom, pickWeighted, type RandomSource } from '../utils/random';
 
-export type PowerUpType = 'multiBall' | 'splitBall' | 'widePaddle' | 'stickyPaddle' | 'extraLife';
-export type FuturePowerUpType =
-  | 'pierceBall'
-  | 'fireBall'
-  | 'magnetPaddle'
-  | 'slowMotion'
-  | 'shieldBottom'
-  | 'laserPaddle';
-export type AnyPowerUpType = PowerUpType | FuturePowerUpType;
+export { getPowerUpDefinition, type PowerUpDefinition, type PowerUpType };
 
-export interface PowerUpRollEntry<T extends AnyPowerUpType = PowerUpType> {
-  type: T;
-  weight: number;
-}
-
-export interface PowerUpDefinition {
+export interface PowerUpRollEntry {
   type: PowerUpType;
-  label: string;
-  color: number;
-  durationMs: number;
   weight: number;
-  positive: boolean;
 }
 
-export interface FuturePowerUpDefinition {
-  type: FuturePowerUpType;
-  label: string;
-  description: string;
-  defaultWeight: number;
-  positive: boolean;
-}
+export const DROP_RATE_MULTIPLIER: Record<DropRate, number> = { low: 0.5, normal: 1, high: 1.8 };
 
-export const POWER_UP_DEFINITIONS: Record<PowerUpType, PowerUpDefinition> = {
-  multiBall: {
-    type: 'multiBall',
-    label: 'x3',
-    color: 0x6dffbd,
-    durationMs: 0,
-    weight: 6.5,
-    positive: true
-  },
-  splitBall: {
-    type: 'splitBall',
-    label: 'x2',
-    color: 0x65d7ff,
-    durationMs: 0,
-    weight: 4,
-    positive: true
-  },
-  widePaddle: {
-    type: 'widePaddle',
-    label: 'W',
-    color: 0x8da2ff,
-    durationMs: 11000,
-    weight: 0.45,
-    positive: true
-  },
-  stickyPaddle: {
-    type: 'stickyPaddle',
-    label: 'AIM',
-    color: 0xffd65a,
-    durationMs: 9000,
-    weight: 0.12,
-    positive: true
-  },
-  extraLife: {
-    type: 'extraLife',
-    label: '+1',
-    color: 0xff6f9f,
-    durationMs: 0,
-    weight: 0.8,
-    positive: true
-  }
-};
-
-export const FUTURE_POWER_UP_DEFINITIONS: Record<FuturePowerUpType, FuturePowerUpDefinition> = {
-  pierceBall: {
-    type: 'pierceBall',
-    label: 'PIERCE',
-    description: 'Ball pierces a limited number of bricks before bouncing normally.',
-    defaultWeight: 0.7,
-    positive: true
-  },
-  fireBall: {
-    type: 'fireBall',
-    label: 'FIRE',
-    description: 'Ball creates a small impact explosion.',
-    defaultWeight: 0.55,
-    positive: true
-  },
-  magnetPaddle: {
-    type: 'magnetPaddle',
-    label: 'MAG',
-    description: 'Paddle attracts falling power-ups for a short duration.',
-    defaultWeight: 0.5,
-    positive: true
-  },
-  slowMotion: {
-    type: 'slowMotion',
-    label: 'SLOW',
-    description: 'Temporarily slows launched balls without changing level rules.',
-    defaultWeight: 0.45,
-    positive: true
-  },
-  shieldBottom: {
-    type: 'shieldBottom',
-    label: 'SHIELD',
-    description: 'Saves one missed ball at the bottom of the playfield.',
-    defaultWeight: 0.42,
-    positive: true
-  },
-  laserPaddle: {
-    type: 'laserPaddle',
-    label: 'LASER',
-    description: 'Temporarily fires shots from the paddle.',
-    defaultWeight: 0.35,
-    positive: true
-  }
-};
-
-export const DEFAULT_POWER_UP_DROP_TABLE: readonly PowerUpRollEntry[] = Object.freeze(
-  Object.values(POWER_UP_DEFINITIONS).map((definition) =>
-    Object.freeze({
-      type: definition.type,
-      weight: definition.weight
+/**
+ * Drop table for a chapter (0-based, clamped). `allowed` restricts the table to the power-ups
+ * a level creator enabled; an empty result falls back to multiball so a level never drops nothing.
+ */
+export function dropTableFor(
+  chapter: number,
+  allowed?: readonly PowerUpType[]
+): PowerUpRollEntry[] {
+  const index = Math.max(0, Math.min(CHAPTER_COUNT - 1, Math.floor(chapter)));
+  const allowedSet = allowed ? new Set(allowed) : null;
+  const table = POWER_UP_TYPES.filter((type) => !allowedSet || allowedSet.has(type))
+    .map((type) => {
+      const weights = POWER_UPS[type].weights;
+      // Creators may enable a power-up before its chapter: give it the weight of its debut.
+      const weight = weights[index] || (allowedSet ? (weights.find((value) => value > 0) ?? 0) : 0);
+      return { type, weight };
     })
-  )
+    .filter((entry) => entry.weight > 0);
+  return table.length > 0 ? table : [{ type: 'multiBall', weight: 1 }];
+}
+
+/** Default table: the last chapter, where everything is unlocked. */
+export const DEFAULT_POWER_UP_DROP_TABLE: readonly PowerUpRollEntry[] = Object.freeze(
+  dropTableFor(CHAPTER_COUNT - 1)
 );
 
+/** Bonus bricks always drop extra balls. */
 export const BALL_BONUS_DROP_TABLE: readonly PowerUpRollEntry[] = Object.freeze([
-  Object.freeze({ type: 'multiBall', weight: POWER_UP_DEFINITIONS.multiBall.weight }),
-  Object.freeze({ type: 'splitBall', weight: POWER_UP_DEFINITIONS.splitBall.weight })
+  { type: 'multiBall', weight: 6.5 },
+  { type: 'splitBall', weight: 4 }
 ]);
-
-export function getPowerUpDefinition(type: PowerUpType): PowerUpDefinition {
-  return POWER_UP_DEFINITIONS[type];
-}
 
 export class PowerUpSystem {
   public constructor(
     private readonly rng: RandomSource = nativeRandom,
     private readonly dropTable: readonly PowerUpRollEntry[] = DEFAULT_POWER_UP_DROP_TABLE,
-    private readonly ballBonusTable: readonly PowerUpRollEntry[] = BALL_BONUS_DROP_TABLE
+    private readonly ballBonusTable: readonly PowerUpRollEntry[] = BALL_BONUS_DROP_TABLE,
+    private readonly rateMultiplier = 1
   ) {}
 
   public roll(dropChance: number): PowerUpType | null {
-    if (!chance(dropChance, this.rng)) {
+    if (!chance(Math.min(0.95, dropChance * this.rateMultiplier), this.rng)) {
       return null;
     }
-
     return pickWeighted(
-      this.dropTable.map((entry) => ({
-        item: entry.type,
-        weight: entry.weight
-      })),
+      this.dropTable.map((entry) => ({ item: entry.type, weight: entry.weight })),
       this.rng
     );
   }
 
   public rollBallBonus(): PowerUpType {
     return pickWeighted(
-      this.ballBonusTable.map((entry) => ({
-        item: entry.type,
-        weight: entry.weight
-      })),
+      this.ballBonusTable.map((entry) => ({ item: entry.type, weight: entry.weight })),
+      this.rng
+    );
+  }
+
+  /** A random power-up from the table, ignoring the drop chance (bonus rain event). */
+  public rollAny(): PowerUpType {
+    return pickWeighted(
+      this.dropTable.map((entry) => ({ item: entry.type, weight: entry.weight })),
       this.rng
     );
   }

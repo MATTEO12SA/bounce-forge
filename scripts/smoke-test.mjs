@@ -325,7 +325,7 @@ try {
   const migrated = await evaluate(page, `JSON.parse(localStorage.getItem('bounce-forge.save.v1'))`);
   check(
     'v5 save migrates to v6 and keeps progress',
-    migrated?.version === 6 && migrated.bestScore === 4321 && migrated.unlockedLevel === 3,
+    migrated?.version === 7 && migrated.bestScore === 4321 && migrated.unlockedLevel === 3,
     migrated?.version
   );
   // Start the rest from a French, tutorial-free profile for stable screenshots.
@@ -549,6 +549,42 @@ try {
   );
 
   // ---------------------------------------------------------------- sharing with Unicode
+  // ---------------------------------------------------------------- power-ups
+  console.log('Power-ups');
+  await goto(page, baseUrl, '#/play/campaign/2');
+  await waitFor(page, `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === 1`);
+  const allPowerUps = [
+    'multiBall',
+    'splitBall',
+    'widePaddle',
+    'stickyPaddle',
+    'extraLife',
+    'fireBall',
+    'explosiveBall',
+    'bigBall',
+    'laserPaddle',
+    'magnet',
+    'shield',
+    'slowMotion',
+    'fever',
+    'turbo',
+    'shrinkPaddle'
+  ];
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.launchAttachedBalls(); ${JSON.stringify(allPowerUps)}.forEach((type) => s.applyPowerUp(type)); s.launchAttachedBalls(); return true; })()`
+  );
+  await delay(2500);
+  const powered = await evaluate(
+    page,
+    `({ chips: document.querySelectorAll('.hud .effect-chip, .effect-list .effect-chip').length, balls: ${GAME}.ballManager.getStats().activeCount, active: window.__bounceForge.scene.isActive('GameScene') })`
+  );
+  check(
+    'every power-up applies without error and shows in the HUD',
+    powered.chips >= 8 && powered.balls >= 1 && powered.active,
+    powered
+  );
+
   // ---------------------------------------------------------------- workshop & editor
   console.log('Workshop');
   await goto(page, baseUrl, '#/create');

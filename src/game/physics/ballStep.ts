@@ -25,7 +25,7 @@ export interface PlayfieldBounds {
 
 export type StepEvent<T> =
   | { type: 'wall'; side: 'left' | 'right' | 'top'; x: number; y: number }
-  | { type: 'brick'; item: T; x: number; y: number; nx: number; ny: number }
+  | { type: 'brick'; item: T; x: number; y: number; nx: number; ny: number; pierced?: boolean }
   | { type: 'paddle'; x: number; y: number };
 
 export interface StepContext<T extends GridItem> {
@@ -36,6 +36,11 @@ export interface StepContext<T extends GridItem> {
   bouncePaddle: (ball: BallBody) => { vx: number; vy: number };
   /** Bricks hit during this step are not bounced off twice. */
   isActive: (item: T) => boolean;
+  /**
+   * Optional: when it returns true the ball flies through the brick instead of bouncing (fire
+   * ball, teleporters). The brick is still reported, once per step, with `pierced: true`.
+   */
+  passThrough?: (ball: BallBody, item: T) => boolean;
 }
 
 const EPSILON = 0.01;
@@ -60,6 +65,8 @@ export function stepBall<T extends GridItem>(
   const maxStep = Math.max(1, ball.radius * 0.5);
   const substeps = Math.max(1, Math.ceil(distance / maxStep));
   const h = dt / substeps;
+
+  let pierced: Set<T> | null = null;
 
   for (let step = 0; step < substeps; step += 1) {
     let remaining = 1;
@@ -112,7 +119,7 @@ export function stepBall<T extends GridItem>(
         };
         const candidates = ctx.grid.query(swept, scratch as T[]);
         for (const item of candidates) {
-          if (!ctx.isActive(item)) continue;
+          if (!ctx.isActive(item) || pierced?.has(item)) continue;
           const hit = sweepPointBox(ball.x, ball.y, dx, dy, inflate(item.box, r));
           if (!hit) continue;
           // Moving away from an embedded brick: let the ball leave.
@@ -148,6 +155,24 @@ export function stepBall<T extends GridItem>(
       }
 
       const { hit } = best;
+      if (best.kind === 'brick' && best.item && ctx.passThrough?.(ball, best.item)) {
+        // Fly through: keep the velocity, report the brick once, ignore it for this step.
+        ball.x += dx * hit.t;
+        ball.y += dy * hit.t;
+        remaining *= 1 - hit.t;
+        pierced ??= new Set<T>();
+        pierced.add(best.item);
+        events.push({
+          type: 'brick',
+          item: best.item,
+          x: ball.x,
+          y: ball.y,
+          nx: hit.nx,
+          ny: hit.ny,
+          pierced: true
+        });
+        continue;
+      }
       ball.x += dx * hit.t + hit.nx * EPSILON;
       ball.y += dy * hit.t + hit.ny * EPSILON;
       remaining *= 1 - hit.t;

@@ -8,9 +8,12 @@ import {
   type HudSnapshot,
   type ObjectiveKind
 } from '../bridge';
+import { CHAPTER_COUNT, getPowerUpDefinition, type PowerUpType } from '../config/powerUps';
 import { getTheme, type ThemeDefinition } from '../config/themeConfig';
+import { EffectState, type ComboId } from '../effects/EffectState';
 import type { Ball } from '../entities/Ball';
 import { Brick } from '../entities/Brick';
+import { Lasers } from '../entities/Lasers';
 import { Paddle } from '../entities/Paddle';
 import { POWER_UP_HALF_HEIGHT, POWER_UP_HALF_WIDTH, PowerUp } from '../entities/PowerUp';
 import { createPatternFromEditorRows } from '../levels/editorGrid';
@@ -41,7 +44,12 @@ import { FxManager } from '../systems/FxManager';
 import { InputSystem } from '../systems/InputSystem';
 import { LevelSystem } from '../systems/LevelSystem';
 import { ParticleSystem } from '../systems/ParticleSystem';
-import { getPowerUpDefinition, PowerUpSystem, type PowerUpType } from '../systems/PowerUpSystem';
+import {
+  BALL_BONUS_DROP_TABLE,
+  DROP_RATE_MULTIPLIER,
+  dropTableFor,
+  PowerUpSystem
+} from '../systems/PowerUpSystem';
 import { getSharedSaveSystem, type LevelMedal, type SaveSystem } from '../systems/SaveSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { SettingsSystem } from '../systems/SettingsSystem';
@@ -71,6 +79,18 @@ const EXPLOSION_STAGGER_MS = 55;
 const MAX_POWER_UPS = 40;
 const MAX_FRAME_MS = 50;
 const TRAIL_BALL_LIMIT = 10;
+const LASER_INTERVAL_MS = 320;
+/** Height of the shield barrier that saves a ball. */
+const SHIELD_Y = PADDLE_Y + 72;
+const BIG_BALL_SCALE = 1.6;
+const FIRE_TINT = 0xff9a4a;
+const EXPLOSIVE_TINT = 0xff6a5a;
+
+const COMBO_NAMES: Record<ComboId, { fr: string; en: string }> = {
+  meteor: { fr: 'MÉTÉORE !', en: 'METEOR!' },
+  explosiveLasers: { fr: 'LASERS EXPLOSIFS !', en: 'EXPLOSIVE LASERS!' },
+  sun: { fr: 'SOLEIL !', en: 'SUN!' }
+};
 
 interface PendingExplosion {
   x: number;
@@ -124,7 +144,11 @@ export class GameScene extends Phaser.Scene {
   private respawning = false;
   private explosionsTriggered = 0;
   private gameTime = 0;
-  private readonly activeTimers = new Map<PowerUpType, Phaser.Time.TimerEvent>();
+  private readonly effects = new EffectState();
+  private lasers!: Lasers<Brick>;
+  private laserCooldownMs = 0;
+  private shieldBar!: Phaser.GameObjects.Rectangle;
+  private language: 'fr' | 'en' = 'fr';
 
   public constructor() {
     super('GameScene');
@@ -196,6 +220,7 @@ export class GameScene extends Phaser.Scene {
 
     const preferences = this.saveSystem.snapshot().preferences;
     this.reducedMotion = preferences.reducedMotion;
+    this.language = preferences.language;
     this.theme = getTheme(preferences.themeId);
     audio.setEnabled(preferences.soundEnabled);
     audio.setVolume(preferences.volumeSfx);
@@ -203,9 +228,14 @@ export class GameScene extends Phaser.Scene {
     const quality = this.reducedMotion ? 'low' : this.settingsSystem.getFxQuality();
     this.scoreSystem = new ScoreSystem(this.getModeBestScore(), this.session.carry?.score ?? 0);
     this.comboSystem = new ComboSystem();
-    this.powerUpSystem = this.isWaveMode()
-      ? new PowerUpSystem(new SeededRandom(getPowerUpSeed(this.runSeed, this.wave)))
-      : new PowerUpSystem();
+    const chapter = this.mode === 'creative' ? CHAPTER_COUNT - 1 : Math.floor(this.level.index / 6);
+    const options = this.level.options;
+    this.powerUpSystem = new PowerUpSystem(
+      this.isWaveMode() ? new SeededRandom(getPowerUpSeed(this.runSeed, this.wave)) : undefined,
+      dropTableFor(chapter, options?.powerUps),
+      BALL_BONUS_DROP_TABLE,
+      DROP_RATE_MULTIPLIER[options?.dropRate ?? 'normal']
+    );
     this.particleSystem = new ParticleSystem(
       this,
       quality === 'low' ? 0.5 : quality === 'high' ? 1.25 : 1
@@ -225,7 +255,8 @@ export class GameScene extends Phaser.Scene {
     this.explosions.length = 0;
     this.powerUps.length = 0;
     this.debugOverlay = undefined;
-    this.activeTimers.clear();
+    this.effects.clear();
+    this.laserCooldownMs = 0;
 
     new PlayfieldRenderer(this, this.theme).render();
     if (!this.reducedMotion) {
@@ -249,8 +280,15 @@ export class GameScene extends Phaser.Scene {
       grid: this.grid,
       paddle: null,
       bouncePaddle: (ball) => this.bounceOffPaddle(ball as Ball),
-      isActive: (brick) => brick.active
+      isActive: (brick) => brick.active,
+      passThrough: (_ball, brick) => this.effects.has('fireBall') && brick.isBreakable
     };
+    this.lasers = new Lasers<Brick>(this, 0xff4d8d);
+    this.shieldBar = this.add
+      .rectangle(540, SHIELD_Y, PLAYFIELD_RIGHT - PLAYFIELD_LEFT - 8, 6, 0x7fe8ff, 0.85)
+      .setDepth(DEPTHS.paddle - 1)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setVisible(false);
 
     if (isDebugOverlayEnabled()) {
       this.debugOverlay = new DebugOverlay(this);
@@ -287,6 +325,9 @@ export class GameScene extends Phaser.Scene {
     this.gameTime += physicsMs;
     if (physicsMs > 0) {
       this.stepBalls(physicsMs / 1000);
+      this.applyShield();
+      this.updateLasers(physicsMs);
+      this.effects.tick(physicsMs).forEach((type) => this.onEffectEnd(type));
     }
     if (this.ballManager.update(this.respawning)) {
       this.loseLife();
@@ -405,6 +446,7 @@ export class GameScene extends Phaser.Scene {
     this.ballManager.destroy();
     this.powerUps.length = 0;
     this.explosions.length = 0;
+    this.lasers.clear();
     this.input.off('pointerdown', this.startAiming, this);
     this.input.off('pointerup', this.releaseAim, this);
     this.input.off('pointerupoutside', this.releaseAim, this);
@@ -460,10 +502,11 @@ export class GameScene extends Phaser.Scene {
       width: paddle.activeWidth,
       height: PADDLE_HEIGHT
     };
+    const ballDt = dt * this.effects.ballTimeScale();
     for (const ball of this.ballManager.getActiveBalls()) {
       if (ball.isAttached) continue;
       this.stepEvents.length = 0;
-      stepBall(ball, dt, this.stepContext, this.stepEvents);
+      stepBall(ball, ballDt, this.stepContext, this.stepEvents);
       for (const event of this.stepEvents) {
         if (!ball.active || ball.isAttached) break;
         this.handleStepEvent(ball, event);
@@ -506,16 +549,49 @@ export class GameScene extends Phaser.Scene {
         this.onPaddleHit(ball);
         break;
       case 'brick':
-        ball.impact = 1;
-        if (!event.item.isBreakable) {
-          this.sfx('steel', { x: event.x });
-          event.item.flash(50);
-          this.particleSystem.sparkBurst(event.x, event.y, 0xd8d2c4, 4);
-        } else {
-          this.damageBrick(event.item, 1, 0, ball, event.x, event.y);
-        }
+        this.onBrickContact(ball, event);
         break;
     }
+  }
+
+  /** A ball touched a brick: bounce damage, fire burn, explosive charges and combos. */
+  private onBrickContact(ball: Ball, event: Extract<StepEvent<Brick>, { type: 'brick' }>): void {
+    const brick = event.item;
+    ball.impact = 1;
+    if (!brick.isBreakable) {
+      this.sfx('steel', { x: event.x });
+      brick.flash(50);
+      this.particleSystem.sparkBurst(event.x, event.y, 0xd8d2c4, 4);
+      return;
+    }
+    const { x, y } = brick;
+    if (event.pierced) {
+      // Fire ball: burns straight through.
+      this.sfx('fire', { x: event.x });
+      this.particleSystem.sparkBurst(event.x, event.y, FIRE_TINT, 6);
+      this.damageBrick(brick, 99, 0, ball, event.x, event.y);
+      if (this.effects.has('bigBall')) this.burnAround(brick.col, brick.row, ball);
+    } else {
+      this.damageBrick(brick, this.effects.has('bigBall') ? 2 : 1, 0, ball, event.x, event.y);
+    }
+    if (this.effects.explosiveCharges > 0 && this.effects.useExplosiveCharge()) {
+      this.explode(x, y, EXPLOSIVE_TINT, 1);
+    }
+  }
+
+  /** Sun combo (big + fire): the ball also scorches the four neighbours. */
+  private burnAround(col: number, row: number, ball: Ball): void {
+    const neighbours = [
+      this.grid.get(col + 1, row),
+      this.grid.get(col - 1, row),
+      this.grid.get(col, row + 1),
+      this.grid.get(col, row - 1)
+    ];
+    neighbours.forEach((brick) => {
+      if (brick && brick.active && brick.isBreakable) {
+        this.damageBrick(brick, 1, 1, ball);
+      }
+    });
   }
 
   private bounceOffPaddle(ball: Ball): { vx: number; vy: number } {
@@ -541,7 +617,7 @@ export class GameScene extends Phaser.Scene {
     this.particleSystem.sparkBurst(ball.x, this.paddle.top, this.theme.primary, 5);
     this.juice.shake(0.06);
 
-    if (this.activeTimers.has('stickyPaddle')) {
+    if (this.effects.has('stickyPaddle')) {
       ball.attachOffset = Phaser.Math.Clamp(
         ball.x - this.paddle.x,
         -this.paddle.activeWidth / 2 + 10,
@@ -586,7 +662,7 @@ export class GameScene extends Phaser.Scene {
     const combo = this.comboSystem.registerBreak();
     const awarded = this.scoreSystem.registerBrickBreak(
       score,
-      combo.multiplier,
+      combo.multiplier * this.effects.scoreMultiplier(),
       this.level.difficulty.scoreMultiplier
     );
     this.sfx('brickBreak', { x, combo: combo.streak });
@@ -755,6 +831,15 @@ export class GameScene extends Phaser.Scene {
       item.x += Math.sin(item.swayPhase) * 18 * dt;
       item.setRotation(Math.sin(item.swayPhase) * 0.08);
     }
+    if (this.effects.has('magnet')) {
+      // The magnet pulls good capsules toward the paddle and leaves risky ones alone.
+      const pull = Math.min(1, dt * 3);
+      for (const item of active) {
+        if (!getPowerUpDefinition(item.powerUpType).risk && item.y < this.paddle.top) {
+          item.x += (this.paddle.x - item.x) * pull;
+        }
+      }
+    }
     separateFallers(active, POWER_UP_HALF_WIDTH * 2 + 10, PLAYFIELD_LEFT, PLAYFIELD_RIGHT, 0.35);
 
     if (this.ending) return;
@@ -782,7 +867,7 @@ export class GameScene extends Phaser.Scene {
     const definition = getPowerUpDefinition(type);
     const sourceBall = powerUp.sourceBall;
     powerUp.disable();
-    this.sfx('powerUp', { x: powerUp.x });
+    this.sfx(definition.risk ? 'risk' : 'powerUp', { x: powerUp.x });
     this.juice.ring(powerUp.x, this.paddle.top, definition.color, 1, 360);
     this.juice.glow(
       this.paddle.x,
@@ -793,9 +878,18 @@ export class GameScene extends Phaser.Scene {
       320,
       0.75
     );
-    this.juice.popup(powerUp.x, this.paddle.top - 40, definition.label, '#ffffff', 40, true);
+    this.juice.popup(powerUp.x, this.paddle.top - 40, definition.icon, '#ffffff', 40, true);
     this.paddle.bump(0.5);
+    this.discover(`power:${type}`);
     this.applyPowerUp(type, sourceBall);
+  }
+
+  /** First encounter with a power-up or brick: the interface explains it once. */
+  private discover(id: string): void {
+    if (this.mode === 'demo' || this.autopilot) return;
+    if (this.saveSystem.discover(id)) {
+      bridge.emit('notice', { kind: 'discovery', id });
+    }
   }
 
   /** Applies a power-up effect; public so diagnostics can trigger effects directly. */
@@ -803,36 +897,122 @@ export class GameScene extends Phaser.Scene {
     switch (type) {
       case 'multiBall':
         this.splitBalls(sourceBall, [-0.34, 0.34]);
-        break;
+        return;
       case 'splitBall':
         this.splitBalls(sourceBall, [0.6]);
-        break;
-      case 'widePaddle':
-        this.setTimedEffect(
-          type,
-          11000,
-          () => this.paddle.setWidthScale(1.38),
-          () => this.paddle.setWidthScale(1)
-        );
-        break;
-      case 'stickyPaddle':
-        this.setTimedEffect(
-          type,
-          9000,
-          () => this.paddle.setTint(0xffe7a8),
-          () => {
-            this.paddle.clearTint();
-            this.launchAttachedBalls();
-          }
-        );
-        break;
+        return;
       case 'extraLife':
         if (this.lives < MAX_LIVES) {
           this.lives = Math.min(this.lives + 1, MAX_LIVES);
           this.emitHud();
         }
+        return;
+      default:
         break;
     }
+    const result = this.effects.activate(type);
+    if (result.cancelled) this.onEffectEnd(result.cancelled);
+    this.onEffectStart(type);
+    result.newCombos.forEach((combo) => this.announceCombo(combo));
+    this.emitHud();
+  }
+
+  private onEffectStart(type: PowerUpType): void {
+    switch (type) {
+      case 'widePaddle':
+      case 'shrinkPaddle':
+      case 'laserPaddle':
+        this.paddle.setWidthScale(this.effects.paddleScale());
+        if (type === 'laserPaddle') this.laserCooldownMs = 0;
+        break;
+      case 'stickyPaddle':
+        this.paddle.setTint(0xffe7a8);
+        break;
+      case 'shield':
+        this.shieldBar.setVisible(true).setAlpha(0.35 + this.effects.shieldCharges * 0.2);
+        this.sfx('shield', { x: 540 });
+        break;
+      case 'fever':
+        this.juice.popup(540, 1200, '×2', '#ffe066', 64, true);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private onEffectEnd(type: PowerUpType): void {
+    switch (type) {
+      case 'widePaddle':
+      case 'shrinkPaddle':
+      case 'laserPaddle':
+        this.paddle.setWidthScale(this.effects.paddleScale());
+        break;
+      case 'stickyPaddle':
+        this.paddle.clearTint();
+        this.launchAttachedBalls();
+        break;
+      default:
+        break;
+    }
+    this.emitHud();
+  }
+
+  private announceCombo(combo: ComboId): void {
+    this.sfx('powerCombo', { x: 540 });
+    this.juice.popup(540, 980, COMBO_NAMES[combo][this.language], '#ffb423', 64, true);
+    this.juice.shake(0.2);
+    if (this.mode !== 'demo') {
+      bridge.emit('notice', { kind: 'combo', id: combo });
+    }
+  }
+
+  /** Shield: a ball falling past the barrier bounces back once per charge. */
+  private applyShield(): void {
+    if (this.effects.shieldCharges <= 0) return;
+    for (const ball of this.ballManager.getActiveBalls()) {
+      if (ball.isAttached || ball.vy <= 0 || ball.y < SHIELD_Y - ball.radius) continue;
+      if (!this.effects.useShield()) break;
+      ball.y = SHIELD_Y - ball.radius - 1;
+      ball.vy = -Math.abs(ball.vy);
+      this.sfx('shield', { x: ball.x });
+      this.juice.ring(ball.x, SHIELD_Y, 0x7fe8ff, 1.2, 320);
+      this.particleSystem.sparkBurst(ball.x, SHIELD_Y, 0x7fe8ff, 10);
+    }
+    if (this.effects.shieldCharges <= 0) {
+      this.shieldBar.setVisible(false);
+    } else {
+      this.shieldBar.setAlpha(0.35 + this.effects.shieldCharges * 0.2);
+    }
+  }
+
+  private updateLasers(deltaMs: number): void {
+    if (this.effects.has('laserPaddle') && !this.ending) {
+      this.laserCooldownMs -= deltaMs;
+      if (this.laserCooldownMs <= 0) {
+        this.laserCooldownMs = LASER_INTERVAL_MS;
+        const half = this.paddle.activeWidth / 2 - 14;
+        this.lasers.fire(this.paddle.x - half, this.paddle.top - 6);
+        this.lasers.fire(this.paddle.x + half, this.paddle.top - 6);
+        this.sfx('laser', { x: this.paddle.x });
+      }
+    }
+    this.lasers.update(
+      deltaMs / 1000,
+      this.grid,
+      (brick) => brick.active,
+      (brick, x, y) => {
+        if (!brick.isBreakable) {
+          this.particleSystem.sparkBurst(x, y, 0xd8d2c4, 3);
+          return;
+        }
+        this.particleSystem.sparkBurst(x, y, 0xff4d8d, 4);
+        const { x: bx, y: by } = brick;
+        this.damageBrick(brick, 1, 0, undefined, x, y);
+        if (this.effects.explosiveCharges > 0 && this.effects.useExplosiveCharge()) {
+          this.explode(bx, by, EXPLOSIVE_TINT, 1);
+        }
+      }
+    );
   }
 
   private splitBalls(sourceBall: Ball | undefined, offsets: number[]): void {
@@ -845,26 +1025,19 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private setTimedEffect(
-    type: PowerUpType,
-    durationMs: number,
-    onStart: () => void,
-    onEnd: () => void
-  ): void {
-    this.activeTimers.get(type)?.remove(false);
-    const timer = this.time.delayedCall(durationMs, () => {
-      this.activeTimers.delete(type);
-      onEnd();
-    });
-    this.activeTimers.set(type, timer);
-    onStart();
-  }
-
   // ------------------------------------------------------------------ visuals & input
 
   private updateBallVisuals(deltaMs: number): void {
     let trails = 0;
+    const sizeScale = this.effects.has('bigBall') ? BIG_BALL_SCALE : 1;
+    const tint = this.effects.has('fireBall')
+      ? FIRE_TINT
+      : this.effects.explosiveCharges > 0
+        ? EXPLOSIVE_TINT
+        : null;
     for (const ball of this.ballManager.getActiveBalls()) {
+      ball.setSizeScale(sizeScale);
+      ball.setEffectTint(tint);
       ball.updateLook(deltaMs);
       if (!ball.isAttached && !this.reducedMotion && trails < TRAIL_BALL_LIMIT) {
         this.particleSystem.trailAt(ball.x, ball.y);
@@ -1192,9 +1365,20 @@ export class GameScene extends Phaser.Scene {
       bricksLeft: this.breakableLeft,
       bricksTotal: this.bricksTotal,
       waitingToLaunch: this.getBalls().some((ball) => ball.isAttached),
-      effects: [...this.activeTimers.keys()],
+      effects: this.hudEffects(),
       objective: this.getObjectiveProgress(ballStats.maxBallsReached, combo.bestStreak)
     };
+  }
+
+  private hudEffects(): HudSnapshot['effects'] {
+    const list: HudSnapshot['effects'] = this.effects.list();
+    if (this.effects.shieldCharges > 0) {
+      list.push({ type: 'shield', ratio: 1, count: this.effects.shieldCharges });
+    }
+    if (this.effects.explosiveCharges > 0) {
+      list.push({ type: 'explosiveBall', ratio: 1, count: this.effects.explosiveCharges });
+    }
+    return list;
   }
 
   private getObjectiveProgress(maxBalls: number, bestCombo: number): HudSnapshot['objective'] {
@@ -1237,7 +1421,10 @@ export class GameScene extends Phaser.Scene {
       pendingClones: ballStats.pendingClones,
       remainingBricks: this.breakableLeft,
       activePowerUps: this.powerUps.filter((item) => item.active).length,
-      activeEffects: [...this.activeTimers.keys()].join('+'),
+      activeEffects: this.effects
+        .list()
+        .map((effect) => effect.type)
+        .join('+'),
       levelIndex: this.levelIndex,
       levelName: this.level.name
     };

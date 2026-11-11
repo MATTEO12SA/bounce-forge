@@ -1,0 +1,58 @@
+/* Active-effect chips (HUD and help): power-up colour, icon, time gauge and charges. */
+
+.effect-chip {
+  position: relative;
+  gap: 2px;
+  grid-auto-flow: column;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--chip) 30%, #15130f);
+  color: #fff;
+  font-size: 0.82rem;
+  isolation: isolate;
+}
+
+.effect-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--chip);
+  transform-origin: left center;
+  transform: scaleX(var(--ratio, 1));
+  transition: transform 120ms linear;
+}
+
+.effect-chip {
+  color: #10120e;
+}
+
+.effect-chip small {
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.effect-chip.is-risk::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.22) 0 5px, transparent 5px 10px);
+}
+
+.help-note {
+  margin: 12px 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.help-swatch {
+  flex: none;
+  width: 34px;
+  height: 31px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .effect-chip::before {
+    transition: none;
+  }
+}

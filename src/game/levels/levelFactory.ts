@@ -6,6 +6,7 @@ import {
   PLAYFIELD_TOP,
   PLAYFIELD_WIDTH
 } from '../utils/constants';
+import { PACE_SPEED, sanitizeLevelOptions } from './levelOptions';
 import type { BrickKind, BrickSpec, LevelDefinition, PatternDefinition } from './levelTypes';
 
 interface BrickTemplate {
@@ -78,7 +79,15 @@ export function createLevelFromPattern(
   pattern: PatternDefinition,
   levelIndex: number
 ): LevelDefinition {
-  const difficulty = getDifficultyForLevel(levelIndex);
+  const difficulty = { ...getDifficultyForLevel(levelIndex) };
+  const options = sanitizeLevelOptions(pattern.options);
+  if (options?.lives) {
+    difficulty.initialLives = options.lives;
+  }
+  if (options?.pace) {
+    difficulty.ballSpeed = Math.round(difficulty.ballSpeed * PACE_SPEED[options.pace]);
+    difficulty.maxBallSpeed = Math.round(difficulty.maxBallSpeed * PACE_SPEED[options.pace]);
+  }
   const rows = pattern.rows.length;
   const cols = Math.max(...pattern.rows.map((row) => row.length));
   const brickWidth = (PLAYFIELD_WIDTH - BRICK_GAP * (cols - 1)) / cols;
@@ -138,6 +147,7 @@ export function createLevelFromPattern(
       silverLives: 2,
       goldScore: Math.round(2400 + levelIndex * 900),
       goldBestCombo: 18 + levelIndex * 2
-    }
+    },
+    options
   };
 }
