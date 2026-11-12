@@ -11,6 +11,8 @@ import {
 } from '../bridge';
 import { CHAPTER_COUNT, getPowerUpDefinition, type PowerUpType } from '../config/powerUps';
 import { activeSkins, trailLook } from '../config/skins';
+import { BossController, type BossHost } from '../mechanics/BossController';
+import { BOSS_DEFEAT_BONUS, BOSS_HIT_PENALTY, BOSS_STUN_MS } from '../mechanics/boss';
 import { getTheme, type ThemeDefinition } from '../config/themeConfig';
 import { EffectState, type ComboId } from '../effects/EffectState';
 import { newlyUnlocked, type RunStats } from '../progress/achievements';
@@ -112,7 +114,8 @@ const NEW_KINDS: readonly BrickKind[] = [
   'mover',
   'bumper',
   'teleporter',
-  'fuse'
+  'fuse',
+  'boss'
 ];
 
 const COMBO_NAMES: Record<ComboId, { fr: string; en: string }> = {
@@ -152,6 +155,8 @@ export class GameScene extends Phaser.Scene {
   private readonly stepEvents: Array<StepEvent<Brick>> = [];
   private readonly explosions: PendingExplosion[] = [];
   private lives = 3;
+  private boss: BossController | null = null;
+  private paddleStunnedUntil = 0;
   /** Admin tools were used in this run: nothing is saved. */
   private assisted = false;
   /** Admin invincibility: lost balls cost no life. */
@@ -299,6 +304,7 @@ export class GameScene extends Phaser.Scene {
       this.session.carry?.lives ??
       (this.isWaveMode() ? ENDLESS_STARTING_LIVES : this.level.difficulty.initialLives);
     this.assisted = this.session.carry?.assisted ?? false;
+    this.paddleStunnedUntil = 0;
     this.invincible = false;
     this.hudElapsedMs = HUD_EMIT_INTERVAL_MS;
     this.demoLaunchMs = 0;
@@ -391,7 +397,10 @@ export class GameScene extends Phaser.Scene {
     if (this.mode === 'demo' || this.autopilot) {
       this.updateDemoPilot(time, frameMs);
     } else {
-      this.inputSystem.updatePaddle(this.paddle, frameMs);
+      // A boss bolt stuns the paddle for a moment.
+      if (this.gameTime >= this.paddleStunnedUntil) {
+        this.inputSystem.updatePaddle(this.paddle, frameMs);
+      }
     }
     this.paddle.afterMove(frameMs, this.reducedMotion);
     this.updateAim();
@@ -402,6 +411,7 @@ export class GameScene extends Phaser.Scene {
       this.stepBalls(physicsMs / 1000);
       this.applyShield();
       this.updateLasers(physicsMs);
+      this.boss?.update(physicsMs);
       this.effects.tick(physicsMs).forEach((type) => this.onEffectEnd(type));
     }
     if (this.ballManager.update(this.respawning)) {
@@ -530,6 +540,9 @@ export class GameScene extends Phaser.Scene {
     );
     this.bricksTotal = this.getBricks().filter((brick) => brick.isRequired).length;
     this.breakableLeft = this.bricksTotal;
+    const bossCells = this.getBricks().filter((brick) => brick.kind === 'boss');
+    this.boss = bossCells.length > 0 ? new BossController(this.bossHost(), bossCells) : null;
+    this.boss?.setLabel(this.language === 'en' ? 'WARDEN' : 'GARDIEN');
     const kinds = new Set(this.level.bricks.map((spec) => spec.kind));
     NEW_KINDS.filter((kind) => kinds.has(kind)).forEach((kind) => this.discover(`brick:${kind}`));
   }
@@ -550,6 +563,8 @@ export class GameScene extends Phaser.Scene {
     this.debugOverlay = undefined;
     this.inputSystem.destroy();
     this.ballManager.destroy();
+    this.boss?.destroy();
+    this.boss = null;
     this.powerUps.length = 0;
     this.explosions.length = 0;
     this.lasers.clear();
@@ -755,6 +770,10 @@ export class GameScene extends Phaser.Scene {
     if (!brick.active || !brick.isBreakable) {
       return;
     }
+    if (brick.kind === 'boss') {
+      this.boss?.hit(brick, amount);
+      return;
+    }
     if (!brick.revealed) {
       // Ghost brick: the first touch only reveals it (strong hits go straight through).
       this.reveal(brick);
@@ -770,6 +789,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.breakBrick(brick, chainDepth, sourceBall);
+  }
+
+  /** Destroys a brick: counters, score, effects, capsule, victory check. */
+  private breakBrick(brick: Brick, chainDepth: number, sourceBall?: Ball): void {
     const { x, y } = brick;
     const { color, kind, powerUpChance, score } = brick.spec;
     const required = brick.isRequired;
@@ -781,6 +805,16 @@ export class GameScene extends Phaser.Scene {
     }
     this.playBreakAnimation(brick);
 
+    if (kind === 'boss') {
+      this.scoreSystem.registerBrickBreak(score, 1, this.level.difficulty.scoreMultiplier);
+      this.particleSystem.brickShatter(x, y, color, 4);
+      if (this.breakableLeft === 0 && !this.ending) {
+        this.crumblePhoenixes();
+        this.onLastBrick(x, y);
+      }
+      this.checkVictory();
+      return;
+    }
     const combo = this.comboSystem.registerBreak();
     const awarded = this.scoreSystem.registerBrickBreak(
       score,
@@ -1374,6 +1408,78 @@ export class GameScene extends Phaser.Scene {
     if (this.saveSystem.discover(id)) {
       bridge.emit('notice', { kind: 'discovery', id });
     }
+  }
+
+  // ------------------------------------------------------------------ bosses
+
+  private bossHost(): BossHost {
+    return {
+      scene: this,
+      reducedMotion: this.reducedMotion,
+      gridCols: () => this.grid.cols,
+      isCellFree: (col, row) => !this.grid.get(col, row),
+      moveCells: (cells, dx) => this.slideCells(cells, dx),
+      paddle: () => ({ x: this.paddle.x, top: this.paddle.top, width: this.paddle.activeWidth }),
+      watchX: () => this.ballManager.getActiveBalls()[0]?.x ?? null,
+      breakCell: (brick) => this.breakBrick(brick, 2),
+      onHit: (x, y, phaseChanged) => {
+        this.sfx(phaseChanged ? 'mechanism' : 'steel', { x });
+        this.particleSystem.sparkBurst(x, y, 0xff5a4a, phaseChanged ? 18 : 6);
+        if (phaseChanged) {
+          this.juice.shake(0.35);
+          this.juice.popup(
+            540,
+            900,
+            this.language === 'en' ? 'RAGE!' : 'FURIE !',
+            '#ff5a4a',
+            60,
+            true
+          );
+        }
+      },
+      onDefeated: (x, y) => {
+        const bonus = this.scoreSystem.addBonus(
+          Math.round(BOSS_DEFEAT_BONUS * this.level.difficulty.scoreMultiplier)
+        );
+        this.sfx('explosion', { x, intensity: 1 });
+        this.juice.shake(0.8);
+        this.juice.ring(x, y, 0xff5a4a, 3, 600);
+        this.juice.popup(x, y, `+${bonus}`, '#ffd36b', 56, true);
+        if (!this.assisted) this.discover('boss:defeated');
+        this.emitHud();
+      },
+      onPaddleHit: (x) => {
+        this.paddleStunnedUntil = this.gameTime + BOSS_STUN_MS;
+        const removed = this.scoreSystem.addPenalty(BOSS_HIT_PENALTY);
+        if (removed > 0) {
+          this.juice.popup(x, this.paddle.top - 60, `-${removed}`, '#ff5a4a', 40, true);
+        }
+        this.sfx('powerMiss', { x });
+        this.juice.shake(0.25);
+        haptic(60);
+        this.paddle.setTint(0xff6a6a);
+        this.time.delayedCall(BOSS_STUN_MS, () => {
+          if (!this.scene.isActive()) return;
+          if (this.effects.has('stickyPaddle')) this.paddle.setTint(0xffe7a8);
+          else this.paddle.clearTint();
+        });
+        this.emitHud();
+      },
+      onFire: (x) => this.sfx('laser', { x })
+    };
+  }
+
+  /** Moves a group of bricks one cell sideways (movers and bosses). */
+  private slideCells(cells: readonly Brick[], dx: 1 | -1): void {
+    cells.forEach((cell) => this.grid.remove(cell));
+    cells.forEach((cell) => {
+      const col = cell.col + dx;
+      const x = PLAYFIELD_LEFT + cell.spec.width / 2 + col * (cell.spec.width + BRICK_GAP);
+      const y = (cell.box.top + cell.box.bottom) / 2;
+      cell.moveToCell(col, cell.row, x, y);
+      this.grid.set(cell);
+      this.tweens.add({ targets: cell, x, duration: 200, ease: 'Sine.easeInOut' });
+    });
   }
 
   /** Admin cheats. Using any of them marks the run as assisted (nothing is saved). */

@@ -5,7 +5,7 @@ import { MEDAL_RANK, type ChallengeId, type Medal } from './challenges';
  * a few, on the run that just happened), with a progress bar where it makes sense.
  */
 
-export const CAMPAIGN_LEVELS = 30;
+export const CAMPAIGN_LEVELS = 36;
 export const LEVELS_PER_CHAPTER = 6;
 const POWER_UP_COUNT = 15;
 const MECHANISM_COUNT = 9;
@@ -75,10 +75,10 @@ const discoveredCount = (save: ProgressSnapshot, prefix: string): number =>
 
 export const ACHIEVEMENTS: readonly AchievementDef[] = [
   { id: 'first-clear', icon: '⚒', progress: (s) => [Math.min(1, s.completedLevels.length), 1] },
-  ...[0, 1, 2, 3, 4].map(
+  ...[0, 1, 2, 3, 4, 5].map(
     (chapter): AchievementDef => ({
       id: `chapter-${chapter + 1}`,
-      icon: ['🔥', '⛓', '💥', '🌪', '⚙'][chapter] ?? '★',
+      icon: ['🔥', '⛓', '💥', '🌪', '⚙', '👁'][chapter] ?? '★',
       progress: (s) => chapterCleared(s, chapter)
     })
   ),
@@ -139,7 +139,16 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
   {
     id: 'all-mechanisms',
     icon: '⚙',
-    progress: (s) => [discoveredCount(s, 'brick:'), MECHANISM_COUNT]
+    // The boss is not a mechanism: it has its own trophy.
+    progress: (s) => [
+      s.discovered.filter((id) => id.startsWith('brick:') && id !== 'brick:boss').length,
+      MECHANISM_COUNT
+    ]
+  },
+  {
+    id: 'boss-slayer',
+    icon: '👁',
+    progress: (s) => [Math.min(1, discoveredCount(s, 'boss:')), 1]
   },
   { id: 'all-combos', icon: '✧', progress: (s) => [discoveredCount(s, 'combo:'), COMBO_COUNT] },
   {

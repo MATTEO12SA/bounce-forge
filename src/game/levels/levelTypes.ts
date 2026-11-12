@@ -16,7 +16,8 @@ export type BrickKind =
   | 'mover'
   | 'bumper'
   | 'teleporter'
-  | 'fuse';
+  | 'fuse'
+  | 'boss';
 
 /** Kinds the ball cannot destroy (gates are handled separately: locked while keys remain). */
 export const SOLID_KINDS: readonly BrickKind[] = ['indestructible', 'bumper', 'teleporter'];

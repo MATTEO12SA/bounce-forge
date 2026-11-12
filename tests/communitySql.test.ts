@@ -268,6 +268,21 @@ describe('community database: automatic moderation', () => {
   });
 });
 
+describe('community database: boss blocks', () => {
+  it('accepts levels with boss armour and counts it as bricks to break', async () => {
+    const author = await player();
+    const rows = Array.from({ length: 58 }, () => '.'.repeat(36));
+    rows[6] = `..WWWW${'.'.repeat(30)}`;
+    rows[7] = `..WWWW${'.'.repeat(30)}`;
+    expect(typeof (await publish(author, 'Boss maison', [{ name: 'Boss', rows }]))).toBe('string');
+    const count = await db.query<{ value: number }>(
+      'select public.required_bricks($1::jsonb) as value',
+      [JSON.stringify({ rows })]
+    );
+    expect(count.rows[0]!.value).toBe(8);
+  });
+});
+
 describe('community database: reports, review, sanctions, appeals', () => {
   it('sends a creation to review after three reports and hides it', async () => {
     const author = await player();

@@ -73,7 +73,8 @@ const CHAPTER_SLUG: Record<string, string> = {
   'Wall Mazes': 'steel',
   'Chain Reactor': 'chain',
   'Ball Storm': 'storm',
-  Mechanisms: 'mech'
+  Mechanisms: 'mech',
+  Wardens: 'boss'
 };
 /** Brick symbols worth a "New" badge on the level that introduces them. */
 const INTRODUCED_SYMBOLS: Array<[string, MessageKey]> = [
@@ -86,6 +87,7 @@ const INTRODUCED_SYMBOLS: Array<[string, MessageKey]> = [
   ['O', 'editor.brick.O'],
   ['T', 'editor.brick.T'],
   ['F', 'editor.brick.F'],
+  ['W', 'editor.brick.W'],
   ['R', 'editor.brick.R'],
   ['M', 'editor.brick.M'],
   ['I', 'editor.brick.I']
@@ -1877,7 +1879,8 @@ export class App {
       ['M', 'brickinfo.mover'],
       ['O', 'brickinfo.bumper'],
       ['T', 'brickinfo.teleporter'],
-      ['F', 'brickinfo.fuse']
+      ['F', 'brickinfo.fuse'],
+      ['W', 'brickinfo.boss']
     ];
     const brickItem = ([symbol, key]: [string, MessageKey]): HTMLElement => {
       const swatch = h('canvas', {
@@ -3195,7 +3198,8 @@ const BRICK_SYMBOL_FOR_KIND: Record<string, string> = {
   mover: 'M',
   bumper: 'O',
   teleporter: 'T',
-  fuse: 'F'
+  fuse: 'F',
+  boss: 'W'
 };
 
 /** "Name — description" → [name, description]. */

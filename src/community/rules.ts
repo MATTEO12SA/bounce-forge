@@ -48,7 +48,7 @@ export const MIN_REQUIRED_BRICKS = 4;
 
 /** Bricks that must be destroyed to win (same symbols as the server's `required_bricks`). */
 export function requiredBricks(rows: readonly string[]): number {
-  return rows.reduce((sum, row) => sum + (row.match(/[123EBSCKIMF]/g)?.length ?? 0), 0);
+  return rows.reduce((sum, row) => sum + (row.match(/[123EBSCKIMFW]/g)?.length ?? 0), 0);
 }
 
 /** Turns a saved level into the published format, or throws `invalid_level`. */

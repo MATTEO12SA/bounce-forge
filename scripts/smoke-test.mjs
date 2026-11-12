@@ -39,7 +39,7 @@ const browserPath = [
 
 // SMOKE_SHARD runs one part of the journey so CI can run the parts in parallel:
 // layout (every screen on 3 sizes), ui (campaign, modes, stress, trophies), levels-a / levels-b
-// (the 30 campaign levels, half each) and gameplay (power-ups, mechanisms, workshop, community,
+// (the 36 campaign levels, half each) and gameplay (power-ups, mechanisms, workshop, community,
 // sharing). Default: everything.
 const SHARD = process.env.SMOKE_SHARD ?? 'all';
 const runs = (name) => SHARD === 'all' || SHARD === name;
@@ -641,8 +641,8 @@ try {
     // ---------------------------------------------------------------- whole campaign
     console.log('Campaign levels');
     const stuck = [];
-    const firstLevel = SHARD === 'levels-b' ? 15 : 0;
-    const lastLevel = SHARD === 'levels-a' ? 15 : 30;
+    const firstLevel = SHARD === 'levels-b' ? 18 : 0;
+    const lastLevel = SHARD === 'levels-a' ? 18 : 36;
     for (let index = firstLevel; index < lastLevel; index += 1) {
       // Let any restart still pending from a previous step finish before starting a new one.
       await waitFor(
@@ -683,6 +683,55 @@ try {
     );
   }
   if (runs('gameplay')) {
+    // ---------------------------------------------------------------- bosses
+    console.log('Bosses');
+    await waitFor(
+      page,
+      `${GAME} && window.__bounceForge.scene.isActive('GameScene') && ${GAME}.gameTime > 150`,
+      15000
+    );
+    await evaluate(
+      page,
+      `(() => { window.__smokeBricks = ${GAME}.bricks; ${GAME}.scene.restart({ mode: 'campaign', levelIndex: 30 }); return true; })()`
+    );
+    await waitFor(
+      page,
+      `${GAME} && ${GAME}.bricks !== window.__smokeBricks && ${GAME}.getSession().levelIndex === 30 && ${GAME}.boss !== null`,
+      15000
+    );
+    const bossStart = await evaluate(
+      page,
+      `(() => { const s = ${GAME}; return { active: s.boss.active, cells: s.getBricks().filter((b) => b.kind === 'boss').length, ratio: s.boss.ratio }; })()`
+    );
+    check(
+      'a boss level starts with a boss at full health',
+      bossStart.active && bossStart.cells > 0 && bossStart.ratio === 1,
+      bossStart
+    );
+    const fired = await waitFor(page, `${GAME}.boss.bolts.length > 0`, 20000);
+    const stun = await evaluate(
+      page,
+      `(() => { const s = ${GAME}; const bolt = s.boss.bolts[0]; bolt.sprite.x = s.paddle.x; bolt.sprite.y = s.paddle.top; s.boss.update(16); return { stunned: s.paddleStunnedUntil > s.gameTime }; })()`
+    );
+    check('the boss fires bolts that stun the paddle', Boolean(fired) && stun.stunned, {
+      fired,
+      stun
+    });
+    const phases = await evaluate(
+      page,
+      `(() => { const s = ${GAME}; const cell = s.getBricks().find((b) => b.kind === 'boss'); const seen = new Set(); let guard = 0; while (s.boss.active && guard < 500) { s.boss.time += 200; s.damageBrick(cell, 1, 0); seen.add(s.boss.bosses[0].phase); guard += 1; } return { phases: [...seen], defeated: !s.boss.active }; })()`
+    );
+    const cleared = await waitFor(
+      page,
+      `${GAME}.getBricks().every((b) => b.kind !== 'boss')`,
+      15000
+    );
+    check(
+      'hitting the boss drains its health through three phases until it falls apart',
+      phases.defeated && phases.phases.length === 3 && Boolean(cleared),
+      { phases, cleared }
+    );
+
     // ---------------------------------------------------------------- power-ups
     console.log('Power-ups');
     await goto(page, baseUrl, '#/play/campaign/2');

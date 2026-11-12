@@ -18,7 +18,8 @@ export type EditorCell =
   | 'M'
   | 'O'
   | 'T'
-  | 'F';
+  | 'F'
+  | 'W';
 
 export interface EditorCellRule {
   breakable: boolean;

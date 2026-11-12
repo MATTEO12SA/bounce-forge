@@ -84,7 +84,8 @@ export const EDITOR_CELL_DEFINITIONS: Record<EditorCell, EditorCellDefinition> =
   M: { symbol: 'M', label: 'Mover', color: 0x5fb3ff, breakable: true },
   O: { symbol: 'O', label: 'Bumper', color: 0xff5ab4, breakable: false },
   T: { symbol: 'T', label: 'Portal', color: 0x9b6bff, breakable: false },
-  F: { symbol: 'F', label: 'Fuse', color: 0xffa94d, breakable: true }
+  F: { symbol: 'F', label: 'Fuse', color: 0xffa94d, breakable: true },
+  W: { symbol: 'W', label: 'Boss', color: 0x9b2335, breakable: true }
 };
 
 export function createEmptyEditorRows(): string[] {

@@ -3,6 +3,28 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.7.0] — 2026-11-12
+
+### Added
+
+- **Chapter 6 — The Wardens**: six boss levels (Sentinel, Shield Wall, Twin Wardens, Furnace
+  Golem, Storm Titan, The Forge Lord). The campaign now has 36 levels and 108 challenges.
+- **Bosses**: a boss is a group of armour blocks sharing one health bar (shown at the top with
+  its name). Hitting any of its blocks drains it, strong hits and explosions count double; it
+  slides from side to side, glows before firing bolts that stun the paddle (and cost a few
+  points), and enrages in three phases: faster, more bolts. Its eye follows the ball. Defeating
+  it shatters the armour from the core outwards and gives a big score bonus.
+- New block **W (Boss)** in the editor palette, the help page and the community library
+  (database migration `20261112000300_boss_block.sql`).
+- Trophies **Warden slayer** (clear chapter 6) and **First blood** (defeat a boss), which unlocks
+  the new **Warden** paddle.
+
+### Changed
+
+- Power-up drop tables for chapter 6 favour lasers, fireballs and shields.
+- "All gold", "All diamond" and "All challenges" trophies now cover 36 levels / 108 challenges
+  (trophies already earned stay earned).
+
 ## [1.6.0] — 2026-11-12
 
 ### Added

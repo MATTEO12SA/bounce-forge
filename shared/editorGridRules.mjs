@@ -22,7 +22,8 @@ export const EDITOR_CELL_RULES = Object.freeze({
   M: Object.freeze({ breakable: true, required: true }),
   O: Object.freeze({ breakable: false, required: false }),
   T: Object.freeze({ breakable: false, required: false }),
-  F: Object.freeze({ breakable: true, required: true })
+  F: Object.freeze({ breakable: true, required: true }),
+  W: Object.freeze({ breakable: true, required: true })
 });
 
 export const EDITOR_PALETTE = Object.freeze(Object.keys(EDITOR_CELL_RULES));

@@ -36,8 +36,8 @@ export interface PowerUpDefinition {
   durationMs: number;
   /** Longest a timed effect may last when caught again (stacking extends it up to this). */
   maxDurationMs: number;
-  /** Drop weight for chapters 1 to 5 (0 = not yet introduced). */
-  weights: readonly [number, number, number, number, number];
+  /** Drop weight for chapters 1 to 6 (0 = not yet introduced). */
+  weights: readonly [number, number, number, number, number, number];
   /** Red capsule with a drawback. */
   risk: boolean;
 }
@@ -52,7 +52,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'instant',
     durationMs: 0,
     maxDurationMs: 0,
-    weights: [1.8, 1.9, 1.8, 2.3, 1.8],
+    weights: [1.8, 1.9, 1.8, 2.3, 1.8, 1.8],
     risk: false
   }),
   splitBall: def({
@@ -62,7 +62,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'instant',
     durationMs: 0,
     maxDurationMs: 0,
-    weights: [1.3, 1.3, 1.2, 1.5, 1.2],
+    weights: [1.3, 1.3, 1.2, 1.5, 1.2, 1.2],
     risk: false
   }),
   widePaddle: def({
@@ -72,7 +72,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'paddle',
     durationMs: 11000,
     maxDurationMs: 22000,
-    weights: [1, 0.9, 0.8, 0.7, 0.7],
+    weights: [1, 0.9, 0.8, 0.7, 0.7, 0.7],
     risk: false
   }),
   stickyPaddle: def({
@@ -82,7 +82,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'paddle',
     durationMs: 9000,
     maxDurationMs: 15000,
-    weights: [0.12, 0.12, 0.12, 0.12, 0.12],
+    weights: [0.12, 0.12, 0.12, 0.12, 0.12, 0.12],
     risk: false
   }),
   extraLife: def({
@@ -92,7 +92,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'instant',
     durationMs: 0,
     maxDurationMs: 0,
-    weights: [0.3, 0.28, 0.26, 0.24, 0.24],
+    weights: [0.3, 0.28, 0.26, 0.24, 0.24, 0.24],
     risk: false
   }),
   fireBall: def({
@@ -102,7 +102,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'ball',
     durationMs: 8000,
     maxDurationMs: 14000,
-    weights: [0, 0.55, 0.65, 0.65, 0.75],
+    weights: [0, 0.55, 0.65, 0.65, 0.75, 0.9],
     risk: false
   }),
   explosiveBall: def({
@@ -112,7 +112,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'ball',
     durationMs: 0,
     maxDurationMs: 0,
-    weights: [0, 0, 0.9, 0.7, 0.8],
+    weights: [0, 0, 0.9, 0.7, 0.8, 0.8],
     risk: false
   }),
   bigBall: def({
@@ -122,7 +122,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'ball',
     durationMs: 10000,
     maxDurationMs: 18000,
-    weights: [0, 0.6, 0.6, 0.55, 0.6],
+    weights: [0, 0.6, 0.6, 0.55, 0.6, 0.6],
     risk: false
   }),
   laserPaddle: def({
@@ -132,7 +132,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'paddle',
     durationMs: 8000,
     maxDurationMs: 14000,
-    weights: [0, 0.65, 0.6, 0.6, 0.7],
+    weights: [0, 0.65, 0.6, 0.6, 0.7, 0.9],
     risk: false
   }),
   magnet: def({
@@ -142,7 +142,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'paddle',
     durationMs: 10000,
     maxDurationMs: 18000,
-    weights: [0.6, 0.5, 0.5, 0.6, 0.6],
+    weights: [0.6, 0.5, 0.5, 0.6, 0.6, 0.6],
     risk: false
   }),
   shield: def({
@@ -152,7 +152,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'field',
     durationMs: 0,
     maxDurationMs: 0,
-    weights: [0.7, 0.55, 0.5, 0.5, 0.6],
+    weights: [0.7, 0.55, 0.5, 0.5, 0.6, 0.7],
     risk: false
   }),
   slowMotion: def({
@@ -162,7 +162,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'field',
     durationMs: 8000,
     maxDurationMs: 14000,
-    weights: [0.6, 0.5, 0.5, 0.5, 0.5],
+    weights: [0.6, 0.5, 0.5, 0.5, 0.5, 0.5],
     risk: false
   }),
   fever: def({
@@ -172,7 +172,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'field',
     durationMs: 10000,
     maxDurationMs: 18000,
-    weights: [0, 0, 0.5, 0.6, 0.6],
+    weights: [0, 0, 0.5, 0.6, 0.6, 0.6],
     risk: false
   }),
   turbo: def({
@@ -182,7 +182,7 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'risk',
     durationMs: 9000,
     maxDurationMs: 15000,
-    weights: [0, 0.4, 0.5, 0.6, 0.6],
+    weights: [0, 0.4, 0.5, 0.6, 0.6, 0.6],
     risk: true
   }),
   shrinkPaddle: def({
@@ -192,13 +192,13 @@ export const POWER_UPS: Record<PowerUpType, PowerUpDefinition> = {
     category: 'risk',
     durationMs: 10000,
     maxDurationMs: 16000,
-    weights: [0, 0, 0.4, 0.5, 0.6],
+    weights: [0, 0, 0.4, 0.5, 0.6, 0.6],
     risk: true
   })
 };
 
 export const POWER_UP_TYPES = Object.keys(POWER_UPS) as PowerUpType[];
-export const CHAPTER_COUNT = 5;
+export const CHAPTER_COUNT = 6;
 
 export function getPowerUpDefinition(type: PowerUpType): PowerUpDefinition {
   return POWER_UPS[type];

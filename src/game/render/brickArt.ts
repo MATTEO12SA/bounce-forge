@@ -116,8 +116,8 @@ export function paintBrick(
   ctx.setLineDash([]);
   ctx.restore();
 
-  paintSymbol(ctx, kind, color, w, h);
-  if (damage > 0) {
+  paintSymbol(ctx, kind, color, w, h, damage);
+  if (damage > 0 && kind !== 'boss') {
     paintCracks(ctx, damage, w, h);
   }
 }
@@ -127,7 +127,8 @@ function paintSymbol(
   kind: BrickKind,
   color: number,
   w: number,
-  h: number
+  h: number,
+  damage = 0
 ): void {
   const cx = w / 2;
   const cy = h / 2 + 1;
@@ -323,6 +324,21 @@ function paintSymbol(
       ctx.beginPath();
       ctx.arc(38, cy + 4, 3, 0, Math.PI * 2);
       ctx.fill();
+      break;
+    }
+    case 'boss': {
+      // Riveted armour plate with a glowing seam; damage stages show as brighter cracks.
+      ctx.fillStyle = 'rgba(20, 4, 6, 0.55)';
+      ctx.fillRect(4, cy - 2, w - 8, 4);
+      ctx.fillStyle = damage >= 2 ? '#ff3b2b' : damage === 1 ? '#ff7a2a' : '#ffb423';
+      ctx.fillRect(6, cy - 1, w - 12, 2);
+      ctx.fillStyle = '#2a0b0e';
+      for (const rx of [7, w - 7]) {
+        ctx.beginPath();
+        ctx.arc(rx, 7, 2.4, 0, Math.PI * 2);
+        ctx.arc(rx, h - 7, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
       break;
     }
     case 'standard':
