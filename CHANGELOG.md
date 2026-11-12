@@ -19,6 +19,8 @@ All notable changes to Bounce Forge. Format based on
   player per day, play and like counters that cannot be forged, players can only touch their own
   creations (`supabase/migrations`, checked by `scripts/community-live-test.mjs`).
 - BF2/BF3 share codes stay available but are no longer needed to play someone else's level.
+- **Faster CI**: the browser journey runs as five parallel parts (about a minute and a half
+  instead of four), and deployment re-runs only a quick part.
 
 ## [1.3.0] — 2026-11-12
 
