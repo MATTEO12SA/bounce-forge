@@ -153,10 +153,18 @@ try {
 } catch (error) {
   check('no unexpected exception', false, String(error));
 } finally {
+  // Remove the two test players' profiles too (cascades to anything left behind).
+  const cleanup = async () => {
+    for (const client of [a, b]) {
+      const user = (await client.auth.getUser()).data.user;
+      if (user) await client.from('profiles').delete().eq('id', user.id);
+    }
+  };
   if (created) {
     const removed = await a.from('creations').delete().eq('id', created).select('id');
     check('the author can delete it (cleanup)', (removed.data ?? []).length === 1, removed);
   }
+  await cleanup();
 }
 
 console.log(
