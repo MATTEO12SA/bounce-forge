@@ -3,6 +3,31 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.3.0] — 2026-11-12
+
+### Added
+
+- **Three challenges per level**: the level objective, a score target and a flawless run (no
+  life lost). They are collected one by one (90 in the campaign) and shown on every level card
+  and live in the HUD.
+- **Diamond medal**: medals now count the challenges met in the same run — bronze to clear,
+  silver for one, gold for two, diamond for all three.
+- **27 trophies** with progress bars in a new **Trophies** screen (chapters, gold and diamond
+  sweeps, challenge counts, combos, balls, explosions, every power-up / mechanism / combo, risk
+  capsules, a no-power-up clear, Endless, daily challenge, Workshop), plus lifetime statistics.
+- Collection summary (medals, challenges, trophies) on the campaign and trophy screens.
+- Result screen: medal, challenges with "New" marks, score breakdown and trophies unlocked.
+
+### Changed
+
+- **Score**: losing a life costs 10 % of the score (at least 300 points). Clearing a level adds
+  bonuses for lives left, a flawless run, the objective and speed (par time).
+- Save format v8 (diamond medals, collected challenges, trophies, statistics); older saves
+  migrate.
+- The Bonus panel moves to the right column, under balls and combo; the live challenges sit on
+  the left, under the lives.
+- Faster CI: one run per pull request (no duplicate push run) and a quicker campaign smoke check.
+
 ## [1.2.1] — 2026-11-12
 
 ### Changed

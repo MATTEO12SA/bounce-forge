@@ -87,8 +87,8 @@ function makeLevel(level: ArtLevel, index: number): PatternDefinition {
     .split('')
     .reduce((sum, symbol) => sum + (SYMBOL_SCORE[symbol] ?? 0), 0);
   const difficultyMultiplier = 1 + index * 0.08;
-  // Gold needs a clean, combo-rich clear: about 1.6× the raw value of the level.
-  const goldScore = Math.round((baseScore * difficultyMultiplier * 1.6) / 100) * 100;
+  // Score challenge: sustained combos plus end bonuses, about 2× the raw value of the level.
+  const goldScore = Math.round((baseScore * difficultyMultiplier * 2) / 100) * 100;
   return {
     id: level.id,
     name: level.name,

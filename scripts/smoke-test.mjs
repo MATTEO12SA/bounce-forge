@@ -288,7 +288,8 @@ try {
     ].filter(Boolean),
     { stdio: ['ignore', 'pipe', 'pipe'] }
   );
-  await waitForHttp(`http://127.0.0.1:${cdpPort}/json/version`);
+  // Cold CI runners can take a while to start the browser.
+  await waitForHttp(`http://127.0.0.1:${cdpPort}/json/version`, 60000);
   const target = JSON.parse(await requestText(`http://127.0.0.1:${cdpPort}/json/new`, 'PUT'));
   page = await createCdpClient(target.webSocketDebuggerUrl);
 
@@ -325,7 +326,7 @@ try {
   const migrated = await evaluate(page, `JSON.parse(localStorage.getItem('bounce-forge.save.v1'))`);
   check(
     'v5 save migrates to v6 and keeps progress',
-    migrated?.version === 7 && migrated.bestScore === 4321 && migrated.unlockedLevel === 3,
+    migrated?.version === 8 && migrated.bestScore === 4321 && migrated.unlockedLevel === 3,
     migrated?.version
   );
   // Start the rest from a French, tutorial-free profile for stable screenshots.
@@ -417,6 +418,17 @@ try {
   );
   check('Escape resumes', resumed);
 
+  // A lost life costs score before the level is cleared.
+  const penalty = await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.scoreSystem.addBonus(5000); const before = s.scoreSystem.snapshot().score; s.loseLife(); return { before, after: s.scoreSystem.snapshot().score, lost: s.livesLost }; })()`
+  );
+  check(
+    'losing a life costs a tenth of the score',
+    penalty.after === penalty.before - 500 && penalty.lost === 1,
+    penalty
+  );
+  await delay(800);
   await evaluate(
     page,
     `(() => { const s = ${GAME}; s.bricks.getChildren().filter((b) => b.active && b.isBreakable).forEach((b) => s.damageBrick(b, 99, 0)); return true; })()`
@@ -433,6 +445,19 @@ try {
     `JSON.parse(localStorage.getItem('bounce-forge.save.v1')).levelMedals['0'] !== undefined`
   );
   check('victory is saved', unlocked);
+  const resultInfo = await evaluate(
+    page,
+    `({ medal: Boolean(document.querySelector('.dialog .result-medal .medal')), challenges: document.querySelectorAll('.dialog .result-challenges .challenge-row').length, breakdown: document.querySelectorAll('.dialog .result-breakdown dl > div').length, penalties: document.querySelector('.dialog .result-breakdown .is-negative') !== null, flawless: document.querySelector('.dialog .result-challenges .pip-flawless')?.classList.contains('is-done') })`
+  );
+  check(
+    'the result shows the medal, the 3 challenges and the score breakdown',
+    resultInfo.medal &&
+      resultInfo.challenges === 3 &&
+      resultInfo.breakdown >= 2 &&
+      resultInfo.penalties &&
+      resultInfo.flawless === false,
+    resultInfo
+  );
 
   // Defeat on the phone layout.
   await setViewport(page, 360, 800);
@@ -563,13 +588,14 @@ try {
       `${GAME} && ${GAME}.getSession().levelIndex === ${index} && ${GAME}.gameTime < 1500 && ${GAME}.getBricks().length > 0 && window.__bounceForge.scene.isActive('GameScene')`,
       10000
     );
-    await delay(350);
+    await delay(100);
     const before = await evaluate(
       page,
-      `(() => { const s = ${GAME}; s.setAutopilot(true); s.launchAttachedBalls(); for (let i = 0; i < 12; i += 1) s.createBall(false); s.ballManager.getActiveBalls().forEach((b, i) => { b.y = 900; b.x = 180 + ((i * 61) % 720); }); return s.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0); })()`
+      `(() => { const s = ${GAME}; s.setAutopilot(true); s.launchAttachedBalls(); for (let i = 0; i < 12; i += 1) s.createBall(false); const low = s.getBricks().reduce((max, b) => Math.max(max, b.box.bottom), 0); s.ballManager.getActiveBalls().forEach((b, i) => { b.y = Math.min(1500, low + 40); b.x = 180 + ((i * 61) % 720); b.vx = (i % 2 ? 1 : -1) * 120; b.vy = -620; b.speed = 632; }); return s.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0); })()`
     );
     // Give every level the same amount of game time, whatever the runner's frame rate.
-    await waitFor(page, `${GAME}.gameTime > 3200`, 20000);
+    // Balls start just under the bricks, so a short slice of game time is enough.
+    await waitFor(page, `${GAME}.gameTime > 1400`, 15000);
     const after = await evaluate(
       page,
       `({ left: ${GAME}.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0), active: window.__bounceForge.scene.isActive('GameScene'), level: ${GAME}.getSession().levelIndex })`
@@ -617,19 +643,19 @@ try {
   );
   const pickup = await evaluate(
     page,
-    `(() => new Promise((resolve) => { const s = ${GAME}; document.querySelectorAll('.toast').forEach((t) => t.remove()); s.spawnSpecificPowerUp(540, 900, 'magnet'); s.collectPowerUp(s.powerUps.find((p) => p.active)); setTimeout(() => { const card = document.querySelector('.hud-left .bonus-card'); resolve({ visible: card && !card.hidden, title: card?.querySelector('.bonus-card-title')?.textContent ?? '', toasts: document.querySelectorAll('.toast').length }); }, 200); }))()`
+    `(() => new Promise((resolve) => { const s = ${GAME}; document.querySelectorAll('.toast').forEach((t) => t.remove()); s.spawnSpecificPowerUp(540, 900, 'magnet'); s.collectPowerUp(s.powerUps.find((p) => p.active)); setTimeout(() => { const card = document.querySelector('.hud-right .bonus-card'); resolve({ visible: card && !card.hidden, title: card?.querySelector('.bonus-card-title')?.textContent ?? '', toasts: document.querySelectorAll('.toast').length }); }, 200); }))()`
   );
   check(
-    'catching a capsule shows a card in the left panel, not a toast',
+    'catching a capsule shows a card in the bonus panel, not a toast',
     pickup.visible && pickup.title.length > 0 && pickup.toasts === 0,
     pickup
   );
   const hovered = await evaluate(
     page,
-    `(() => { const row = document.querySelector('.bonus-list .bonus-row[data-effect="fireBall"]'); row.dispatchEvent(new MouseEvent('mouseenter')); const card = document.querySelector('.hud-left .bonus-card'); return { visible: !card.hidden, text: card.querySelector('.bonus-card-text')?.textContent ?? '' }; })()`
+    `(() => { const row = document.querySelector('.bonus-list .bonus-row[data-effect="fireBall"]'); row.dispatchEvent(new MouseEvent('mouseenter')); const card = document.querySelector('.hud-right .bonus-card'); return { visible: !card.hidden, text: card.querySelector('.bonus-card-text')?.textContent ?? '' }; })()`
   );
   check(
-    'hovering a power-up explains it in the left panel',
+    'hovering a power-up explains it in the bonus panel',
     hovered.visible && hovered.text.length > 20,
     hovered
   );
@@ -821,6 +847,15 @@ try {
     4000
   );
   check('saved level appears in the workshop', listed);
+
+  console.log('Trophies');
+  await goto(page, baseUrl, '#/trophies');
+  const trophyRoom = await waitFor(
+    page,
+    `document.querySelectorAll('.trophy-grid .trophy').length >= 25 && document.querySelectorAll('.trophy.is-unlocked').length >= 1`,
+    6000
+  );
+  check('the trophy room lists every trophy and the ones already earned', trophyRoom);
 
   console.log('Sharing');
   const name = 'Forgé à chaud 🔥 ñ';

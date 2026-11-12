@@ -22,7 +22,7 @@ class MemoryStorage implements KeyValueStorage {
 }
 
 function isSaveData(value: unknown): value is SaveData {
-  return Boolean(value && typeof value === 'object' && (value as Partial<SaveData>).version === 7);
+  return Boolean(value && typeof value === 'object' && (value as Partial<SaveData>).version === 8);
 }
 
 function makeOneBrickRows(): string[] {
@@ -50,7 +50,7 @@ describe('storage helpers and save system', () => {
     expect(reloaded.bestScore).toBe(2400);
     expect(reloaded.unlockedLevel).toBe(3);
     expect(reloaded.completedLevels).toContain(2);
-    expect(reloaded.version).toBe(7);
+    expect(reloaded.version).toBe(8);
     expect(reloaded.levelMedals['2']).toBe('bronze');
     expect(reloaded.preferences.fxQuality).toBe('med');
     expect(reloaded.preferences.volumeSfx).toBeGreaterThan(0);
@@ -81,7 +81,7 @@ describe('storage helpers and save system', () => {
 
     const migrated = new SaveSystem(storage).snapshot();
 
-    expect(migrated.version).toBe(7);
+    expect(migrated.version).toBe(8);
     expect(migrated.bestScore).toBe(4200);
     expect(migrated.unlockedLevel).toBe(4);
     expect(migrated.completedLevels).toEqual([0, 1, 3]);
@@ -115,7 +115,7 @@ describe('storage helpers and save system', () => {
 
     const migrated = new SaveSystem(storage).snapshot();
 
-    expect(migrated.version).toBe(7);
+    expect(migrated.version).toBe(8);
     expect(migrated.bestScore).toBe(1500);
     expect(migrated.levelMedals['0']).toBe('gold');
     expect(migrated.levelMedals['1']).toBe('silver');

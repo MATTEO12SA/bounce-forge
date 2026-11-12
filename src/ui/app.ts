@@ -10,6 +10,8 @@ import { audio } from '../game/audio/AudioEngine';
 import { ADMIN_ENABLED } from '../game/config/features';
 import { getPowerUpDefinition, introducedInChapter, POWER_UP_TYPES } from '../game/config/powerUps';
 import { campaignLevels } from '../game/levels/campaignLevels';
+import { ACHIEVEMENTS, newlyUnlocked } from '../game/progress/achievements';
+import { CHALLENGE_IDS, MEDALS, type ChallengeId } from '../game/progress/challenges';
 import { decodeCreativeLevelCode, encodeCreativeLevelCode } from '../game/levels/levelShare';
 import { createLevelFromPattern } from '../game/levels/levelFactory';
 import { estimateDifficulty } from '../game/levels/levelChecks';
@@ -79,7 +81,7 @@ INTRODUCED_SYMBOLS.forEach(([symbol, key]) => {
 const SLOT_COUNT = campaignLevels.length;
 
 type View = 'home' | 'menu' | 'play' | 'tool' | 'editor';
-type MenuScreen = 'campaign' | 'modes' | 'create' | 'help' | 'settings';
+type MenuScreen = 'campaign' | 'modes' | 'create' | 'help' | 'settings' | 'trophies';
 
 type Route =
   | { name: 'home' }
@@ -97,6 +99,7 @@ function parseRoute(hash: string): Route {
     case 'modes':
     case 'help':
     case 'settings':
+    case 'trophies':
       return { name: head };
     case 'create':
       if (second === 'edit') {
@@ -301,6 +304,7 @@ export class App {
         route.name === 'modes' ||
         route.name === 'create' ||
         route.name === 'help' ||
+        route.name === 'trophies' ||
         route.name === 'settings'
       ) {
         this.startDemo();
@@ -347,6 +351,7 @@ export class App {
       ['campaign', 'nav.campaign', '#/campaign'],
       ['modes', 'nav.modes', '#/modes'],
       ['create', 'nav.create', '#/create'],
+      ['trophies', 'nav.trophies', '#/trophies'],
       ['help', 'nav.help', '#/help']
     ];
     const soundOn = this.save.snapshot().preferences.soundEnabled;
@@ -577,6 +582,8 @@ export class App {
           return this.createScreen();
         case 'help':
           return this.helpScreen();
+        case 'trophies':
+          return this.trophiesScreen();
         case 'settings':
         default:
           return this.settingsScreen();
@@ -685,11 +692,16 @@ export class App {
                 { class: 'card-sub' },
                 this.objectiveText(level.objective.type, level.objective.target)
               ),
-              ...(INTRODUCED_AT.get(level.index) ?? []).map((key) =>
-                h('span', { class: 'new-badge' }, t('campaign.new', { name: t(key) }))
+              h(
+                'span',
+                { class: 'card-tags' },
+                this.challengePips(data.levelChallenges[String(level.index)] ?? []),
+                ...(INTRODUCED_AT.get(level.index) ?? []).map((key) =>
+                  h('span', { class: 'new-badge' }, t('campaign.new', { name: t(key) }))
+                )
               )
             ),
-            this.medalBadge(medal)
+            h('span', { class: 'card-progress' }, this.medalBadge(medal))
           )
         ];
         return h(
@@ -731,6 +743,7 @@ export class App {
           })
         )
       ),
+      this.collectionSummary(),
       filters,
       activeChapter ? this.chapterIntro(activeChapter) : null,
       h('ul', { class: 'card-grid', role: 'list' }, ...cards)
@@ -765,6 +778,142 @@ export class App {
             })
           )
         : null
+    );
+  }
+
+  /** Three small marks: the challenges of a level already collected. */
+  private challengePips(collected: readonly ChallengeId[]): HTMLElement {
+    return h(
+      'span',
+      {
+        class: 'challenge-pips',
+        title: CHALLENGE_IDS.map(
+          (id) =>
+            `${collected.includes(id) ? '✓' : '·'} ${t(`challenge.${id}.short` as MessageKey)}`
+        ).join('\n'),
+        'aria-label': t('campaign.challengesOf', { n: collected.length })
+      },
+      ...CHALLENGE_IDS.map((id) =>
+        h(
+          'span',
+          { class: `challenge-pip pip-${id}${collected.includes(id) ? ' is-done' : ''}` },
+          CHALLENGE_ICONS[id]
+        )
+      )
+    );
+  }
+
+  /** Medals, challenges and trophies collected so far. */
+  private collectionSummary(): HTMLElement {
+    const data = this.save.snapshot();
+    const medals = Object.values(data.levelMedals);
+    const challenges = Object.values(data.levelChallenges).reduce(
+      (sum, list) => sum + list.length,
+      0
+    );
+    const trophies = Object.keys(data.achievements).length;
+    return h(
+      'div',
+      { class: 'collection' },
+      ...[...MEDALS]
+        .reverse()
+        .map((medal) =>
+          h(
+            'span',
+            { class: 'collection-item', title: t(`medal.${medal}`) },
+            this.medalBadge(medal),
+            h('strong', {}, String(medals.filter((value) => value === medal).length)),
+            h('span', { class: 'visually-hidden' }, t(`medal.${medal}`))
+          )
+        ),
+      h(
+        'span',
+        { class: 'collection-item' },
+        h('span', { class: 'collection-icon', 'aria-hidden': 'true' }, '◎'),
+        t('campaign.challenges', { n: challenges, total: campaignLevels.length * 3 })
+      ),
+      h(
+        'a',
+        { class: 'collection-item collection-link', href: '#/trophies' },
+        h('span', { class: 'collection-icon', 'aria-hidden': 'true' }, '🏆'),
+        t('campaign.trophies', { n: trophies, total: ACHIEVEMENTS.length })
+      )
+    );
+  }
+
+  private trophiesScreen(): HTMLElement {
+    const data = this.save.snapshot();
+    const progress = this.save.progressSnapshot();
+    const unlockedCount = ACHIEVEMENTS.filter((def) => data.achievements[def.id]).length;
+    const cards = ACHIEVEMENTS.map((def) => {
+      const unlockedAt = data.achievements[def.id];
+      const [current, target] = def.progress(progress);
+      const [name, text] = splitInfo(t(`trophy.${def.id}` as MessageKey));
+      return h(
+        'li',
+        {},
+        h(
+          'article',
+          { class: `trophy${unlockedAt ? ' is-unlocked' : ''}` },
+          h('span', { class: 'trophy-icon', 'aria-hidden': 'true' }, def.icon),
+          h(
+            'div',
+            { class: 'trophy-body' },
+            h('h2', { class: 'trophy-name' }, name),
+            h('p', { class: 'trophy-text' }, text),
+            unlockedAt
+              ? h(
+                  'p',
+                  { class: 'trophy-date' },
+                  t('trophies.unlocked', { date: formatDate(unlockedAt) })
+                )
+              : target > 1
+                ? h(
+                    'div',
+                    { class: 'trophy-progress' },
+                    h(
+                      'div',
+                      { class: 'meter', 'aria-hidden': 'true' },
+                      h('span', {
+                        class: 'meter-fill',
+                        style: `transform: scaleX(${Math.min(1, current / target).toFixed(3)})`
+                      })
+                    ),
+                    h('span', {}, `${Math.min(current, target)}/${target}`)
+                  )
+                : null
+          )
+        )
+      );
+    });
+    const stats: Array<[MessageKey, number]> = [
+      ['stats.bricks', data.stats.bricksBroken],
+      ['stats.capsules', data.stats.capsulesCaught],
+      ['stats.bestCombo', data.stats.bestCombo],
+      ['stats.bestBalls', data.stats.bestBalls],
+      ['stats.livesLost', data.stats.livesLost]
+    ];
+    return h(
+      'section',
+      { class: 'screen', 'aria-labelledby': 'screen-title' },
+      this.screenHeader(
+        t('trophies.title'),
+        t('trophies.subtitle'),
+        h(
+          'p',
+          { class: 'progress-chip' },
+          t('campaign.trophies', { n: unlockedCount, total: ACHIEVEMENTS.length })
+        )
+      ),
+      this.collectionSummary(),
+      h(
+        'dl',
+        { class: 'stats-strip' },
+        ...stats.map(([key, value]) =>
+          h('div', {}, h('dt', {}, t(key)), h('dd', {}, formatNumber(value)))
+        )
+      ),
+      h('ul', { class: 'trophy-grid', role: 'list' }, ...cards)
     );
   }
 
@@ -1394,6 +1543,20 @@ export class App {
           icon: '✦',
           durationMs: 4200
         };
+      case 'achievement': {
+        const def = ACHIEVEMENTS.find((item) => item.id === notice.id);
+        if (!def) return null;
+        const [title, text] = splitInfo(t(`trophy.${def.id}` as MessageKey));
+        return {
+          tag: t('bonus.trophy'),
+          highlight: true,
+          title,
+          text,
+          color: '#ffd36b',
+          icon: def.icon,
+          durationMs: 5200
+        };
+      }
       case 'event': {
         const key = `notice.event.${notice.id}`;
         return hasMessage(key)
@@ -1491,6 +1654,39 @@ export class App {
       icon: definition.icon,
       durationMs: 0
     };
+  }
+
+  /** Live state of the three challenges of a campaign level. */
+  private renderChallenges(hud: HudSnapshot): void {
+    const block = this.hudRefs.challenges;
+    if (!block) return;
+    const state = hud.challenges;
+    block.hidden = !state;
+    if (!state) return;
+    const rows: Array<[ChallengeId, boolean, string]> = [
+      [
+        'objective',
+        state.objective,
+        `${this.objectiveText(hud.objective.kind, hud.objective.target)}`
+      ],
+      [
+        'score',
+        state.score >= state.target,
+        t('challenge.score.live', {
+          current: formatNumber(state.score),
+          target: formatNumber(state.target)
+        })
+      ],
+      ['flawless', state.flawless, t('challenge.flawless.short')]
+    ];
+    rows.forEach(([id, done, text]) => {
+      const row = this.hudRefs[`challenge-${id}`];
+      if (!row) return;
+      row.classList.toggle('is-done', done);
+      row.classList.toggle('is-lost', id === 'flawless' && !done);
+      const label = row.querySelector('.challenge-label');
+      if (label && label.textContent !== text) label.textContent = text;
+    });
   }
 
   /** Active effects: one row each (icon, name, time gauge, charges); chips on phones. */
@@ -1649,6 +1845,23 @@ export class App {
             })
           ),
           h('p', { class: 'help-note' }, t('help.risk'))
+        ),
+        h(
+          'div',
+          { class: 'panel' },
+          h('h2', { class: 'panel-title' }, t('help.medals')),
+          h(
+            'ul',
+            { class: 'help-list' },
+            ...(
+              [
+                'help.medal.challenges',
+                'help.medal.ladder',
+                'help.medal.collect',
+                'help.medal.score'
+              ] as MessageKey[]
+            ).map((key) => h('li', {}, t(key)))
+          )
         ),
         h(
           'div',
@@ -1897,7 +2110,13 @@ export class App {
   }
 
   private onSaveChanged(): void {
-    // Keep the top bar sound icon honest when another part of the app changes the setting.
+    // Trophies that do not depend on a run (a saved creation...) unlock right away. During a
+    // run the game unlocks them itself so the result screen can list them.
+    if (this.view === 'play' || this.activeSessionKey) return;
+    const data = this.save.snapshot();
+    const fresh = newlyUnlocked(this.save.progressSnapshot(), data.achievements);
+    if (fresh.length === 0) return;
+    this.save.unlockAchievements(fresh).forEach((id) => this.onNotice({ kind: 'achievement', id }));
   }
 
   // ---------------------------------------------------------------------------------- play
@@ -2014,19 +2233,32 @@ export class App {
             h('p', { class: 'hud-label' }, t('hud.lives')),
             ref('lives', h('p', { class: 'hud-lives' }))
           ),
-          h(
-            'section',
-            { class: 'bonus-panel', 'aria-label': t('bonus.title') },
-            h('p', { class: 'hud-label' }, t('bonus.title')),
-            ref(
-              'effects',
+          ref(
+            'challenges',
+            h(
+              'div',
+              { class: 'hud-block hud-challenges', hidden: true },
+              h('p', { class: 'hud-label' }, t('hud.challenges')),
               h(
                 'ul',
-                { class: 'bonus-list', role: 'list' },
-                h('li', { class: 'bonus-empty' }, t('bonus.empty'))
+                { class: 'challenge-list', role: 'list' },
+                ...CHALLENGE_IDS.map((id) =>
+                  ref(
+                    `challenge-${id}`,
+                    h(
+                      'li',
+                      { class: `challenge-row pip-${id}` },
+                      h(
+                        'span',
+                        { class: 'challenge-pip', 'aria-hidden': 'true' },
+                        CHALLENGE_ICONS[id]
+                      ),
+                      h('span', { class: 'challenge-label' })
+                    )
+                  )
+                )
               )
-            ),
-            ref('bonusCard', h('div', { class: 'bonus-card', role: 'status', hidden: true }))
+            )
           )
         ),
         slot,
@@ -2070,6 +2302,20 @@ export class App {
               h('p', { class: 'hud-label' }, t('hud.combo')),
               ref('combo', h('p', { class: 'hud-value' }, '0'))
             )
+          ),
+          h(
+            'section',
+            { class: 'bonus-panel', 'aria-label': t('bonus.title') },
+            h('p', { class: 'hud-label' }, t('bonus.title')),
+            ref(
+              'effects',
+              h(
+                'ul',
+                { class: 'bonus-list', role: 'list' },
+                h('li', { class: 'bonus-empty' }, t('bonus.empty'))
+              )
+            ),
+            ref('bonusCard', h('div', { class: 'bonus-card', role: 'status', hidden: true }))
           ),
           pauseButton('hud-pause')
         ),
@@ -2214,6 +2460,18 @@ export class App {
     setText(r.combo, hud.combo > 1 ? `×${hud.combo}` : '0');
 
     this.renderBonusList(hud.effects);
+    this.renderChallenges(hud);
+    const scoreElement = r.score;
+    if (scoreElement) {
+      const previous = Number(scoreElement.dataset.value ?? '0');
+      if (hud.score < previous) {
+        // Lost life: the score visibly drops.
+        scoreElement.classList.remove('is-penalty');
+        void scoreElement.offsetWidth;
+        scoreElement.classList.add('is-penalty');
+      }
+      scoreElement.dataset.value = String(hud.score);
+    }
 
     const hint = r.launchHint;
     if (hint) {
@@ -2339,7 +2597,12 @@ export class App {
               'div',
               {},
               h('dt', {}, t('result.medal')),
-              h('dd', {}, this.medalBadge(result.medal), t(`medal.${result.medal}`))
+              h(
+                'dd',
+                { class: `result-medal medal-text-${result.medal}` },
+                this.medalBadge(result.medal),
+                t(`medal.${result.medal}`)
+              )
             )
           : null,
         isWave
@@ -2358,6 +2621,86 @@ export class App {
           : null
       )
     ];
+    if (result.challenges) {
+      const { met, fresh, scoreTarget } = result.challenges;
+      rows.push(
+        h(
+          'div',
+          { class: 'result-section' },
+          h('p', { class: 'result-heading' }, t('result.challenges')),
+          h(
+            'ul',
+            { class: 'result-challenges', role: 'list' },
+            ...CHALLENGE_IDS.map((id) =>
+              h(
+                'li',
+                { class: `challenge-row pip-${id}${met.includes(id) ? ' is-done' : ''}` },
+                h('span', { class: 'challenge-pip', 'aria-hidden': 'true' }, CHALLENGE_ICONS[id]),
+                h(
+                  'span',
+                  { class: 'challenge-label' },
+                  id === 'score'
+                    ? t('challenge.score.target', { target: formatNumber(scoreTarget) })
+                    : id === 'objective'
+                      ? this.objectiveText(
+                          campaignLevels[result.levelIndex]?.objective.type ?? '',
+                          campaignLevels[result.levelIndex]?.objective.target ?? 0
+                        )
+                      : t('challenge.flawless.short')
+                ),
+                fresh.includes(id)
+                  ? h('span', { class: 'fresh-badge' }, t('result.newChallenge'))
+                  : null
+              )
+            )
+          ),
+          met.length < 3 ? h('p', { class: 'result-hint' }, t('result.diamondHint')) : null
+        )
+      );
+    }
+    if (result.breakdown && result.breakdown.length > 0) {
+      rows.push(
+        h(
+          'details',
+          { class: 'result-section result-breakdown' },
+          h('summary', { class: 'result-heading' }, t('result.breakdown')),
+          h(
+            'dl',
+            {},
+            ...result.breakdown.map((line) =>
+              h(
+                'div',
+                { class: line.points < 0 ? 'is-negative' : '' },
+                h('dt', {}, t(`score.${line.id}` as MessageKey)),
+                h('dd', {}, `${line.points > 0 ? '+' : ''}${formatNumber(line.points)}`)
+              )
+            )
+          )
+        )
+      );
+    }
+    if (result.trophies && result.trophies.length > 0) {
+      rows.push(
+        h(
+          'div',
+          { class: 'result-section' },
+          h('p', { class: 'result-heading' }, t('result.trophies')),
+          h(
+            'ul',
+            { class: 'result-trophies', role: 'list' },
+            ...result.trophies.map((id) => {
+              const def = ACHIEVEMENTS.find((item) => item.id === id);
+              return h(
+                'li',
+                {},
+                h('span', { 'aria-hidden': 'true' }, def?.icon ?? '★'),
+                splitInfo(t(`trophy.${id}` as MessageKey))[0]
+              );
+            })
+          )
+        )
+      );
+    }
     if (result.isNewBest) {
       rows.unshift(h('p', { class: 'new-best' }, t('result.newBest')));
     }
@@ -2669,6 +3012,12 @@ interface BonusCard {
   brick?: string;
   durationMs: number;
 }
+
+const CHALLENGE_ICONS: Record<ChallengeId, string> = {
+  objective: '◎',
+  score: '★',
+  flawless: '♥'
+};
 
 const BRICK_SYMBOL_FOR_KIND: Record<string, string> = {
   crystal: 'C',

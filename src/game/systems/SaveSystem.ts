@@ -1,6 +1,15 @@
 import { getTheme } from '../config/themeConfig';
 import { isValidEditorRows, normalizeEditorRows, validateEditorRows } from '../levels/editorGrid';
 import { sanitizeLevelOptions, type LevelOptions } from '../levels/levelOptions';
+import {
+  CHALLENGE_IDS,
+  isChallengeId,
+  isMedal,
+  MEDAL_RANK,
+  type ChallengeId,
+  type Medal
+} from '../progress/challenges';
+import type { ProgressSnapshot } from '../progress/achievements';
 import { sanitizeLevelName } from '../levels/levelNames';
 import type { CreativeLevelSlot } from '../levels/levelTypes';
 import { SAVE_STORAGE_KEY } from '../utils/constants';
@@ -41,10 +50,20 @@ export interface ModeRecords {
   daily: Record<string, DailyRecord>;
 }
 
-export type LevelMedal = 'bronze' | 'silver' | 'gold';
+export type LevelMedal = Medal;
+
+/** Lifetime counters used by trophies and the trophy room. */
+export interface PlayerStats {
+  riskCaught: number;
+  capsulesCaught: number;
+  bricksBroken: number;
+  livesLost: number;
+  bestCombo: number;
+  bestBalls: number;
+}
 
 export interface SaveData {
-  version: 7;
+  version: 8;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
@@ -55,10 +74,15 @@ export interface SaveData {
   records: ModeRecords;
   /** Power-ups and brick kinds the player has met (first-time hints are shown once). */
   discovered: string[];
+  /** Challenges collected per campaign level (cumulative across runs). */
+  levelChallenges: Record<string, ChallengeId[]>;
+  /** Unlocked trophies with their unlock time. */
+  achievements: Record<string, number>;
+  stats: PlayerStats;
 }
 
 interface LegacySaveData {
-  version: 1 | 2 | 3 | 4 | 5 | 6;
+  version: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   bestScore: number;
   unlockedLevel: number;
   completedLevels: number[];
@@ -78,6 +102,9 @@ interface LegacySaveData {
   tutorialSeen?: boolean;
   records?: unknown;
   discovered?: unknown;
+  levelChallenges?: unknown;
+  achievements?: unknown;
+  stats?: unknown;
 }
 
 const MAX_DAILY_RECORDS = 60;
@@ -113,8 +140,17 @@ const DEFAULT_PREFERENCES: SavePreferences = {
   reducedMotion: false
 };
 
+const EMPTY_STATS: PlayerStats = {
+  riskCaught: 0,
+  capsulesCaught: 0,
+  bricksBroken: 0,
+  livesLost: 0,
+  bestCombo: 0,
+  bestBalls: 0
+};
+
 export const DEFAULT_SAVE_DATA: SaveData = {
-  version: 7,
+  version: 8,
   bestScore: 0,
   unlockedLevel: 0,
   completedLevels: [],
@@ -123,7 +159,10 @@ export const DEFAULT_SAVE_DATA: SaveData = {
   creativeLevelSlots: {},
   tutorialSeen: false,
   records: { endless: { bestScore: 0, bestWave: 0 }, daily: {} },
-  discovered: []
+  discovered: [],
+  levelChallenges: {},
+  achievements: {},
+  stats: { ...EMPTY_STATS }
 };
 
 function createDefaultSaveData(): SaveData {
@@ -168,7 +207,11 @@ function isPersistedSaveData(value: unknown): value is PersistedSaveData {
   }
 
   return (
-    (value.version === 4 || value.version === 5 || value.version === 6 || value.version === 7) &&
+    (value.version === 4 ||
+      value.version === 5 ||
+      value.version === 6 ||
+      value.version === 7 ||
+      value.version === 8) &&
     Boolean(value.levelMedals) &&
     typeof value.levelMedals === 'object' &&
     !Array.isArray(value.levelMedals) &&
@@ -243,12 +286,6 @@ function sanitizeCreativeLevelSlots(overrides: unknown): Record<string, Creative
   return sanitized;
 }
 
-const MEDAL_RANK: Record<LevelMedal, number> = {
-  bronze: 1,
-  silver: 2,
-  gold: 3
-};
-
 function sanitizeLevelMedals(medals: unknown): Record<string, LevelMedal> {
   if (!medals || typeof medals !== 'object' || Array.isArray(medals)) {
     return {};
@@ -257,7 +294,7 @@ function sanitizeLevelMedals(medals: unknown): Record<string, LevelMedal> {
   const sanitized: Record<string, LevelMedal> = {};
 
   Object.entries(medals).forEach(([key, value]) => {
-    if (value === 'bronze' || value === 'silver' || value === 'gold') {
+    if (isMedal(value)) {
       sanitized[String(Math.max(0, Math.floor(Number(key) || 0)))] = value;
     }
   });
@@ -352,7 +389,7 @@ export function migrateSaveData(value: PersistedSaveData): SaveData {
   });
 
   return {
-    version: 7,
+    version: 8,
     bestScore: Math.max(0, Math.floor(value.bestScore)),
     unlockedLevel: Math.max(0, Math.floor(value.unlockedLevel)),
     completedLevels: value.completedLevels
@@ -364,7 +401,48 @@ export function migrateSaveData(value: PersistedSaveData): SaveData {
     creativeLevelSlots,
     tutorialSeen: 'tutorialSeen' in value && value.tutorialSeen === true,
     records: sanitizeRecords('records' in value ? value.records : undefined),
-    discovered: sanitizeDiscovered('discovered' in value ? value.discovered : undefined)
+    discovered: sanitizeDiscovered('discovered' in value ? value.discovered : undefined),
+    levelChallenges: sanitizeChallenges(
+      'levelChallenges' in value ? value.levelChallenges : undefined
+    ),
+    achievements: sanitizeAchievements('achievements' in value ? value.achievements : undefined),
+    stats: sanitizeStats('stats' in value ? value.stats : undefined)
+  };
+}
+
+function sanitizeChallenges(value: unknown): Record<string, ChallengeId[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: Record<string, ChallengeId[]> = {};
+  Object.entries(value).forEach(([key, list]) => {
+    if (!Array.isArray(list)) return;
+    const clean = CHALLENGE_IDS.filter((id) => list.filter(isChallengeId).includes(id));
+    if (clean.length > 0) result[String(Math.max(0, Math.floor(Number(key) || 0)))] = clean;
+  });
+  return result;
+}
+
+function sanitizeAchievements(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const result: Record<string, number> = {};
+  Object.entries(value).forEach(([key, at]) => {
+    if (typeof at === 'number' && Number.isFinite(at) && key.length < 40) result[key] = at;
+  });
+  return result;
+}
+
+function sanitizeStats(value: unknown): PlayerStats {
+  const source = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  const read = (key: keyof PlayerStats): number => {
+    const raw = source[key];
+    return typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : 0;
+  };
+  return {
+    riskCaught: read('riskCaught'),
+    capsulesCaught: read('capsulesCaught'),
+    bricksBroken: read('bricksBroken'),
+    livesLost: read('livesLost'),
+    bestCombo: read('bestCombo'),
+    bestBalls: read('bestBalls')
   };
 }
 
@@ -404,6 +482,11 @@ export class SaveSystem {
       preferences: { ...this.data.preferences },
       creativeLevelSlots: this.cloneCreativeLevelSlots(),
       discovered: [...this.data.discovered],
+      levelChallenges: Object.fromEntries(
+        Object.entries(this.data.levelChallenges).map(([key, list]) => [key, [...list]])
+      ),
+      achievements: { ...this.data.achievements },
+      stats: { ...this.data.stats },
       records: {
         endless: { ...this.data.records.endless },
         daily: Object.fromEntries(
@@ -486,6 +569,69 @@ export class SaveSystem {
     this.data.preferences.reducedMotion = enabled;
     this.persist();
     return this.snapshot();
+  }
+
+  /**
+   * Records a cleared campaign level: keeps the best medal, adds the challenges met in this run to
+   * the collection, unlocks the next level. Returns the challenges collected for the first time.
+   */
+  public recordLevelResult(
+    levelIndex: number,
+    medal: Medal,
+    met: readonly ChallengeId[]
+  ): ChallengeId[] {
+    this.completeLevel(levelIndex, medal);
+    const key = String(Math.max(0, Math.floor(levelIndex)));
+    const before = this.data.levelChallenges[key] ?? [];
+    const fresh = met.filter((id) => !before.includes(id));
+    if (fresh.length > 0) {
+      this.data.levelChallenges[key] = CHALLENGE_IDS.filter(
+        (id) => before.includes(id) || met.includes(id)
+      );
+      this.persist();
+    }
+    return fresh;
+  }
+
+  public getLevelChallenges(levelIndex: number): ChallengeId[] {
+    return [...(this.data.levelChallenges[String(Math.max(0, Math.floor(levelIndex)))] ?? [])];
+  }
+
+  /** Adds to the lifetime counters (best values keep the maximum). */
+  public addStats(delta: Partial<PlayerStats>): void {
+    const stats = this.data.stats;
+    stats.riskCaught += Math.max(0, delta.riskCaught ?? 0);
+    stats.capsulesCaught += Math.max(0, delta.capsulesCaught ?? 0);
+    stats.bricksBroken += Math.max(0, delta.bricksBroken ?? 0);
+    stats.livesLost += Math.max(0, delta.livesLost ?? 0);
+    stats.bestCombo = Math.max(stats.bestCombo, delta.bestCombo ?? 0);
+    stats.bestBalls = Math.max(stats.bestBalls, delta.bestBalls ?? 0);
+    this.persist();
+  }
+
+  /** Marks trophies as unlocked; returns the ones that were new. */
+  public unlockAchievements(ids: readonly string[]): string[] {
+    const fresh = [...new Set(ids)].filter((id) => !this.data.achievements[id]);
+    if (fresh.length === 0) return [];
+    const now = Date.now();
+    fresh.forEach((id) => {
+      this.data.achievements[id] = now;
+    });
+    this.persist();
+    return fresh;
+  }
+
+  /** The parts of the save the trophy checks read. */
+  public progressSnapshot(): ProgressSnapshot {
+    return {
+      completedLevels: this.data.completedLevels,
+      levelMedals: this.data.levelMedals,
+      levelChallenges: this.data.levelChallenges,
+      discovered: this.data.discovered,
+      stats: this.data.stats,
+      records: this.data.records,
+      creativeCount: Object.keys(this.data.creativeLevelSlots).length
+    };
   }
 
   /** Records a first encounter; returns true the first time only. */

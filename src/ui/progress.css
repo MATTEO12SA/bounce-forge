@@ -1,0 +1,400 @@
+/* Medals, challenges, collection and the trophy room. */
+
+.medal-diamond {
+  border: 0;
+  background: conic-gradient(from 30deg, #e9fdff, #7fe8ff, #b9a8ff, #e9fdff, #7fe8ff, #e9fdff)
+    border-box;
+  box-shadow:
+    0 0 10px rgba(127, 232, 255, 0.55),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+  animation: diamond-shine 3s linear infinite;
+}
+
+@keyframes diamond-shine {
+  50% {
+    box-shadow:
+      0 0 16px rgba(185, 168, 255, 0.75),
+      inset 0 0 0 2px rgba(255, 255, 255, 0.8);
+  }
+}
+
+/* ------------------------------------------------------------------ challenge marks */
+
+.card-progress {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+
+.card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.card-tags .new-badge {
+  margin-top: 0;
+}
+
+.challenge-pips {
+  display: flex;
+  gap: 3px;
+}
+
+.challenge-pip {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--text-faint);
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+.is-done > .challenge-pip,
+.challenge-pip.is-done {
+  border-color: transparent;
+  color: #10120e;
+}
+
+.pip-objective.is-done,
+.pip-objective.is-done > .challenge-pip,
+.challenge-pip.pip-objective.is-done {
+  background: #5fe0a8;
+}
+
+.pip-score.is-done > .challenge-pip,
+.challenge-pip.pip-score.is-done {
+  background: #ffd36b;
+}
+
+.pip-flawless.is-done > .challenge-pip,
+.challenge-pip.pip-flawless.is-done {
+  background: #ff6f9f;
+}
+
+.challenge-row.pip-objective.is-done {
+  background: none;
+}
+
+/* ------------------------------------------------------------------ collection summary */
+
+.collection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: -8px 0 22px;
+}
+
+.collection-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.collection-item .medal {
+  width: 18px;
+  height: 18px;
+}
+
+.collection-link:hover {
+  border-color: var(--amber);
+}
+
+.collection-icon {
+  color: var(--amber);
+}
+
+/* ------------------------------------------------------------------ HUD challenges */
+
+.hud-challenges[hidden] {
+  display: none;
+}
+
+.challenge-list,
+.result-challenges {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.challenge-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+}
+
+.challenge-row .challenge-pip {
+  width: 20px;
+  height: 20px;
+  font-size: 0.7rem;
+}
+
+.challenge-row.is-done {
+  color: var(--text);
+}
+
+.challenge-row.is-lost {
+  color: var(--text-faint);
+  text-decoration: line-through;
+}
+
+.challenge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-score.is-penalty {
+  animation: score-drop 700ms var(--ease);
+}
+
+@keyframes score-drop {
+  20% {
+    color: #ff5a4a;
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+}
+
+/* ------------------------------------------------------------------ result screen */
+
+.result-section {
+  display: grid;
+  gap: 8px;
+}
+
+.result-heading {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+details.result-breakdown summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+details.result-breakdown summary::-webkit-details-marker {
+  display: none;
+}
+
+details.result-breakdown summary::after {
+  content: ' ▾';
+}
+
+.result-breakdown dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.result-breakdown dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.result-breakdown dt {
+  color: var(--text-muted);
+}
+
+.result-breakdown dd {
+  margin: 0;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.result-breakdown .is-negative dd {
+  color: var(--danger);
+}
+
+.result-hint {
+  font-size: 0.82rem;
+}
+
+.fresh-badge {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(95, 224, 168, 0.16);
+  color: var(--success);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.result-trophies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-trophies li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 211, 107, 0.45);
+  background: rgba(255, 211, 107, 0.1);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+/* Long results (challenges, breakdown, trophies) scroll inside the dialog. */
+.dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.medal-text-diamond {
+  color: #b8f2ff;
+  font-weight: 900;
+}
+
+/* ------------------------------------------------------------------ trophy room */
+
+.stats-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 0 0 22px;
+}
+
+.stats-strip > div {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.stats-strip dt {
+  color: var(--text-faint);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stats-strip dd {
+  margin: 4px 0 0;
+  font-size: 1.4rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.trophy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.trophy {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 14px;
+  height: 100%;
+  padding: 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+  opacity: 0.72;
+}
+
+.trophy.is-unlocked {
+  border-color: rgba(255, 211, 107, 0.5);
+  background:
+    radial-gradient(120% 100% at 0% 0%, rgba(255, 180, 35, 0.12), transparent 70%), var(--bg-raised);
+  opacity: 1;
+}
+
+.trophy-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  font-size: 1.5rem;
+  filter: grayscale(1);
+}
+
+.trophy.is-unlocked .trophy-icon {
+  background: rgba(255, 211, 107, 0.16);
+  filter: none;
+}
+
+.trophy-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.trophy-text {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.trophy-date {
+  margin: 8px 0 0;
+  color: var(--amber);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.trophy-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--text-faint);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.trophy-progress .meter-fill {
+  display: block;
+  width: 100%;
+  transform-origin: left center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .medal-diamond,
+  .hud-score.is-penalty {
+    animation: none;
+  }
+}
