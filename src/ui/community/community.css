@@ -1,0 +1,264 @@
+/* Community library, creation page, publishing dialogs and "My publications". */
+
+.community-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.community-toolbar .filter-pills {
+  margin-bottom: 0;
+}
+
+.community-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.community .community-search {
+  width: min(100%, 320px);
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  font-family: var(--font);
+}
+
+.community-status {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+}
+
+.community-status:empty {
+  display: none;
+}
+
+.community-status.is-error {
+  color: #ff8a7e;
+}
+
+.community-card .card-visual {
+  position: relative;
+}
+
+.kind-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(14, 13, 11, 0.85);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.community-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.community-stats .stars {
+  color: var(--amber);
+  letter-spacing: 0.05em;
+}
+
+.community-stats.is-large {
+  font-size: 1rem;
+}
+
+.community-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+/* ------------------------------------------------------------------ creation page */
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.community-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 48px);
+  align-items: start;
+  margin-bottom: 28px;
+}
+
+.community-hero-visual {
+  aspect-ratio: 9 / 12;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: #0b0a08;
+  overflow: hidden;
+}
+
+.community-hero-visual canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.community-hero-body {
+  display: grid;
+  gap: 10px;
+}
+
+.community-author,
+.community-description {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.community-description {
+  max-width: 60ch;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+.community-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.like-heart {
+  color: var(--text-faint);
+  transition: color 160ms var(--ease);
+}
+
+.is-liked .like-heart {
+  color: #ff6f9f;
+}
+
+.community-level canvas {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+}
+
+/* ------------------------------------------------------------------ publishing */
+
+.dialog input[type='text'],
+.dialog textarea {
+  font-family: var(--font);
+}
+
+.campaign-pick {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.campaign-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.campaign-pick-item.is-picked {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.campaign-pick-number {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.is-picked .campaign-pick-number {
+  background: var(--amber);
+  color: #1a1206;
+}
+
+.workshop-community {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.my-publications {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.my-publication {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.my-publication:last-child {
+  border-bottom: 0;
+}
+
+.my-publication-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.my-publication-text .card-title {
+  color: var(--text);
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .community-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .community-hero-visual {
+    max-width: 320px;
+  }
+}

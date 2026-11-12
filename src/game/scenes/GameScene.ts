@@ -434,6 +434,9 @@ export class GameScene extends Phaser.Scene {
         rows: [...data.draft.rows],
         options: data.draft.options
       };
+      if (data.community && typeof data.community.id === 'string') {
+        session.community = { ...data.community };
+      }
     }
     if (mode === 'endless' || mode === 'daily') {
       session.wave = Math.max(1, Math.floor(data?.wave ?? 1));

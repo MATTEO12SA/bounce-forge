@@ -297,7 +297,8 @@ try {
   const failedRequests = [];
   page.on('Network.requestWillBeSent', (params) => requests.push(params.request.url));
   page.on('Network.responseReceived', (params) => {
-    if (params.response.status >= 400)
+    // Only the site's own files count: the community API reports its errors in the interface.
+    if (params.response.status >= 400 && !params.response.url.includes('.supabase.co'))
       failedRequests.push(`${params.response.status} ${params.response.url}`);
   });
   page.on('Network.loadingFailed', (params) => {
@@ -847,6 +848,15 @@ try {
     4000
   );
   check('saved level appears in the workshop', listed);
+
+  console.log('Community');
+  await goto(page, baseUrl, '#/community');
+  const library = await waitFor(
+    page,
+    `(() => { const status = document.querySelector('.community .community-status'); const cards = document.querySelectorAll('.community-card').length; if (!status) return false; const text = status.textContent; return (cards > 0 || (text && !text.endsWith('…'))) ? { cards, text } : false; })()`,
+    15000
+  );
+  check('the community library loads (or explains why not)', Boolean(library), library);
 
   console.log('Trophies');
   await goto(page, baseUrl, '#/trophies');

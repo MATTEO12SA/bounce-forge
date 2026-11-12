@@ -40,6 +40,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
     "phaser": "4.1.0"
   },
   "devDependencies": {
