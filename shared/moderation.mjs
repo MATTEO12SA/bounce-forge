@@ -5,7 +5,11 @@
 // to letters, everything that is not a letter turned into a space, repeated letters collapsed.
 // Each word is matched as a whole word; long, distinctive words are also caught when the letters
 // are spaced out or glued to other words ("f u c k", "xxconnardxx"). Short words are only matched
-// whole, so "Computer", "Violet", "Cocktail" or "à retardement" are never flagged.
+// whole, so "Computer", "Violet", "Cocktail" or "à retardement" are never flagged. Words that are
+// also ordinary words in the other language ("bite", "retard", "chatte") are left out.
+//
+// The same list and normalisation live in supabase/migrations/*_moderation.sql;
+// tests/moderation.test.ts checks that both stay identical.
 
 /** [word, alsoMatchInsideWords] — written in plain form, normalised at load time. */
 const WORDS = [
@@ -25,11 +29,8 @@ const WORDS = [
   ['fdp', false],
   ['pd', false],
   ['pede', false],
-  ['tapette', false],
   ['batard', false],
   ['enfoire', true],
-  ['bite', false],
-  ['chatte', false],
   ['negre', true],
   ['bougnoule', true],
   ['youpin', true],
@@ -50,11 +51,10 @@ const WORDS = [
   ['bastard', false],
   ['whore', true],
   ['slut', false],
-  ['nigger', true],
-  ['nigga', true],
-  ['faggot', true],
+  ['nigger', false],
+  ['nigga', false],
+  ['faggot', false],
   ['fag', false],
-  ['retard', false],
   ['rape', false],
   ['rapist', true],
   ['pedo', false],
@@ -78,6 +78,8 @@ export function normalizeForModeration(text) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+    .replace(/\u0153/g, 'oe')
+    .replace(/\u00e6/g, 'ae')
     .replace(/[0-9@$]/g, (char) => LEET[char] ?? char)
     .replace(/[^a-z]+/g, ' ')
     .replace(/([a-z])\1+/g, '$1')

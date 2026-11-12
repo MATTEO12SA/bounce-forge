@@ -40,6 +40,9 @@ import type { SaveSystem } from '../../game/systems/SaveSystem';
 import { append, clear, h, icon } from '../dom';
 import { formatDate, formatNumber, t, type MessageKey } from '../i18n';
 import { drawLevelPreview } from '../preview';
+import { appealControl, moderationLinks, reportButton, sanctionNotice } from './ModerationUi';
+import { myAppeals } from '../../community/moderation';
+import type { Appeal } from '../../community/types';
 
 /** What the community screens need from the app shell. */
 export interface CommunityHost {
@@ -60,7 +63,8 @@ export interface CommunityHost {
   closeOverlays(): void;
   confirm(message: string, confirmLabel: string): Promise<boolean>;
   screenHeader(title: string, subtitle: string, extra?: HTMLElement): HTMLElement;
-  play(creation: Creation, index: number): void;
+  /** Plays a level; `returnHash` is where "back" goes after the game (default: its page). */
+  play(creation: Creation, index: number, returnHash?: string): void;
 }
 
 const SORTS: SortKey[] = ['popular', 'new', 'played', 'easy', 'hard'];
@@ -75,7 +79,7 @@ function stars(difficulty: number): string {
   return '★'.repeat(difficulty) + '☆'.repeat(5 - difficulty);
 }
 
-function previewCanvas(level: CommunityLevel | null, className = ''): HTMLCanvasElement {
+export function previewCanvas(level: CommunityLevel | null, className = ''): HTMLCanvasElement {
   const canvas = h('canvas', { class: className, 'aria-hidden': 'true' });
   if (level) {
     // Drawn after insertion so the canvas has its real size.
@@ -189,6 +193,7 @@ export class LibraryScreen {
         (value) => (state.sort = value),
         'community.sort'
       ),
+      moderationLinks(),
       this.status,
       this.grid,
       h('div', { class: 'community-more' }, this.more)
@@ -406,7 +411,8 @@ export class CreationScreen {
               { class: 'button button-ghost', type: 'button', onclick: () => void copyLink() },
               icon('share'),
               t('community.copyLink')
-            )
+            ),
+            reportButton(this.host, creation)
           )
         )
       ),
@@ -683,8 +689,18 @@ export function myPublicationsPanel(host: CommunityHost): HTMLElement | null {
     'div',
     { class: 'panel' },
     h('h2', { class: 'panel-title' }, t('community.mine')),
+    sanctionNotice(),
     list
   );
+  let appeals = new Map<string, Appeal>();
+  const refreshAppeals = (items: CreationSummary[]): void => {
+    void myAppeals()
+      .then((found) => {
+        appeals = found;
+        render(items);
+      })
+      .catch(() => undefined);
+  };
   const render = (items: CreationSummary[]): void => {
     clear(list);
     if (items.length === 0) {
@@ -726,6 +742,7 @@ export function myPublicationsPanel(host: CommunityHost): HTMLElement | null {
                 listed ? t('community.hide') : t('community.show')
               )
             : null,
+          appealControl(host, item, appeals.get(item.id), () => refreshAppeals(items)),
           h(
             'button',
             {
@@ -757,7 +774,10 @@ export function myPublicationsPanel(host: CommunityHost): HTMLElement | null {
     });
   };
   myCreations()
-    .then(render)
+    .then((items) => {
+      render(items);
+      if (items.some((item) => item.status === 'removed')) refreshAppeals(items);
+    })
     .catch((error: unknown) => {
       clear(list);
       list.append(h('li', { class: 'community-status is-error' }, errorText(error)));

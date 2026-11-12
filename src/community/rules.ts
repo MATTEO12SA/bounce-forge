@@ -1,10 +1,12 @@
 import { normalizeEditorRows, validateEditorRows } from '../game/levels/editorGrid';
 import { sanitizeLevelOptions } from '../game/levels/levelOptions';
 import { sanitizeOptionalLevelName } from '../game/levels/levelNames';
+import { hasLink, isOffensive } from '../../shared/moderation.mjs';
 import {
   CommunityError,
   type CommunityErrorCode,
   type CommunityLevel,
+  type Creation,
   type CreationSummary,
   type SortKey
 } from './types';
@@ -24,6 +26,29 @@ export const PAGE_SIZE = 24;
 
 export function validNickname(nickname: string): boolean {
   return NICKNAME_PATTERN.test(nickname.trim());
+}
+
+/** Same automatic checks as the server for a nickname: null when it is fine. */
+export function nicknameProblem(nickname: string): CommunityErrorCode | null {
+  if (!validNickname(nickname)) return 'nickname_invalid';
+  if (isOffensive(nickname)) return 'nickname_offensive';
+  if (hasLink(nickname)) return 'links_forbidden';
+  return null;
+}
+
+/** Automatic moderation of free text (titles, descriptions, messages): null when it is fine. */
+export function textProblem(...texts: readonly string[]): CommunityErrorCode | null {
+  if (texts.some((text) => isOffensive(text))) return 'offensive_text';
+  if (texts.some((text) => hasLink(text))) return 'links_forbidden';
+  return null;
+}
+
+/** A published level needs at least this many bricks to break (one 2 × 2 pixel). */
+export const MIN_REQUIRED_BRICKS = 4;
+
+/** Bricks that must be destroyed to win (same symbols as the server's `required_bricks`). */
+export function requiredBricks(rows: readonly string[]): number {
+  return rows.reduce((sum, row) => sum + (row.match(/[123EBSCKIMF]/g)?.length ?? 0), 0);
 }
 
 /** Turns a saved level into the published format, or throws `invalid_level`. */
@@ -62,7 +87,11 @@ export function checkPublication(input: {
   const valid = input.levels.every(
     (level) => level.rows.length === 58 && validateEditorRows(level.rows).valid
   );
-  return valid ? null : 'invalid_level';
+  if (!valid) return 'invalid_level';
+  if (input.levels.some((level) => requiredBricks(level.rows) < MIN_REQUIRED_BRICKS)) {
+    return 'too_simple';
+  }
+  return textProblem(title, input.description, ...input.levels.map((level) => level.name));
 }
 
 /** Database ordering for each sort of the library. */
@@ -112,7 +141,21 @@ const KNOWN_ERRORS: CommunityErrorCode[] = [
   'invalid_title',
   'invalid_description',
   'too_large',
-  'not_found'
+  'not_found',
+  'offensive_text',
+  'nickname_offensive',
+  'links_forbidden',
+  'duplicate',
+  'too_simple',
+  'report_blocked',
+  'report_quota',
+  'already_reported',
+  'cannot_report_own',
+  'invalid_reason',
+  'not_eligible',
+  'already_voted',
+  'appeal_exists',
+  'not_admin'
 ];
 
 /** Maps a Supabase / PostgREST / network error to a code the interface can explain. */
@@ -122,7 +165,10 @@ export function errorCode(error: unknown): CommunityErrorCode {
   const message = String(source.message ?? '');
   if (source.code === '23505') return 'nickname_taken';
   if (source.code === '23514') return 'nickname_invalid';
-  const known = KNOWN_ERRORS.find((code) => message.includes(code));
+  // Whole codes only: "invalid_level" must not match "invalid_level_count".
+  const known = KNOWN_ERRORS.find((code) =>
+    new RegExp(`(^|[^a-z_])${code}([^a-z_]|$)`).test(message)
+  );
   if (known) return known;
   if (source.name === 'TypeError' || /fetch|network|Failed to fetch|NetworkError/i.test(message)) {
     return 'offline';
@@ -145,6 +191,7 @@ interface CreationRow {
   version?: number;
   levels?: unknown;
   preview?: unknown;
+  author_id?: string;
   author?: { nickname?: string } | Array<{ nickname?: string }> | null;
 }
 
@@ -165,10 +212,7 @@ function parseLevel(value: unknown): CommunityLevel | null {
 }
 
 /** Parses a row from the `creations` table (untrusted data). */
-export function parseCreation(row: CreationRow): CreationSummary & {
-  levels: CommunityLevel[];
-  version: number;
-} {
+export function parseCreation(row: CreationRow): Creation {
   const author = Array.isArray(row.author) ? row.author[0] : row.author;
   const levels = Array.isArray(row.levels)
     ? row.levels.map(parseLevel).filter((level): level is CommunityLevel => level !== null)
@@ -190,7 +234,8 @@ export function parseCreation(row: CreationRow): CreationSummary & {
     author: String(author?.nickname ?? '?').slice(0, 20),
     preview: parseLevel(row.preview) ?? levels[0] ?? null,
     levels,
-    version: Number(row.version) || 1
+    version: Number(row.version) || 1,
+    authorId: typeof row.author_id === 'string' ? row.author_id : ''
   };
 }
 

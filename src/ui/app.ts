@@ -45,6 +45,8 @@ import {
   openPublishLevel,
   type CommunityHost
 } from './community/CommunityUi';
+import { AdminScreen } from './community/AdminUi';
+import { ReviewScreen, rulesScreen } from './community/ModerationUi';
 import { brickSprite, EditorScreen } from './editor/EditorScreen';
 import { generateLevel, randomSeed } from './editor/generator';
 import { EngineLoader, type EngineState } from './engine';
@@ -92,6 +94,7 @@ INTRODUCED_SYMBOLS.forEach(([symbol, key]) => {
 const SLOT_COUNT = campaignLevels.length;
 
 type View = 'home' | 'menu' | 'play' | 'tool' | 'editor';
+const COMMUNITY_PAGES = ['review', 'rules', 'admin'];
 type MenuScreen = 'campaign' | 'modes' | 'create' | 'community' | 'help' | 'settings' | 'trophies';
 
 type Route =
@@ -115,7 +118,11 @@ function parseRoute(hash: string): Route {
     case 'community':
       return {
         name: 'community',
-        id: second && /^[0-9a-f-]{36}$/i.test(second) ? second : undefined
+        // A creation id, or one of the moderation pages.
+        id:
+          second && (/^[0-9a-f-]{36}$/i.test(second) || COMMUNITY_PAGES.includes(second))
+            ? second
+            : undefined
       };
     case 'create':
       if (second === 'edit') {
@@ -181,6 +188,8 @@ export class App {
   private hoveredEffect: string | null = null;
   /** Community creation being played, for "next level" and the HUD label. */
   private communityCreation: Creation | null = null;
+  /** Where "back" goes after a community game (the creation page, the review queue…). */
+  private communityReturn = '#/community';
   /** Unsaved editor level to play next ("Test" never overwrites the saved slot). */
   private pendingDraft: {
     slotIndex: number;
@@ -609,6 +618,9 @@ export class App {
         case 'trophies':
           return this.trophiesScreen();
         case 'community':
+          if (id === 'review') return new ReviewScreen(this.communityHost()).element;
+          if (id === 'rules') return rulesScreen(this.communityHost());
+          if (id === 'admin') return new AdminScreen(this.communityHost()).element;
           return id
             ? new CreationScreen(this.communityHost(), id).element
             : new LibraryScreen(this.communityHost()).element;
@@ -879,15 +891,18 @@ export class App {
       closeOverlays: () => this.closeOverlays(),
       confirm: (message, label) => this.confirm(message, label),
       screenHeader: (title, subtitle, extra) => this.screenHeader(title, subtitle, extra),
-      play: (creation, index) => this.playCommunity(creation, index)
+      play: (creation, index, returnHash) => this.playCommunity(creation, index, returnHash)
     };
   }
 
   /** Plays one level of a community creation (campaigns continue level after level). */
-  private playCommunity(creation: Creation, index: number): void {
+  private playCommunity(creation: Creation, index: number, returnHash?: string): void {
     const level = creation.levels[index];
     if (!level) return;
     if (index === 0) void recordPlay(creation.id, false);
+    if (index === 0 || this.communityCreation?.id !== creation.id) {
+      this.communityReturn = returnHash ?? `#/community/${creation.id}`;
+    }
     this.communityCreation = creation;
     this.startSession({
       mode: 'creative',
@@ -2837,7 +2852,7 @@ export class App {
         label: t('community.backToCreation'),
         variant: actions.length === 0 ? 'primary' : 'secondary',
         icon: 'globe',
-        action: () => this.navigate(`#/community/${community.id}`)
+        action: () => this.navigate(this.communityReturn)
       });
     }
     if (result.outcome === 'victory' && result.hasNext) {

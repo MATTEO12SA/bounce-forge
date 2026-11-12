@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // End-to-end check of the community backend (Supabase): anonymous account, nickname, publish,
 // library listing, like, play counter, hide/show, update, delete — plus the security rules
-// (validation, forged counters, other players' data). Cleans up after itself.
+// (validation, forged counters, other players' data) and moderation (word filter, links, copies,
+// reports, review, admin rights). Cleans up after itself.
 //
 // Usage: node scripts/community-live-test.mjs   (uses the public URL and publishable key)
 
@@ -18,23 +19,37 @@ function check(name, ok, details) {
 
 const player = () => createClient(URL, KEY, { auth: { persistSession: false } });
 
-function rows() {
+const suffix = Math.random().toString(36).slice(2, 7);
+// A different grid on every run, so leftovers of an interrupted run never count as copies.
+const seed = Math.floor(Math.random() * 40 * 28);
+function rows(variant = 0) {
   const grid = Array.from({ length: 58 }, () => '.'.repeat(36));
-  grid[4] = `11111111${'.'.repeat(28)}`;
+  const row = 2 + (seed % 40);
+  const col = Math.floor(seed / 40) % 28;
+  grid[row] = '.'.repeat(col) + '11111111' + '.'.repeat(28 - col);
+  if (variant) grid[row + 2] = '.'.repeat(col) + '2222' + '.'.repeat(32 - col);
   return grid;
 }
 
+const errorOf = (result) => String(result.error?.message);
+
 const a = player();
 const b = player();
-const suffix = Math.random().toString(36).slice(2, 7);
+const c = player();
+const d = player();
 let created = null;
+let reported = null;
 
 try {
   const signA = await a.auth.signInAnonymously();
   const signB = await b.auth.signInAnonymously();
+  const signC = await c.auth.signInAnonymously();
+  const signD = await d.auth.signInAnonymously();
   check('anonymous sign-in works', !signA.error && !signB.error, signA.error ?? signB.error);
   const idA = signA.data.user.id;
   const idB = signB.data.user.id;
+  const idC = signC.data.user.id;
+  const idD = signD.data.user.id;
 
   const noNick = await a.rpc('publish_creation', {
     p_kind: 'level',
@@ -43,10 +58,13 @@ try {
     p_levels: [{ name: 'L', rows: rows() }],
     p_difficulty: 1
   });
+  check('publishing needs a nickname', errorOf(noNick).includes('nickname_required'), noNick.error);
+
+  const rude = await a.from('profiles').insert({ id: idA, nickname: 'Gros connard' });
   check(
-    'publishing needs a nickname',
-    String(noNick.error?.message).includes('nickname_required'),
-    noNick.error
+    'offensive nicknames are refused',
+    errorOf(rude).includes('nickname_offensive'),
+    rude.error
   );
 
   const nick = await a.from('profiles').insert({ id: idA, nickname: `Test ${suffix}` });
@@ -63,11 +81,7 @@ try {
     p_levels: [{ name: 'L', rows: ['xx'] }],
     p_difficulty: 1
   });
-  check(
-    'the server rejects an invalid grid',
-    String(bad.error?.message).includes('invalid_level'),
-    bad.error
-  );
+  check('the server rejects an invalid grid', errorOf(bad).includes('invalid_level'), bad.error);
 
   const direct = await a.from('creations').insert({
     author_id: idA,
@@ -150,12 +164,75 @@ try {
     (deletedByOther.data ?? []).length === 0,
     deletedByOther
   );
+
+  // ---------------------------------------------------------------- moderation
+  const attempt = (client, title, levels, description = '') =>
+    client.rpc('publish_creation', {
+      p_kind: 'level',
+      p_title: title,
+      p_description: description,
+      p_levels: levels,
+      p_difficulty: 1
+    });
+  const rudeTitle = await attempt(a, 'Niveau de salope', [{ name: 'N', rows: rows(1) }]);
+  check('offensive titles are refused', errorOf(rudeTitle).includes('offensive_text'), rudeTitle);
+  const link = await attempt(a, 'Pub', [{ name: 'N', rows: rows(1) }], 'va sur www.example.com');
+  check('links are refused', errorOf(link).includes('links_forbidden'), link.error);
+  const copy = await attempt(b, 'Copie', [{ name: 'Autre nom', rows: rows() }]);
+  check('copies of a creation are refused', errorOf(copy).includes('duplicate'), copy.error);
+  const tiny = Array.from({ length: 58 }, () => '.'.repeat(36));
+  tiny[3] = `1${'.'.repeat(35)}`;
+  const empty = await attempt(a, 'Presque vide', [{ name: 'N', rows: tiny }]);
+  check('nearly empty levels are refused', errorOf(empty).includes('too_simple'), empty.error);
+
+  await c.from('profiles').insert({ id: idC, nickname: `Trois ${suffix}` });
+  await d.from('profiles').insert({ id: idD, nickname: `Quatre ${suffix}` });
+  const second = await attempt(a, `Signale ${suffix}`, [{ name: 'N', rows: rows(1) }]);
+  reported = second.data;
+  check('a second level is published', typeof reported === 'string', second.error);
+  const report = (client, reason) =>
+    client.rpc('report_creation', { p_id: reported, p_reason: reason, p_details: '' });
+  const own = await report(a, 'spam');
+  check(
+    'authors cannot report their own creation',
+    errorOf(own).includes('cannot_report_own'),
+    own
+  );
+  const first = await report(b, 'spam');
+  const again = await report(b, 'other');
+  check(
+    'a player reports a creation once',
+    first.data === 'published' && errorOf(again).includes('already_reported'),
+    { first, again }
+  );
+  await report(c, 'offensive');
+  const third = await report(d, 'broken');
+  const hiddenNow = await b.from('creations').select('id').eq('id', reported);
+  const authorSees = await a.from('creations').select('status').eq('id', reported).single();
+  check(
+    'three reports hide it and send it to review',
+    third.data === 'review' && hiddenNow.data?.length === 0 && authorSees.data?.status === 'review',
+    { third, hiddenNow, authorSees }
+  );
+  const queue = await b.rpc('review_queue');
+  check('new players cannot review yet', errorOf(queue).includes('not_eligible'), queue.error);
+  const mine = await b.rpc('my_moderation');
+  check(
+    'players see their moderation status',
+    mine.data?.profile === true && mine.data?.can_review === false && mine.data?.admin === false,
+    mine
+  );
+  const notAdmin = await b.rpc('admin_overview');
+  check('players have no admin rights', errorOf(notAdmin).includes('not_admin'), notAdmin.error);
+  const selfAdmin = await b.from('admins').insert({ user_id: idB });
+  check('players cannot make themselves admin', Boolean(selfAdmin.error), selfAdmin);
 } catch (error) {
   check('no unexpected exception', false, String(error));
 } finally {
-  // Remove the two test players' profiles too (cascades to anything left behind).
+  // Remove the test players' profiles too (cascades to anything left behind).
   const cleanup = async () => {
-    for (const client of [a, b]) {
+    if (reported) await a.from('creations').delete().eq('id', reported);
+    for (const client of [a, b, c, d]) {
       const user = (await client.auth.getUser()).data.user;
       if (user) await client.from('profiles').delete().eq('id', user.id);
     }

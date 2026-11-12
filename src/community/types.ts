@@ -32,6 +32,34 @@ export interface CreationSummary {
 export interface Creation extends CreationSummary {
   levels: CommunityLevel[];
   version: number;
+  /** Author's user id (to recognise one's own creations); empty when unknown. */
+  authorId: string;
+}
+
+export type ReportReason = 'offensive' | 'spam' | 'broken' | 'copied' | 'other';
+
+/** What the current player may do in moderation (from `my_moderation`). */
+export interface ModerationStatus {
+  profile: boolean;
+  trust: number;
+  strikes: number;
+  bannedUntil: string | null;
+  canReport: boolean;
+  canReview: boolean;
+  toReview: number;
+}
+
+/** A creation waiting for community votes. */
+export interface ReviewItem extends Creation {
+  reasons: Partial<Record<ReportReason, number>>;
+  details: string[];
+  votes: number;
+}
+
+export interface Appeal {
+  creationId: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  note: string;
 }
 
 export interface Profile {
@@ -54,6 +82,21 @@ export type CommunityErrorCode =
   | 'invalid_description'
   | 'too_large'
   | 'not_found'
+  | 'offensive_text'
+  | 'nickname_offensive'
+  | 'links_forbidden'
+  | 'duplicate'
+  | 'too_simple'
+  | 'report_blocked'
+  | 'report_quota'
+  | 'already_reported'
+  | 'cannot_report_own'
+  | 'invalid_reason'
+  | 'not_eligible'
+  | 'already_voted'
+  | 'appeal_exists'
+  | 'not_admin'
+  | 'admin_login'
   | 'unknown';
 
 export class CommunityError extends Error {

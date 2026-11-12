@@ -41,6 +41,11 @@ describe('automatic moderation', () => {
       'Shiitake',
       'Pédale douce',
       'Cassis',
+      'En retard',
+      'Bite the dust',
+      'Nigeria',
+      'Nigaud',
+      'La chatte du voisin',
       'Pute' + 'aux'
     ]) {
       expect(isOffensive(text), text).toBe(false);

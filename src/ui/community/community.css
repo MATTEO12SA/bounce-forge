@@ -279,3 +279,314 @@ button.pill.is-active {
     max-width: 320px;
   }
 }
+
+/* ------------------------------------------------------------------ moderation */
+
+.moderation-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 16px;
+}
+
+.count-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #1a1408;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.report-reasons,
+.reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reason-chip,
+.status-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 90, 74, 0.45);
+  background: rgba(255, 90, 74, 0.1);
+  color: #ffb3aa;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.status-chip {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.report-detail {
+  margin: 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.review-list,
+.admin-list {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-card,
+.admin-card {
+  display: grid;
+  grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 0;
+}
+
+.review-visual {
+  aspect-ratio: 9 / 12;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: #0b0a08;
+  overflow: hidden;
+}
+
+.review-visual canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.review-text {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review-text .panel-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-text .card-sub,
+.review-text .result-hint {
+  margin: 0;
+}
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+
+.rules-grid .panel {
+  margin-bottom: 0;
+}
+
+.rules-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-muted);
+}
+
+.appeal-status {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.appeal-status.is-accepted {
+  color: var(--success);
+}
+
+.appeal-status.is-rejected {
+  color: #ff8a7e;
+}
+
+.sanction-notice {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 90, 74, 0.45);
+  background: rgba(255, 90, 74, 0.08);
+  color: #ffb3aa;
+}
+
+.sanction-notice[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ admin panel */
+
+.admin-login {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+}
+
+.admin-login .panel-title,
+.admin-login .result-hint {
+  margin: 0;
+}
+
+.admin input[type='email'],
+.admin input[type='password'],
+.admin input[type='text'] {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: #0b0a08;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.95rem;
+}
+
+.admin input:focus {
+  border-color: var(--amber);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+.admin-signed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: var(--text-muted);
+}
+
+.admin-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.admin-tile {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.admin-tile.is-hot {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.admin-tile-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.admin-tile-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.admin .admin-search {
+  margin-bottom: 16px;
+}
+
+.admin-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-card.is-review,
+.admin-card.is-team {
+  border-color: var(--amber);
+}
+
+.admin-card.is-removed {
+  border-color: rgba(255, 90, 74, 0.45);
+}
+
+.admin-reports summary {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.admin-reports ul {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+
+.admin-appeal {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-player {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-player.is-banned .card-title {
+  color: #ffb3aa;
+}
+
+.admin-player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-log {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-log li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.admin-log-date {
+  margin-right: 10px;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 560px) {
+  .review-card,
+  .admin-card {
+    grid-template-columns: 1fr;
+  }
+
+  .review-visual {
+    max-width: 200px;
+  }
+}

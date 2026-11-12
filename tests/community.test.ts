@@ -3,6 +3,7 @@ import { createEmptyRows } from '../shared/editorGridRules.mjs';
 import {
   checkPublication,
   errorCode,
+  nicknameProblem,
   paceIndexFor,
   parseCreation,
   searchPattern,
@@ -15,6 +16,14 @@ import { CommunityError } from '../src/community/types';
 function oneBrick(): string[] {
   const rows = createEmptyRows();
   rows[4] = `1${'.'.repeat(35)}`;
+  return rows;
+}
+
+/** One 2 × 2 art pixel: the smallest level the server accepts. */
+function onePixel(): string[] {
+  const rows = createEmptyRows();
+  rows[4] = `11${'.'.repeat(34)}`;
+  rows[5] = `11${'.'.repeat(34)}`;
   return rows;
 }
 
@@ -35,7 +44,7 @@ describe('community rules', () => {
   });
 
   it('checks a publication before sending it', () => {
-    const level = toCommunityLevel('A', oneBrick());
+    const level = toCommunityLevel('A', onePixel());
     expect(
       checkPublication({ kind: 'level', title: 'Mon niveau', description: '', levels: [level] })
     ).toBeNull();
@@ -53,6 +62,40 @@ describe('community rules', () => {
         levels: [level]
       })
     ).toBe('invalid_description');
+    expect(
+      checkPublication({
+        kind: 'level',
+        title: 'Presque vide',
+        description: '',
+        levels: [toCommunityLevel('A', oneBrick())]
+      })
+    ).toBe('too_simple');
+    expect(
+      checkPublication({ kind: 'level', title: 'Gros connard', description: '', levels: [level] })
+    ).toBe('offensive_text');
+    expect(
+      checkPublication({
+        kind: 'level',
+        title: 'Mon niveau',
+        description: 'www.exemple.com',
+        levels: [level]
+      })
+    ).toBe('links_forbidden');
+    expect(
+      checkPublication({
+        kind: 'level',
+        title: 'Mon niveau',
+        description: '',
+        levels: [{ ...level, name: 'F.U.C.K' }]
+      })
+    ).toBe('offensive_text');
+  });
+
+  it('checks nicknames like the server', () => {
+    expect(nicknameProblem('Forgeron_42')).toBeNull();
+    expect(nicknameProblem('ab')).toBe('nickname_invalid');
+    expect(nicknameProblem('Salope 42')).toBe('nickname_offensive');
+    expect(nicknameProblem('monsite.com')).toBe('links_forbidden');
   });
 
   it('sorts the library and escapes searches', () => {
@@ -65,6 +108,10 @@ describe('community rules', () => {
 
   it('turns server errors into explainable codes', () => {
     expect(errorCode({ message: 'rate_limited' })).toBe('rate_limited');
+    expect(errorCode({ message: 'invalid_level_count' })).toBe('invalid_level_count');
+    expect(errorCode({ message: 'invalid_level' })).toBe('invalid_level');
+    expect(errorCode({ message: 'nickname_offensive' })).toBe('nickname_offensive');
+    expect(errorCode({ message: 'duplicate' })).toBe('duplicate');
     expect(errorCode({ code: '23505', message: 'duplicate key' })).toBe('nickname_taken');
     expect(errorCode(new TypeError('Failed to fetch'))).toBe('offline');
     expect(errorCode(new CommunityError('not_found'))).toBe('not_found');

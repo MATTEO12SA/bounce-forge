@@ -1,11 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   errorCode,
+  nicknameProblem,
   parseCreation,
   PAGE_SIZE,
   searchPattern,
-  sortOrder,
-  validNickname
+  sortOrder
 } from './rules';
 import {
   CommunityError,
@@ -30,8 +30,8 @@ export const SUPABASE_KEY =
 
 const SUMMARY_COLUMNS =
   'id,kind,title,description,level_count,difficulty,plays,likes,status,created_at,updated_at,author:profiles(nickname),preview:levels->0';
-const FULL_COLUMNS =
-  'id,kind,title,description,level_count,difficulty,plays,likes,status,created_at,updated_at,version,levels,author:profiles(nickname)';
+export const FULL_COLUMNS =
+  'id,kind,title,description,level_count,difficulty,plays,likes,status,created_at,updated_at,version,levels,author_id,author:profiles(nickname)';
 
 let clientPromise: Promise<SupabaseClient> | null = null;
 
@@ -44,7 +44,7 @@ function client(): Promise<SupabaseClient> {
   return clientPromise;
 }
 
-async function run<T>(task: (db: SupabaseClient) => Promise<T>): Promise<T> {
+export async function run<T>(task: (db: SupabaseClient) => Promise<T>): Promise<T> {
   try {
     return await task(await client());
   } catch (error) {
@@ -52,18 +52,28 @@ async function run<T>(task: (db: SupabaseClient) => Promise<T>): Promise<T> {
   }
 }
 
-function check<R extends { data: unknown; error: unknown }>(result: R): R['data'] {
+export function check<R extends { data: unknown; error: unknown }>(result: R): R['data'] {
   if (result.error) throw result.error;
   return result.data;
 }
 
 /** Signs the player in anonymously if needed; returns their user id. */
-async function userId(db: SupabaseClient): Promise<string> {
+export async function userId(db: SupabaseClient): Promise<string> {
   const session = check(await db.auth.getSession()).session;
   if (session?.user) return session.user.id;
   const signed = check(await db.auth.signInAnonymously());
   if (!signed.user) throw new CommunityError('auth_required');
   return signed.user.id;
+}
+
+/** The signed-in player's id, without creating an account; null when there is none. */
+export async function currentUserId(): Promise<string | null> {
+  try {
+    const db = await client();
+    return check(await db.auth.getSession()).session?.user.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export function listCreations(query: {
@@ -106,7 +116,8 @@ export function myProfile(): Promise<Profile | null> {
 
 export function setNickname(nickname: string): Promise<Profile> {
   const clean = nickname.trim();
-  if (!validNickname(clean)) return Promise.reject(new CommunityError('nickname_invalid'));
+  const problem = nicknameProblem(clean);
+  if (problem) return Promise.reject(new CommunityError(problem));
   return run(async (db) => {
     const id = await userId(db);
     const existing = check(await db.from('profiles').select('id').eq('id', id).maybeSingle());
