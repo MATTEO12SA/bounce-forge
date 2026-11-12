@@ -5,6 +5,8 @@
  * The UI drives the game through `GameController` (see GameApp) and listens to the events below.
  */
 import type { LevelOptions } from './levels/levelOptions';
+import type { ChallengeId } from './progress/challenges';
+import type { ScoreBreakdownLine } from './progress/scoring';
 import type { LevelMedal } from './systems/SaveSystem';
 
 export type GameMode = 'campaign' | 'creative' | 'endless' | 'daily' | 'demo';
@@ -51,7 +53,16 @@ export type GameNotice =
   /** A capsule was caught; `first` the very first time this power-up is met. */
   | { kind: 'pickup'; id: string; first: boolean }
   | { kind: 'combo'; id: 'meteor' | 'explosiveLasers' | 'sun' }
-  | { kind: 'event'; id: 'descend' | 'storm' | 'bonusRain' | 'gatesOpen' };
+  | { kind: 'event'; id: 'descend' | 'storm' | 'bonusRain' | 'gatesOpen' }
+  | { kind: 'achievement'; id: string };
+
+/** Live state of the three level challenges (campaign only). */
+export interface HudChallenges {
+  objective: boolean;
+  score: number;
+  target: number;
+  flawless: boolean;
+}
 
 export interface HudSnapshot {
   mode: GameMode;
@@ -72,6 +83,7 @@ export interface HudSnapshot {
   waitingToLaunch: boolean;
   effects: HudEffect[];
   objective: { kind: ObjectiveKind; current: number; target: number };
+  challenges?: HudChallenges;
 }
 
 export interface GameResult {
@@ -88,6 +100,16 @@ export interface GameResult {
   hasNext: boolean;
   editorReturn?: EditorReturn;
   session: GameSession;
+  /** Campaign: challenges met in this run, collected so far, and new ones. */
+  challenges?: {
+    met: ChallengeId[];
+    collected: ChallengeId[];
+    fresh: ChallengeId[];
+    scoreTarget: number;
+  };
+  breakdown?: ScoreBreakdownLine[];
+  /** Trophies unlocked by this run. */
+  trophies?: string[];
 }
 
 export interface BridgeEvents {

@@ -27,7 +27,7 @@ describe('save v6', () => {
     );
 
     const data = new SaveSystem(storage).snapshot();
-    expect(data.version).toBe(7);
+    expect(data.version).toBe(8);
     expect(data.bestScore).toBe(9100);
     expect(data.unlockedLevel).toBe(7);
     expect(data.levelMedals['0']).toBe('gold');
@@ -35,7 +35,7 @@ describe('save v6', () => {
     expect(data.preferences.fxQuality).toBe('high');
     expect(['fr', 'en']).toContain(data.preferences.language);
     expect(data.records.endless).toEqual({ bestScore: 0, bestWave: 0 });
-    expect(JSON.parse(storage.getItem(SAVE_STORAGE_KEY) ?? '{}').version).toBe(7);
+    expect(JSON.parse(storage.getItem(SAVE_STORAGE_KEY) ?? '{}').version).toBe(8);
   });
 
   it('keeps endless and daily records separate', () => {

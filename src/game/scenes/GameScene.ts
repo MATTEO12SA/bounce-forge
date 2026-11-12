@@ -11,6 +11,9 @@ import {
 import { CHAPTER_COUNT, getPowerUpDefinition, type PowerUpType } from '../config/powerUps';
 import { getTheme, type ThemeDefinition } from '../config/themeConfig';
 import { EffectState, type ComboId } from '../effects/EffectState';
+import { newlyUnlocked, type RunStats } from '../progress/achievements';
+import { challengesMet, medalFor } from '../progress/challenges';
+import { finishBonuses, lifePenalty, parTimeMs } from '../progress/scoring';
 import type { Ball } from '../entities/Ball';
 import { Brick } from '../entities/Brick';
 import { Lasers } from '../entities/Lasers';
@@ -51,7 +54,7 @@ import {
   dropTableFor,
   PowerUpSystem
 } from '../systems/PowerUpSystem';
-import { getSharedSaveSystem, type LevelMedal, type SaveSystem } from '../systems/SaveSystem';
+import { getSharedSaveSystem, type SaveSystem } from '../systems/SaveSystem';
 import { ScoreSystem } from '../systems/ScoreSystem';
 import { SettingsSystem } from '../systems/SettingsSystem';
 import { DebugOverlay, isDebugOverlayEnabled, type DebugOverlaySnapshot } from '../ui/DebugOverlay';
@@ -179,6 +182,10 @@ export class GameScene extends Phaser.Scene {
   private readonly phoenixQueue: Array<{ spec: BrickSpec; at: number }> = [];
   private readonly fuseQueue: Array<{ brick: Brick; at: number }> = [];
   private readonly litFuses = new Set<Brick>();
+  private livesLost = 0;
+  private pickups = 0;
+  private riskPickups = 0;
+  private trophyClockMs = 0;
   private descendClockMs = 0;
   private stormClockMs = 0;
   private lastRainCombo = 0;
@@ -286,6 +293,10 @@ export class GameScene extends Phaser.Scene {
     this.ending = false;
     this.respawning = false;
     this.explosionsTriggered = 0;
+    this.livesLost = 0;
+    this.pickups = 0;
+    this.riskPickups = 0;
+    this.trophyClockMs = 0;
     this.gameTime = 0;
     this.explosions.length = 0;
     this.powerUps.length = 0;
@@ -394,6 +405,12 @@ export class GameScene extends Phaser.Scene {
     this.ballManager.flushPendingClones();
     const combo = this.comboSystem.update(physicsMs);
     this.juice.combo(combo.streak);
+
+    this.trophyClockMs += physicsMs;
+    if (this.trophyClockMs >= 1000) {
+      this.trophyClockMs = 0;
+      this.checkTrophies(false);
+    }
 
     this.hudElapsedMs += frameMs;
     if (this.hudElapsedMs >= HUD_EMIT_INTERVAL_MS) {
@@ -1326,6 +1343,8 @@ export class GameScene extends Phaser.Scene {
     );
     this.juice.popup(powerUp.x, this.paddle.top - 40, definition.icon, '#ffffff', 40, true);
     this.paddle.bump(0.5);
+    this.pickups += 1;
+    if (definition.risk) this.riskPickups += 1;
     if (this.mode !== 'demo' && !this.autopilot) {
       const first = this.saveSystem.discover(`power:${type}`);
       bridge.emit('notice', { kind: 'pickup', id: type, first });
@@ -1407,6 +1426,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private announceCombo(combo: ComboId): void {
+    if (this.mode !== 'demo' && !this.autopilot) this.saveSystem.discover(`combo:${combo}`);
     this.sfx('powerCombo', { x: 540 });
     this.juice.popup(540, 980, COMBO_NAMES[combo][this.language], '#ffb423', 64, true);
     this.juice.shake(0.2);
@@ -1595,6 +1615,12 @@ export class GameScene extends Phaser.Scene {
     this.respawning = true;
     if (this.mode !== 'demo') {
       this.lives -= 1;
+      this.livesLost += 1;
+      // A lost life costs a tenth of the score: every ball counts.
+      const removed = this.scoreSystem.addPenalty(lifePenalty(this.scoreSystem.snapshot().score));
+      if (removed > 0) {
+        this.juice.popup(this.paddle.x, this.paddle.top - 70, `-${removed}`, '#ff5a4a', 46, true);
+      }
     }
     this.comboSystem.reset();
     this.sfx('lifeLost', { x: this.paddle.x });
@@ -1659,27 +1685,99 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const stateBeforeBonus = this.scoreSystem.snapshot();
     const previousBest = this.saveSystem.snapshot().bestScore;
-    this.scoreSystem.addLifeBonus(this.lives);
+    const objectiveMet = this.isObjectiveMet();
+    this.scoreSystem.addEndBonuses(
+      finishBonuses({
+        livesLeft: this.lives,
+        livesLost: this.livesLost,
+        objectiveMet,
+        elapsedMs: this.gameTime,
+        parMs: parTimeMs(this.bricksTotal),
+        multiplier: this.level.difficulty.scoreMultiplier
+      })
+    );
     const score = this.scoreSystem.snapshot().score;
-    const medal = this.calculateLevelMedal(score);
     const recordsProgress = !this.editorReturn && this.levelSource === 'campaign';
+    const scoreTarget = this.level.medalTargets.goldScore ?? 0;
+    const met = challengesMet({ objectiveMet, score, scoreTarget, livesLost: this.livesLost });
+    const medal = medalFor(met);
+    let fresh: typeof met = [];
 
     if (recordsProgress) {
       this.saveSystem.updateBestScore(score);
-      this.saveSystem.completeLevel(this.levelIndex, medal);
+      fresh = this.saveSystem.recordLevelResult(this.levelIndex, medal, met);
     }
+    this.recordRunStats();
+    const trophies = this.checkTrophies(true);
     this.time.delayedCall(450, () => this.sfx('levelClear'));
     this.emitHud();
 
     this.finishWithResult({
       outcome: 'victory',
-      score: Math.max(score, stateBeforeBonus.score),
-      medal,
+      score,
+      medal: recordsProgress ? medal : undefined,
       isNewBest: recordsProgress && score > previousBest,
-      hasNext: recordsProgress && this.levelSystem.hasNext(this.levelIndex)
+      hasNext: recordsProgress && this.levelSystem.hasNext(this.levelIndex),
+      challenges: recordsProgress
+        ? {
+            met,
+            collected: this.saveSystem.getLevelChallenges(this.levelIndex),
+            fresh,
+            scoreTarget
+          }
+        : undefined,
+      trophies
     });
+  }
+
+  private isObjectiveMet(): boolean {
+    const combo = this.comboSystem.snapshot();
+    const progress = this.getObjectiveProgress(
+      this.ballManager.getStats().maxBallsReached,
+      combo.bestStreak
+    );
+    return progress.current >= progress.target;
+  }
+
+  private runStats(cleared: boolean): RunStats {
+    return {
+      mode: this.mode,
+      cleared,
+      maxCombo: this.comboSystem.snapshot().bestStreak,
+      maxBalls: this.ballManager.getStats().maxBallsReached,
+      explosions: this.explosionsTriggered,
+      pickups: this.pickups
+    };
+  }
+
+  private recordRunStats(): void {
+    if (this.mode === 'demo' || this.autopilot) return;
+    const stats = this.runStats(false);
+    this.saveSystem.addStats({
+      riskCaught: this.riskPickups,
+      capsulesCaught: this.pickups,
+      bricksBroken: this.scoreSystem.snapshot().bricksBroken,
+      livesLost: this.livesLost,
+      bestCombo: stats.maxCombo,
+      bestBalls: stats.maxBalls
+    });
+    this.riskPickups = 0;
+    this.pickups = 0;
+  }
+
+  /** Unlocks earned trophies; during play they are announced at once, at the end in the result. */
+  private checkTrophies(final: boolean): string[] {
+    if (this.mode === 'demo' || this.autopilot) return [];
+    const save = this.saveSystem.snapshot();
+    const run = this.runStats(final && this.breakableLeft === 0);
+    const unlocked = this.saveSystem.unlockAchievements(
+      newlyUnlocked(this.saveSystem.progressSnapshot(), save.achievements, run)
+    );
+    if (!final) {
+      unlocked.forEach((id) => bridge.emit('notice', { kind: 'achievement', id }));
+    }
+    return unlocked;
   }
 
   private completeWave(): void {
@@ -1694,6 +1792,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     const nextWave = this.wave + 1;
+    this.recordRunStats();
+    this.checkTrophies(false);
     bridge.emit('waveCleared', { wave: this.wave, score, nextWave });
     this.time.delayedCall(WAVE_TRANSITION_MS, () => {
       if (!this.scene.isActive()) return;
@@ -1710,6 +1810,8 @@ export class GameScene extends Phaser.Scene {
     } else if (this.mode === 'daily' && this.session.dateKey) {
       isNewBest = this.saveSystem.recordDailyRun(this.session.dateKey, score, wavesCleared);
     }
+    this.recordRunStats();
+    const trophies = this.checkTrophies(true);
     this.emitHud();
     this.finishWithResult({
       outcome,
@@ -1718,15 +1820,19 @@ export class GameScene extends Phaser.Scene {
       wavesCleared,
       dateKey: this.session.dateKey,
       isNewBest,
-      hasNext: false
+      hasNext: false,
+      trophies
     });
   }
 
   private finishWithResult(
     result: Pick<GameResult, 'outcome' | 'score' | 'isNewBest' | 'hasNext'> &
-      Partial<Pick<GameResult, 'medal' | 'wave' | 'wavesCleared' | 'dateKey'>>
+      Partial<
+        Pick<GameResult, 'medal' | 'wave' | 'wavesCleared' | 'dateKey' | 'challenges' | 'trophies'>
+      >
   ): void {
     const payload: GameResult = {
+      breakdown: this.scoreSystem.breakdown(),
       mode: this.mode,
       levelIndex: this.levelIndex,
       levelName: this.level.name,
@@ -1737,17 +1843,6 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(this.reducedMotion ? 150 : 900, () => {
       bridge.emit('result', payload);
     });
-  }
-
-  private calculateLevelMedal(score: number): LevelMedal {
-    const combo = this.comboSystem.snapshot();
-    const { medalTargets } = this.level;
-    const hitGoldScore = medalTargets.goldScore !== undefined && score >= medalTargets.goldScore;
-    const hitGoldCombo =
-      medalTargets.goldBestCombo !== undefined && combo.bestStreak >= medalTargets.goldBestCombo;
-    if (hitGoldScore || hitGoldCombo) return 'gold';
-    if (this.lives >= medalTargets.silverLives) return 'silver';
-    return 'bronze';
   }
 
   private endGame(): void {
@@ -1762,12 +1857,15 @@ export class GameScene extends Phaser.Scene {
     if (recordsProgress) {
       this.saveSystem.updateBestScore(score);
     }
+    this.recordRunStats();
+    const trophies = this.checkTrophies(true);
     this.emitHud();
     this.finishWithResult({
       outcome: 'defeat',
       score,
       isNewBest: recordsProgress && score > previousBest,
-      hasNext: false
+      hasNext: false,
+      trophies
     });
   }
 
@@ -1815,7 +1913,16 @@ export class GameScene extends Phaser.Scene {
       bricksTotal: this.bricksTotal,
       waitingToLaunch: this.getBalls().some((ball) => ball.isAttached),
       effects: this.hudEffects(),
-      objective: this.getObjectiveProgress(ballStats.maxBallsReached, combo.bestStreak)
+      objective: this.getObjectiveProgress(ballStats.maxBallsReached, combo.bestStreak),
+      challenges:
+        this.mode === 'campaign'
+          ? {
+              objective: this.isObjectiveMet(),
+              score: score.score,
+              target: this.level.medalTargets.goldScore ?? 0,
+              flawless: this.livesLost === 0
+            }
+          : undefined
     };
   }
 

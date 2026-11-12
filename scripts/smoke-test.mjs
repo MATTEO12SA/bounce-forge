@@ -325,7 +325,7 @@ try {
   const migrated = await evaluate(page, `JSON.parse(localStorage.getItem('bounce-forge.save.v1'))`);
   check(
     'v5 save migrates to v6 and keeps progress',
-    migrated?.version === 7 && migrated.bestScore === 4321 && migrated.unlockedLevel === 3,
+    migrated?.version === 8 && migrated.bestScore === 4321 && migrated.unlockedLevel === 3,
     migrated?.version
   );
   // Start the rest from a French, tutorial-free profile for stable screenshots.
@@ -417,6 +417,17 @@ try {
   );
   check('Escape resumes', resumed);
 
+  // A lost life costs score before the level is cleared.
+  const penalty = await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.scoreSystem.addBonus(5000); const before = s.scoreSystem.snapshot().score; s.loseLife(); return { before, after: s.scoreSystem.snapshot().score, lost: s.livesLost }; })()`
+  );
+  check(
+    'losing a life costs a tenth of the score',
+    penalty.after === penalty.before - 500 && penalty.lost === 1,
+    penalty
+  );
+  await delay(800);
   await evaluate(
     page,
     `(() => { const s = ${GAME}; s.bricks.getChildren().filter((b) => b.active && b.isBreakable).forEach((b) => s.damageBrick(b, 99, 0)); return true; })()`
@@ -433,6 +444,19 @@ try {
     `JSON.parse(localStorage.getItem('bounce-forge.save.v1')).levelMedals['0'] !== undefined`
   );
   check('victory is saved', unlocked);
+  const resultInfo = await evaluate(
+    page,
+    `({ medal: Boolean(document.querySelector('.dialog .result-medal .medal')), challenges: document.querySelectorAll('.dialog .result-challenges .challenge-row').length, breakdown: document.querySelectorAll('.dialog .result-breakdown dl > div').length, penalties: document.querySelector('.dialog .result-breakdown .is-negative') !== null, flawless: document.querySelector('.dialog .result-challenges .pip-flawless')?.classList.contains('is-done') })`
+  );
+  check(
+    'the result shows the medal, the 3 challenges and the score breakdown',
+    resultInfo.medal &&
+      resultInfo.challenges === 3 &&
+      resultInfo.breakdown >= 2 &&
+      resultInfo.penalties &&
+      resultInfo.flawless === false,
+    resultInfo
+  );
 
   // Defeat on the phone layout.
   await setViewport(page, 360, 800);
@@ -821,6 +845,15 @@ try {
     4000
   );
   check('saved level appears in the workshop', listed);
+
+  console.log('Trophies');
+  await goto(page, baseUrl, '#/trophies');
+  const trophyRoom = await waitFor(
+    page,
+    `document.querySelectorAll('.trophy-grid .trophy').length >= 25 && document.querySelectorAll('.trophy.is-unlocked').length >= 1`,
+    6000
+  );
+  check('the trophy room lists every trophy and the ones already earned', trophyRoom);
 
   console.log('Sharing');
   const name = 'Forgé à chaud 🔥 ñ';

@@ -42,6 +42,10 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
 - **Campagne de 30 niveaux** en 5 chapitres — Bases de la forge, Labyrinthes d’acier, Réaction en
   chaîne, Tempête de balles, Mécanismes — dessinés en pixel art. Chaque niveau présente une idée
   seule avant de la mélanger aux autres, avec une médaille d’or, d’argent ou de bronze à décrocher.
+- **Défis, médailles et trophées** : chaque niveau a 3 défis (objectif, score, sans faute). Les
+  réussir dans la même partie donne le **diamant** (bronze, argent, or, diamant). 90 défis et
+  27 trophées à collectionner. Perdre une vie coûte 10 % du score, et la fin de niveau récompense
+  les vies restantes, le sans-faute, l’objectif et la rapidité.
 - **15 bonus** débloqués au fil des chapitres : multiballe, boule de feu, balle explosive, grosse
   balle, canons laser, aimant, bouclier, ralenti, fièvre… et des capsules rouges « risque »
   (turbo, rétrécir) qui rapportent plus de points. Certains se **combinent** (Météore, Soleil,
