@@ -1,9 +1,10 @@
 name: CI
 
+# One run per change: pull requests only (pushing to a PR branch re-runs it). `main` is
+# validated again by the Pages deploy workflow.
 on:
   pull_request:
-  push:
-    branches-ignore: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

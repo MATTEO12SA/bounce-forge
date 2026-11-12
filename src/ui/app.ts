@@ -2232,22 +2232,6 @@ export class App {
             { class: 'hud-block' },
             h('p', { class: 'hud-label' }, t('hud.lives')),
             ref('lives', h('p', { class: 'hud-lives' }))
-          )
-        ),
-        slot,
-        h(
-          'aside',
-          { class: 'hud hud-right', 'aria-label': t('hud.objective') },
-          h(
-            'div',
-            { class: 'hud-block' },
-            h('p', { class: 'hud-label' }, t('hud.objective')),
-            ref('objective', h('p', { class: 'hud-value' })),
-            h(
-              'div',
-              { class: 'meter', 'aria-hidden': 'true' },
-              ref('objectiveBar', h('span', { class: 'meter-fill' }))
-            )
           ),
           ref(
             'challenges',
@@ -2274,6 +2258,22 @@ export class App {
                   )
                 )
               )
+            )
+          )
+        ),
+        slot,
+        h(
+          'aside',
+          { class: 'hud hud-right', 'aria-label': t('hud.objective') },
+          h(
+            'div',
+            { class: 'hud-block' },
+            h('p', { class: 'hud-label' }, t('hud.objective')),
+            ref('objective', h('p', { class: 'hud-value' })),
+            h(
+              'div',
+              { class: 'meter', 'aria-hidden': 'true' },
+              ref('objectiveBar', h('span', { class: 'meter-fill' }))
             )
           ),
           h(

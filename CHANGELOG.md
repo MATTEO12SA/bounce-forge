@@ -24,7 +24,9 @@ All notable changes to Bounce Forge. Format based on
   bonuses for lives left, a flawless run, the objective and speed (par time).
 - Save format v8 (diamond medals, collected challenges, trophies, statistics); older saves
   migrate.
-- The Bonus panel moves to the right column, under balls and combo.
+- The Bonus panel moves to the right column, under balls and combo; the live challenges sit on
+  the left, under the lives.
+- Faster CI: one run per pull request (no duplicate push run) and a quicker campaign smoke check.
 
 ## [1.2.1] — 2026-11-12
 

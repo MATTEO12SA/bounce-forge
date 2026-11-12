@@ -587,13 +587,14 @@ try {
       `${GAME} && ${GAME}.getSession().levelIndex === ${index} && ${GAME}.gameTime < 1500 && ${GAME}.getBricks().length > 0 && window.__bounceForge.scene.isActive('GameScene')`,
       10000
     );
-    await delay(350);
+    await delay(100);
     const before = await evaluate(
       page,
-      `(() => { const s = ${GAME}; s.setAutopilot(true); s.launchAttachedBalls(); for (let i = 0; i < 12; i += 1) s.createBall(false); s.ballManager.getActiveBalls().forEach((b, i) => { b.y = 900; b.x = 180 + ((i * 61) % 720); }); return s.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0); })()`
+      `(() => { const s = ${GAME}; s.setAutopilot(true); s.launchAttachedBalls(); for (let i = 0; i < 12; i += 1) s.createBall(false); const low = s.getBricks().reduce((max, b) => Math.max(max, b.box.bottom), 0); s.ballManager.getActiveBalls().forEach((b, i) => { b.y = Math.min(1500, low + 40); b.x = 180 + ((i * 61) % 720); b.vx = (i % 2 ? 1 : -1) * 120; b.vy = -620; b.speed = 632; }); return s.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0); })()`
     );
     // Give every level the same amount of game time, whatever the runner's frame rate.
-    await waitFor(page, `${GAME}.gameTime > 3200`, 20000);
+    // Balls start just under the bricks, so a short slice of game time is enough.
+    await waitFor(page, `${GAME}.gameTime > 1400`, 15000);
     const after = await evaluate(
       page,
       `({ left: ${GAME}.getBricks().reduce((sum, b) => sum + b.remainingHitPoints, 0), active: window.__bounceForge.scene.isActive('GameScene'), level: ${GAME}.getSession().levelIndex })`
