@@ -110,3 +110,271 @@
   display: block;
   max-width: 100%;
 }
+
+/* ------------------------------------------------------------------ bonus panel (left HUD) */
+
+.bonus-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.bonus-list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.bonus-empty {
+  color: var(--text-faint);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.bonus-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 6px;
+  padding: 7px 10px 7px 7px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--chip) 32%, transparent);
+  background: color-mix(in srgb, var(--chip) 12%, var(--bg-raised));
+  cursor: help;
+  outline: none;
+  transition:
+    border-color 140ms var(--ease),
+    transform 140ms var(--ease);
+  animation: bonus-row-in 220ms var(--ease);
+}
+
+.bonus-row:hover,
+.bonus-row:focus-visible {
+  border-color: var(--chip);
+  transform: translateX(3px);
+}
+
+.bonus-row.is-risk {
+  background:
+    repeating-linear-gradient(-45deg, rgba(255, 59, 59, 0.08) 0 6px, transparent 6px 12px),
+    color-mix(in srgb, var(--chip) 12%, var(--bg-raised));
+}
+
+.bonus-row-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--chip);
+  color: #10120e;
+  font-size: 0.8rem;
+  font-weight: 900;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--chip) 45%, transparent);
+}
+
+.bonus-row-name {
+  overflow: hidden;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bonus-row-count {
+  color: var(--chip);
+  font-size: 0.85rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.bonus-row-gauge {
+  grid-column: 1 / -1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.bonus-row-gauge i {
+  display: block;
+  height: 100%;
+  background: var(--chip);
+  transform-origin: left center;
+  transform: scaleX(var(--ratio, 1));
+  transition: transform 120ms linear;
+}
+
+/* Info card: pickups, discoveries, combos, events, and the hovered power-up. */
+.bonus-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--chip) 40%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--chip) 18%, var(--surface)),
+    var(--bg-raised) 70%
+  );
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+}
+
+.bonus-card[hidden] {
+  display: none;
+}
+
+.bonus-card.is-highlight {
+  border-color: var(--chip);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.35),
+    0 0 28px color-mix(in srgb, var(--chip) 30%, transparent);
+}
+
+.bonus-card.is-entering {
+  animation: bonus-card-in 280ms var(--ease);
+}
+
+.bonus-card-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--chip);
+  color: #10120e;
+  font-size: 1.05rem;
+  font-weight: 900;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--chip) 55%, transparent);
+}
+
+.bonus-card-brick {
+  width: 44px;
+  height: 40px;
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--chip) 50%, transparent));
+}
+
+.bonus-card-body p {
+  margin: 0;
+}
+
+.bonus-card-tag {
+  color: var(--chip);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.bonus-card-title {
+  margin-top: 2px !important;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.bonus-card-text {
+  margin-top: 4px !important;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+/* Phones: the card floats at the top of the stage, the chips sit in the compact bar. */
+.bonus-card-compact {
+  display: none;
+}
+
+.compact-effects {
+  display: none;
+}
+
+@media (max-width: 900px), (orientation: portrait) and (max-width: 1100px) {
+  .bonus-card-compact {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--bg-raised) 88%, transparent);
+    backdrop-filter: blur(6px);
+    pointer-events: none;
+  }
+
+  .bonus-card-compact .bonus-card-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
+  }
+
+  .bonus-card-compact .bonus-card-brick {
+    width: 34px;
+    height: 31px;
+  }
+
+  .bonus-card-compact .bonus-card-text {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.78rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .bonus-card-compact {
+    padding: 8px 10px;
+  }
+
+  .compact-effects {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .compact-effects:empty {
+    display: none;
+  }
+}
+
+@keyframes bonus-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+}
+
+@keyframes bonus-row-in {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bonus-row,
+  .bonus-card.is-entering {
+    animation: none;
+  }
+
+  .bonus-row-gauge i {
+    transition: none;
+  }
+}

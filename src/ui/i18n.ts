@@ -353,6 +353,18 @@ const fr = {
   'editor.set.bonusRainShort': 'pluie de bonus',
   'editor.set.storm': 'Orage : la foudre frappe une brique toutes les 9 s',
   'editor.set.stormShort': 'orage',
+  'bonus.title': 'Bonus',
+  'bonus.empty':
+    'Aucun bonus actif : attrapez une capsule. Survolez un bonus pour voir ce qu’il fait.',
+  'bonus.new': 'Nouveau bonus',
+  'bonus.picked': 'Bonus',
+  'bonus.risk': 'Risque',
+  'bonus.combo': 'Combinaison',
+  'bonus.event': 'Événement',
+  'bonus.mechanism': 'Nouveau mécanisme',
+  'combo.meteor': 'Météore',
+  'combo.explosiveLasers': 'Lasers explosifs',
+  'combo.sun': 'Soleil',
   'tool.back': 'Retour au menu'
 } as const;
 
@@ -707,6 +719,17 @@ const en: Record<MessageKey, string> = {
   'editor.set.bonusRainShort': 'power-up rain',
   'editor.set.storm': 'Storm: lightning strikes a brick every 9 s',
   'editor.set.stormShort': 'storm',
+  'bonus.title': 'Power-ups',
+  'bonus.empty': 'No active power-up: catch a capsule. Hover a power-up to see what it does.',
+  'bonus.new': 'New power-up',
+  'bonus.picked': 'Power-up',
+  'bonus.risk': 'Risk',
+  'bonus.combo': 'Combo',
+  'bonus.event': 'Event',
+  'bonus.mechanism': 'New mechanism',
+  'combo.meteor': 'Meteor',
+  'combo.explosiveLasers': 'Explosive lasers',
+  'combo.sun': 'Sun',
   'tool.back': 'Back to menu'
 };
 

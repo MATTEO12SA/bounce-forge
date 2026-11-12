@@ -77,7 +77,9 @@ type GameSceneData = Partial<GameSession> & {
 const HUD_EMIT_INTERVAL_MS = 100;
 const WAVE_TRANSITION_MS = 1100;
 const EXPLOSION_STAGGER_MS = 55;
-const MAX_POWER_UPS = 40;
+/** Capsule pool size, and how many may fall at once (more would be unreadable). */
+const MAX_POWER_UPS = 24;
+const MAX_FALLING_CAPSULES = 6;
 const MAX_FRAME_MS = 50;
 const TRAIL_BALL_LIMIT = 10;
 const LASER_INTERVAL_MS = 320;
@@ -772,7 +774,14 @@ export class GameScene extends Phaser.Scene {
     }
     this.onSpecialBrickDestroyed(brick, sourceBall);
 
-    this.spawnPowerUp(x, y, powerUpChance, sourceBall, kind === 'bonus');
+    // Chain reactions break many bricks at once: they drop half as often.
+    this.spawnPowerUp(
+      x,
+      y,
+      chainDepth > 0 ? powerUpChance * 0.5 : powerUpChance,
+      sourceBall,
+      kind === 'bonus'
+    );
 
     if (this.breakableLeft === 0 && !this.ending) {
       this.crumblePhoenixes();
@@ -1238,13 +1247,15 @@ export class GameScene extends Phaser.Scene {
     if (type === 'stickyPaddle' && this.ballManager.getStats().activeCount > 3) {
       return;
     }
+    const falling = this.powerUps.reduce((count, item) => count + (item.active ? 1 : 0), 0);
     let powerUp = this.powerUps.find((item) => !item.active);
+    if (falling >= MAX_FALLING_CAPSULES || (!powerUp && this.powerUps.length >= MAX_POWER_UPS)) {
+      // Too many capsules on screen: the drop becomes points instead of clutter.
+      const points = this.scoreSystem.addBonus(50 * this.effects.scoreMultiplier());
+      this.juice.popup(x, y, `+${points}`, '#ffe3a0', 22);
+      return;
+    }
     if (!powerUp) {
-      if (this.powerUps.length >= MAX_POWER_UPS) {
-        // Too many capsules on screen: turn the drop into points instead of losing it.
-        this.scoreSystem.registerBrickBreak(50, 1, 1);
-        return;
-      }
       powerUp = new PowerUp(this);
       this.powerUps.push(powerUp);
     }
@@ -1315,7 +1326,10 @@ export class GameScene extends Phaser.Scene {
     );
     this.juice.popup(powerUp.x, this.paddle.top - 40, definition.icon, '#ffffff', 40, true);
     this.paddle.bump(0.5);
-    this.discover(`power:${type}`);
+    if (this.mode !== 'demo' && !this.autopilot) {
+      const first = this.saveSystem.discover(`power:${type}`);
+      bridge.emit('notice', { kind: 'pickup', id: type, first });
+    }
     this.applyPowerUp(type, sourceBall);
   }
 

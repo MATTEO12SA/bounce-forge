@@ -608,12 +608,30 @@ try {
   await delay(2500);
   const powered = await evaluate(
     page,
-    `({ chips: document.querySelectorAll('.hud .effect-chip, .effect-list .effect-chip').length, balls: ${GAME}.ballManager.getStats().activeCount, active: window.__bounceForge.scene.isActive('GameScene') })`
+    `({ rows: document.querySelectorAll('.bonus-list .bonus-row').length, balls: ${GAME}.ballManager.getStats().activeCount, active: window.__bounceForge.scene.isActive('GameScene') })`
   );
   check(
-    'every power-up applies without error and shows in the HUD',
-    powered.chips >= 8 && powered.balls >= 1 && powered.active,
+    'every power-up applies without error and shows in the bonus panel',
+    powered.rows >= 8 && powered.balls >= 1 && powered.active,
     powered
+  );
+  const pickup = await evaluate(
+    page,
+    `(() => new Promise((resolve) => { const s = ${GAME}; document.querySelectorAll('.toast').forEach((t) => t.remove()); s.spawnSpecificPowerUp(540, 900, 'magnet'); s.collectPowerUp(s.powerUps.find((p) => p.active)); setTimeout(() => { const card = document.querySelector('.hud-left .bonus-card'); resolve({ visible: card && !card.hidden, title: card?.querySelector('.bonus-card-title')?.textContent ?? '', toasts: document.querySelectorAll('.toast').length }); }, 200); }))()`
+  );
+  check(
+    'catching a capsule shows a card in the left panel, not a toast',
+    pickup.visible && pickup.title.length > 0 && pickup.toasts === 0,
+    pickup
+  );
+  const hovered = await evaluate(
+    page,
+    `(() => { const row = document.querySelector('.bonus-list .bonus-row[data-effect="fireBall"]'); row.dispatchEvent(new MouseEvent('mouseenter')); const card = document.querySelector('.hud-left .bonus-card'); return { visible: !card.hidden, text: card.querySelector('.bonus-card-text')?.textContent ?? '' }; })()`
+  );
+  check(
+    'hovering a power-up explains it in the left panel',
+    hovered.visible && hovered.text.length > 20,
+    hovered
   );
 
   // ---------------------------------------------------------------- mechanisms

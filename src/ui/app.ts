@@ -155,6 +155,11 @@ export class App {
   private resizeObserver: ResizeObserver | null = null;
   private stageSlot: HTMLElement | null = null;
   private editor: EditorScreen | null = null;
+  /** Messages shown one after another in the bonus card (left HUD / top of the stage). */
+  private readonly cardQueue: BonusCard[] = [];
+  private cardTimer = 0;
+  private cardShowing: BonusCard | null = null;
+  private hoveredEffect: string | null = null;
   /** Unsaved editor level to play next ("Test" never overwrites the saved slot). */
   private pendingDraft: {
     slotIndex: number;
@@ -196,7 +201,21 @@ export class App {
       bridge.on('hud', (hud) => this.onHud(hud)),
       bridge.on('result', (result) => this.onResult(result)),
       bridge.on('pauseRequested', () => this.pauseGame()),
-      bridge.on('waveCleared', ({ wave }) => this.toast(t('wave.cleared', { n: wave }))),
+      bridge.on('waveCleared', ({ wave }) => {
+        if (this.view === 'play' && this.hudRefs.bonusCard) {
+          this.queueCard({
+            tag: t('bonus.event'),
+            highlight: false,
+            title: t('wave.cleared', { n: wave }),
+            text: '',
+            color: '#5fe0a8',
+            icon: '✓',
+            durationMs: 2600
+          });
+        } else {
+          this.toast(t('wave.cleared', { n: wave }));
+        }
+      }),
       bridge.on('notice', (notice) => this.onNotice(notice)),
       bridge.on('exitToShell', ({ from }) => this.navigate(from === 'admin' ? '#/' : '#/create')),
       bridge.on('toolOpened', () => this.setView('tool')),
@@ -1318,16 +1337,222 @@ export class App {
   }
 
   private onNotice(notice: GameNotice): void {
-    if (notice.kind === 'discovery') {
-      const [group, id] = notice.id.split(':');
-      const key = `${group === 'power' ? 'power' : 'brickinfo'}.${id}`;
-      if (hasMessage(key)) {
-        this.toast(t('notice.discovery', { text: t(key) }));
+    const card = this.cardForNotice(notice);
+    if (!card) return;
+    if (this.view === 'play' && this.hudRefs.bonusCard) {
+      this.queueCard(card);
+    } else if (notice.kind !== 'pickup') {
+      this.toast(card.text ? `${card.title} — ${card.text}` : card.title);
+    }
+  }
+
+  /** Turns a game notice into the content of the bonus card. */
+  private cardForNotice(notice: GameNotice): BonusCard | null {
+    switch (notice.kind) {
+      case 'pickup': {
+        const known = POWER_UP_TYPES.find((type) => type === notice.id);
+        if (!known) return null;
+        const definition = getPowerUpDefinition(known);
+        const [title, text] = splitInfo(t(`power.${known}` as MessageKey));
+        return {
+          tag: notice.first
+            ? t('bonus.new')
+            : definition.risk
+              ? t('bonus.risk')
+              : t('bonus.picked'),
+          highlight: notice.first,
+          title,
+          text: notice.first ? text : '',
+          color: hexColor(definition.color),
+          icon: definition.icon,
+          durationMs: notice.first ? 5200 : 2200
+        };
       }
+      case 'discovery': {
+        const [group, id] = notice.id.split(':');
+        if (group !== 'brick' || !id) return null;
+        const key = `brickinfo.${id}`;
+        if (!hasMessage(key)) return null;
+        const [title, text] = splitInfo(t(key as MessageKey));
+        return {
+          tag: t('bonus.mechanism'),
+          highlight: true,
+          title,
+          text,
+          color: '#c6a8ff',
+          brick: BRICK_SYMBOL_FOR_KIND[id],
+          durationMs: 5600
+        };
+      }
+      case 'combo':
+        return {
+          tag: t('bonus.combo'),
+          highlight: true,
+          title: t(`combo.${notice.id}` as MessageKey),
+          text: splitInfo(t(`help.combo.${notice.id}` as MessageKey))[1],
+          color: '#ffb423',
+          icon: '✦',
+          durationMs: 4200
+        };
+      case 'event': {
+        const key = `notice.event.${notice.id}`;
+        return hasMessage(key)
+          ? {
+              tag: t('bonus.event'),
+              highlight: false,
+              title: t(key as MessageKey),
+              text: '',
+              color: '#9fd6ff',
+              icon: notice.id === 'storm' ? '⚡' : notice.id === 'descend' ? '↓' : '★',
+              durationMs: 3600
+            }
+          : null;
+      }
+      default:
+        return null;
+    }
+  }
+
+  private queueCard(card: BonusCard): void {
+    // A new pickup replaces a plain pickup on screen; discoveries wait their turn.
+    if (this.cardShowing && !this.cardShowing.highlight && !card.highlight) {
+      this.cardQueue.length = 0;
+      this.showNextCard(card);
       return;
     }
-    const key = `notice.${notice.kind}.${notice.id}`;
-    if (hasMessage(key)) this.toast(t(key));
+    this.cardQueue.push(card);
+    if (!this.cardShowing) this.showNextCard();
+  }
+
+  private showNextCard(card = this.cardQueue.shift()): void {
+    window.clearTimeout(this.cardTimer);
+    this.cardShowing = card ?? null;
+    if (!this.hoveredEffect) this.paintCard(this.cardShowing);
+    if (card) {
+      this.cardTimer = window.setTimeout(() => this.showNextCard(), card.durationMs);
+    }
+  }
+
+  /** Draws a card (or hides it) in the left HUD and at the top of the stage on phones. */
+  private paintCard(card: BonusCard | null): void {
+    [this.hudRefs.bonusCard, this.hudRefs.cBonusCard].forEach((element) => {
+      if (!element) return;
+      if (!card) {
+        element.hidden = true;
+        clear(element);
+        return;
+      }
+      clear(element);
+      element.hidden = false;
+      element.classList.toggle('is-highlight', card.highlight);
+      element.style.setProperty('--chip', card.color);
+      let visual: HTMLElement;
+      if (card.brick) {
+        visual = h('canvas', {
+          class: 'bonus-card-brick',
+          width: '44',
+          height: '40',
+          'aria-hidden': 'true'
+        });
+        const sprite = brickSprite(card.brick);
+        if (sprite) (visual as HTMLCanvasElement).getContext('2d')?.drawImage(sprite, 0, 0);
+      } else {
+        visual = h('span', { class: 'bonus-card-icon', 'aria-hidden': 'true' }, card.icon ?? '');
+      }
+      element.append(
+        visual,
+        h(
+          'div',
+          { class: 'bonus-card-body' },
+          h('p', { class: 'bonus-card-tag' }, card.tag),
+          h('p', { class: 'bonus-card-title' }, card.title),
+          card.text ? h('p', { class: 'bonus-card-text' }, card.text) : null
+        )
+      );
+      // Restart the entrance animation.
+      element.classList.remove('is-entering');
+      void element.offsetWidth;
+      element.classList.add('is-entering');
+    });
+  }
+
+  /** Card describing an active effect, shown while its row is hovered or focused. */
+  private effectInfoCard(type: string): BonusCard | null {
+    const known = POWER_UP_TYPES.find((item) => item === type);
+    if (!known) return null;
+    const definition = getPowerUpDefinition(known);
+    const [title, text] = splitInfo(t(`power.${known}` as MessageKey));
+    return {
+      tag: definition.risk ? t('bonus.risk') : t('bonus.title'),
+      highlight: false,
+      title,
+      text,
+      color: hexColor(definition.color),
+      icon: definition.icon,
+      durationMs: 0
+    };
+  }
+
+  /** Active effects: one row each (icon, name, time gauge, charges); chips on phones. */
+  private renderBonusList(effects: HudSnapshot['effects']): void {
+    const list = this.hudRefs.effects;
+    const compact = this.hudRefs.cEffects;
+    const signature = effects.map((effect) => `${effect.type}:${effect.count ?? ''}`).join(',');
+    if (list && list.dataset.signature !== signature) {
+      list.dataset.signature = signature;
+      clear(list);
+      if (effects.length === 0) {
+        list.append(h('li', { class: 'bonus-empty' }, t('bonus.empty')));
+      }
+      effects.forEach((effect) => list.append(this.bonusRow(effect)));
+      if (this.hoveredEffect && !effects.some((effect) => effect.type === this.hoveredEffect)) {
+        this.hoveredEffect = null;
+        this.paintCard(this.cardShowing);
+      }
+    }
+    if (compact && compact.dataset.signature !== signature) {
+      compact.dataset.signature = signature;
+      clear(compact);
+      effects.forEach((effect) => compact.append(this.effectChip(effect)));
+    }
+    [list, compact].forEach((root) =>
+      root?.querySelectorAll<HTMLElement>('[data-effect]').forEach((element) => {
+        const effect = effects.find((item) => item.type === element.dataset.effect);
+        if (effect) element.style.setProperty('--ratio', effect.ratio.toFixed(3));
+      })
+    );
+  }
+
+  private bonusRow(effect: { type: string; ratio: number; count?: number }): HTMLElement {
+    const known = POWER_UP_TYPES.find((type) => type === effect.type);
+    const definition = known ? getPowerUpDefinition(known) : null;
+    const name = known ? splitInfo(t(`power.${known}` as MessageKey))[0] : effect.type;
+    const show = (): void => {
+      this.hoveredEffect = effect.type;
+      this.paintCard(this.effectInfoCard(effect.type));
+    };
+    const hide = (): void => {
+      if (this.hoveredEffect !== effect.type) return;
+      this.hoveredEffect = null;
+      this.paintCard(this.cardShowing);
+    };
+    return h(
+      'li',
+      {
+        class: `bonus-row${definition?.risk ? ' is-risk' : ''}`,
+        'data-effect': effect.type,
+        tabindex: '0',
+        style: `--chip: ${definition ? hexColor(definition.color) : '#ffb423'}; --ratio: ${effect.ratio.toFixed(3)}`,
+        onmouseenter: show,
+        onmouseleave: hide,
+        onfocus: show,
+        onblur: hide
+      },
+      h('span', { class: 'bonus-row-icon', 'aria-hidden': 'true' }, definition?.icon ?? '?'),
+      h('span', { class: 'bonus-row-name' }, name),
+      effect.count ? h('span', { class: 'bonus-row-count' }, `×${effect.count}`) : null,
+      h('span', { class: 'bonus-row-gauge', 'aria-hidden': 'true' }, h('i'))
+    );
   }
 
   private helpScreen(): HTMLElement {
@@ -1788,6 +2013,20 @@ export class App {
             { class: 'hud-block' },
             h('p', { class: 'hud-label' }, t('hud.lives')),
             ref('lives', h('p', { class: 'hud-lives' }))
+          ),
+          h(
+            'section',
+            { class: 'bonus-panel', 'aria-label': t('bonus.title') },
+            h('p', { class: 'hud-label' }, t('bonus.title')),
+            ref(
+              'effects',
+              h(
+                'ul',
+                { class: 'bonus-list', role: 'list' },
+                h('li', { class: 'bonus-empty' }, t('bonus.empty'))
+              )
+            ),
+            ref('bonusCard', h('div', { class: 'bonus-card', role: 'status', hidden: true }))
           )
         ),
         slot,
@@ -1832,7 +2071,6 @@ export class App {
               ref('combo', h('p', { class: 'hud-value' }, '0'))
             )
           ),
-          ref('effects', h('ul', { class: 'effect-list', 'aria-label': t('hud.effects') })),
           pauseButton('hud-pause')
         ),
         h(
@@ -1860,10 +2098,21 @@ export class App {
               ref('cObjectiveBar', h('span', { class: 'meter-fill' }))
             )
           ),
-          pauseButton('compact-pause')
+          pauseButton('compact-pause'),
+          ref('cEffects', h('ul', { class: 'compact-effects', role: 'list' }))
         )
       )
     );
+    slot.append(
+      ref(
+        'cBonusCard',
+        h('div', { class: 'bonus-card bonus-card-compact', role: 'status', hidden: true })
+      )
+    );
+    this.cardQueue.length = 0;
+    this.cardShowing = null;
+    this.hoveredEffect = null;
+    window.clearTimeout(this.cardTimer);
 
     this.mountStage(slot);
     if (!this.save.snapshot().tutorialSeen && this.activeSessionKey?.startsWith('campaign')) {
@@ -1964,22 +2213,7 @@ export class App {
     setText(r.balls, String(hud.balls));
     setText(r.combo, hud.combo > 1 ? `×${hud.combo}` : '0');
 
-    const effects = r.effects;
-    if (effects) {
-      const signature = hud.effects
-        .map((effect) => `${effect.type}:${effect.count ?? ''}`)
-        .join(',');
-      if (effects.dataset.signature !== signature) {
-        effects.dataset.signature = signature;
-        clear(effects);
-        hud.effects.forEach((effect) => effects.append(this.effectChip(effect)));
-      }
-    }
-
-    effects?.querySelectorAll<HTMLElement>('[data-effect]').forEach((chip) => {
-      const effect = hud.effects.find((item) => item.type === chip.dataset.effect);
-      if (effect) chip.style.setProperty('--ratio', effect.ratio.toFixed(3));
-    });
+    this.renderBonusList(hud.effects);
 
     const hint = r.launchHint;
     if (hint) {
@@ -2421,6 +2655,43 @@ export class App {
       this.escapeHandler();
     }
   }
+}
+
+/** Content of the bonus card (pickups, discoveries, combos, events, hovered effects). */
+interface BonusCard {
+  tag: string;
+  highlight: boolean;
+  title: string;
+  text: string;
+  color: string;
+  icon?: string;
+  /** Brick symbol whose real artwork is drawn instead of an icon. */
+  brick?: string;
+  durationMs: number;
+}
+
+const BRICK_SYMBOL_FOR_KIND: Record<string, string> = {
+  crystal: 'C',
+  key: 'K',
+  gate: 'G',
+  phoenix: 'R',
+  invisible: 'I',
+  mover: 'M',
+  bumper: 'O',
+  teleporter: 'T',
+  fuse: 'F'
+};
+
+/** "Name — description" → [name, description]. */
+function splitInfo(text: string): [string, string] {
+  const index = text.indexOf(' — ');
+  if (index < 0) return [text, ''];
+  const rest = text.slice(index + 3);
+  return [text.slice(0, index), rest.charAt(0).toUpperCase() + rest.slice(1)];
+}
+
+function hexColor(color: number): string {
+  return `#${color.toString(16).padStart(6, '0')}`;
 }
 
 interface DialogAction {

@@ -248,7 +248,7 @@ try {
   await delay(3500);
   await evaluate(
     page,
-    `(() => { const s = ${GAME}; s.applyPowerUp('multiBall'); s.applyPowerUp('multiBall'); return true; })()`
+    `(() => { const s = ${GAME}; s.applyPowerUp('multiBall'); s.applyPowerUp('multiBall'); s.applyPowerUp('fireBall'); s.applyPowerUp('shield'); s.applyPowerUp('explosiveBall'); return true; })()`
   );
   await delay(5000);
   const rect = await evaluate(
@@ -267,6 +267,12 @@ try {
     );
     await delay(40);
   }
+  // Show a first pickup in the bonus card for the screenshot.
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.powerUps.forEach((p) => p.disable()); s.setAutopilot(false); s.spawnSpecificPowerUp(540, 900, 'laserPaddle'); s.collectPowerUp(s.powerUps.find((p) => p.active)); s.setAutopilot(true); return true; })()`
+  );
+  await delay(500);
   await shot(page, `${shots}/gameplay.png`);
 
   await viewport(page, 390, 844, true);
@@ -277,7 +283,12 @@ try {
     page,
     `(() => { const s = ${GAME}; s.setAutopilot(true); s.launchAttachedBalls(); return true; })()`
   );
-  await delay(6000);
+  await delay(5000);
+  await evaluate(
+    page,
+    `(() => { const s = ${GAME}; s.powerUps.forEach((p) => p.disable()); s.applyPowerUp('slowMotion'); s.setAutopilot(false); s.spawnSpecificPowerUp(540, 900, 'magnet'); s.collectPowerUp(s.powerUps.find((p) => p.active)); s.setAutopilot(true); return true; })()`
+  );
+  await delay(600);
   await shot(page, `${shots}/mobile.png`);
   page.close();
 
