@@ -288,7 +288,8 @@ try {
     ].filter(Boolean),
     { stdio: ['ignore', 'pipe', 'pipe'] }
   );
-  await waitForHttp(`http://127.0.0.1:${cdpPort}/json/version`);
+  // Cold CI runners can take a while to start the browser.
+  await waitForHttp(`http://127.0.0.1:${cdpPort}/json/version`, 60000);
   const target = JSON.parse(await requestText(`http://127.0.0.1:${cdpPort}/json/new`, 'PUT'));
   page = await createCdpClient(target.webSocketDebuggerUrl);
 
