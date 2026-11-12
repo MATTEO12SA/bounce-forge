@@ -502,6 +502,14 @@ export class SaveSystem {
     return this.snapshot();
   }
 
+  /** Unlocks a level without recording a completion (admin-assisted runs). */
+  public unlockLevel(levelIndex: number): void {
+    const index = Math.max(0, Math.floor(levelIndex));
+    if (index <= this.data.unlockedLevel) return;
+    this.data.unlockedLevel = index;
+    this.persist();
+  }
+
   public completeLevel(levelIndex: number, medal: LevelMedal = 'bronze'): SaveData {
     if (!this.data.completedLevels.includes(levelIndex)) {
       this.data.completedLevels.push(levelIndex);

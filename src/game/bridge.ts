@@ -4,6 +4,7 @@
  * This module never imports Phaser so the interface can use it before the engine is loaded.
  * The UI drives the game through `GameController` (see GameApp) and listens to the events below.
  */
+import type { PowerUpType } from './config/powerUps';
 import type { LevelOptions } from './levels/levelOptions';
 import type { ChallengeId } from './progress/challenges';
 import type { ScoreBreakdownLine } from './progress/scoring';
@@ -32,7 +33,7 @@ export interface GameSession {
   /** Playing a level of a community creation (the level itself travels in `draft`). */
   community?: { id: string; index: number; count: number; title: string };
   /** Score and lives carried from the previous wave. */
-  carry?: { score: number; lives: number };
+  carry?: { score: number; lives: number; assisted?: boolean };
 }
 
 export type ObjectiveKind =
@@ -77,6 +78,10 @@ export interface HudSnapshot {
   bestScore: number;
   lives: number;
   maxLives: number;
+  /** Admin tools were used: nothing from this run is saved. */
+  assisted?: boolean;
+  /** Admin invincibility: lost balls cost no life. */
+  invincible?: boolean;
   combo: number;
   bestCombo: number;
   balls: number;
@@ -112,7 +117,17 @@ export interface GameResult {
   breakdown?: ScoreBreakdownLine[];
   /** Trophies unlocked by this run. */
   trophies?: string[];
+  /** Admin tools were used: no medal, record, statistic or trophy was saved. */
+  assisted?: boolean;
 }
+
+/** Admin cheats, only offered to a signed-in admin. */
+export type AdminCommand =
+  | { kind: 'powerUp'; type: PowerUpType }
+  | { kind: 'lives'; amount: number }
+  | { kind: 'points'; amount: number }
+  | { kind: 'clear' }
+  | { kind: 'invincible'; enabled: boolean };
 
 export interface BridgeEvents {
   /** Engine booted and textures are ready. */
@@ -173,6 +188,8 @@ export interface GameController {
   quit(): void;
   openEditor(editor: EditorReturn): void;
   openAdmin(): void;
+  /** Applies an admin cheat to the running game (no-op outside a game). */
+  adminCommand(command: AdminCommand): void;
   setSound(enabled: boolean, volume: number): void;
   isPlaying(): boolean;
   refreshLayout(): void;

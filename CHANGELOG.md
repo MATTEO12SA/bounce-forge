@@ -3,6 +3,18 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.5.0] — 2026-11-12
+
+### Added
+
+- **Admin sign-in in Settings**: an Administration block signs the admin in (e-mail account
+  created in Supabase) and links to the moderation panel; signing out is one click.
+- **Moderation button** in the Community library for a signed-in admin, with the number of
+  creations waiting (review, team, appeals, reports).
+- **In-game admin tools** in the pause menu: give any power-up, +1 life or 9 lives, +5,000
+  points, invincibility, finish the level. Assisted runs are marked in the HUD and on the result
+  screen and save nothing (no medal, record, statistic or trophy); the next level still unlocks.
+
 ## [1.4.0] — 2026-11-12
 
 ### Added

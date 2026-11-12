@@ -10,6 +10,7 @@ import {
   reportCreation,
   reviewQueue
 } from '../../community/moderation';
+import { adminStatus } from '../../community/adminState';
 import { hasCommunitySession } from '../../community/published';
 import type {
   Appeal,
@@ -177,7 +178,7 @@ export function moderationLinks(): HTMLElement {
       })
       .catch(() => undefined);
   }
-  return h(
+  const links = h(
     'div',
     { class: 'moderation-links' },
     h(
@@ -188,6 +189,25 @@ export function moderationLinks(): HTMLElement {
     ),
     review
   );
+  // A signed-in admin also gets a direct way to the admin panel, with what is waiting.
+  void adminStatus().then((state) => {
+    if (!state?.isAdmin) return;
+    const panel = h(
+      'a',
+      { class: 'button button-primary button-sm', href: '#/community/admin' },
+      icon('shield'),
+      t('admin.moderationButton')
+    );
+    links.prepend(panel);
+    void import('../../community/admin')
+      .then(({ adminOverview }) => adminOverview())
+      .then((counts) => {
+        const waiting = counts.review + counts.team + counts.appeals + counts.reported;
+        if (waiting > 0) panel.append(h('span', { class: 'count-badge' }, String(waiting)));
+      })
+      .catch(() => undefined);
+  });
+  return links;
 }
 
 /** Creations reported by players, waiting for trusted players' votes. */

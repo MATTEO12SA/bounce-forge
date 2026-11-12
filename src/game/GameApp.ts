@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
-import { bridge, type EditorReturn, type GameController, type GameSession } from './bridge';
+import {
+  bridge,
+  type AdminCommand,
+  type EditorReturn,
+  type GameController,
+  type GameSession
+} from './bridge';
 import { createGameConfig } from './config/gameConfig';
 import { ADMIN_ENABLED } from './config/features';
 import type { GameScene } from './scenes/GameScene';
@@ -92,6 +98,11 @@ export class GameApp implements GameController {
       this.game.scene.start('AdminLoginScene');
       bridge.emit('toolOpened', { tool: 'admin' });
     });
+  }
+
+  public adminCommand(command: AdminCommand): void {
+    const scene = this.getGameScene();
+    if (scene && !scene.isDemo()) scene.adminCommand(command);
   }
 
   public setSound(enabled: boolean, volume: number): void {

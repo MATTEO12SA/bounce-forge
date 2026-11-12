@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { check, FULL_COLUMNS, SUPABASE_KEY, SUPABASE_URL } from './api';
+import { setAdminState } from './adminState';
 import { errorCode, parseCreation } from './rules';
 import { CommunityError, type CommunityLevel, type Creation } from './types';
 
@@ -118,9 +119,14 @@ export interface AdminLogEntry {
 export async function adminSession(): Promise<{ email: string; isAdmin: boolean } | null> {
   return admin(async (db) => {
     const session = check(await db.auth.getSession()).session;
-    if (!session?.user) return null;
+    if (!session?.user) {
+      setAdminState(null);
+      return null;
+    }
     const isAdmin = Boolean(check(await db.rpc('is_admin')));
-    return { email: session.user.email ?? '', isAdmin };
+    const state = { email: session.user.email ?? '', isAdmin };
+    setAdminState(state);
+    return state;
   });
 }
 
@@ -132,12 +138,15 @@ export async function adminSignIn(email: string, password: string): Promise<bool
   if (error) {
     throw new CommunityError(/fetch|network/i.test(error.message) ? 'offline' : 'admin_login');
   }
-  return admin(async (client) => Boolean(check(await client.rpc('is_admin'))));
+  const isAdmin = await admin(async (client) => Boolean(check(await client.rpc('is_admin'))));
+  setAdminState({ email: email.trim(), isAdmin });
+  return isAdmin;
 }
 
 export function adminSignOut(): Promise<void> {
   return admin(async (db) => {
     await db.auth.signOut();
+    setAdminState(null);
   });
 }
 

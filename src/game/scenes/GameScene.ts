@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { audio, haptic, type SfxName, type SfxOptions } from '../audio/AudioEngine';
 import {
   bridge,
+  type AdminCommand,
   type GameMode,
   type GameResult,
   type GameSession,
@@ -63,6 +64,7 @@ import {
   BRICK_GAP,
   DEPTHS,
   BRICK_HEIGHT,
+  ADMIN_MAX_LIVES,
   MAX_LIVES,
   PADDLE_HEIGHT,
   PADDLE_Y,
@@ -149,6 +151,10 @@ export class GameScene extends Phaser.Scene {
   private readonly stepEvents: Array<StepEvent<Brick>> = [];
   private readonly explosions: PendingExplosion[] = [];
   private lives = 3;
+  /** Admin tools were used in this run: nothing is saved. */
+  private assisted = false;
+  /** Admin invincibility: lost balls cost no life. */
+  private invincible = false;
   private levelIndex = 0;
   private levelSource: 'campaign' | 'creative' = 'campaign';
   private editorReturn?: GameSession['editorReturn'];
@@ -287,6 +293,8 @@ export class GameScene extends Phaser.Scene {
     this.lives =
       this.session.carry?.lives ??
       (this.isWaveMode() ? ENDLESS_STARTING_LIVES : this.level.difficulty.initialLives);
+    this.assisted = this.session.carry?.assisted ?? false;
+    this.invincible = false;
     this.hudElapsedMs = HUD_EMIT_INTERVAL_MS;
     this.demoLaunchMs = 0;
     this.autopilot = false;
@@ -1363,6 +1371,41 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** Admin cheats. Using any of them marks the run as assisted (nothing is saved). */
+  public adminCommand(command: AdminCommand): void {
+    if (this.mode === 'demo' || this.ending) return;
+    this.assisted = true;
+    switch (command.kind) {
+      case 'powerUp':
+        this.applyPowerUp(command.type);
+        this.sfx('powerUp', { x: this.paddle.x });
+        break;
+      case 'lives':
+        this.lives = Phaser.Math.Clamp(this.lives + Math.round(command.amount), 1, ADMIN_MAX_LIVES);
+        break;
+      case 'points':
+        this.scoreSystem.addBonus(Math.max(0, Math.round(command.amount)));
+        break;
+      case 'invincible':
+        this.invincible = command.enabled;
+        break;
+      case 'clear':
+        this.adminClear();
+        break;
+    }
+    this.emitHud();
+  }
+
+  /** Breaks every brick needed to win (keys first, so gates open). */
+  private adminClear(): void {
+    for (let pass = 0; pass < 4 && !this.ending; pass += 1) {
+      const targets = this.getBricks().filter((brick) => brick.isRequired && brick.isBreakable);
+      if (targets.length === 0) break;
+      targets.forEach((brick) => this.damageBrick(brick, 99, 0));
+    }
+    this.checkVictory();
+  }
+
   /** Applies a power-up effect; public so diagnostics can trigger effects directly. */
   public applyPowerUp(type: PowerUpType, sourceBall?: Ball): void {
     switch (type) {
@@ -1616,7 +1659,7 @@ export class GameScene extends Phaser.Scene {
   /** Loses a life; public so diagnostics can force a defeat. */
   public loseLife(): void {
     this.respawning = true;
-    if (this.mode !== 'demo') {
+    if (this.mode !== 'demo' && !this.invincible) {
       this.lives -= 1;
       this.livesLost += 1;
       // A lost life costs a tenth of the score: every ball counts.
@@ -1701,7 +1744,9 @@ export class GameScene extends Phaser.Scene {
       })
     );
     const score = this.scoreSystem.snapshot().score;
-    const recordsProgress = !this.editorReturn && this.levelSource === 'campaign';
+    const campaignRun = !this.editorReturn && this.levelSource === 'campaign';
+    const recordsProgress = campaignRun && !this.assisted;
+    if (campaignRun && this.assisted) this.saveSystem.unlockLevel(this.levelIndex + 1);
     const scoreTarget = this.level.medalTargets.goldScore ?? 0;
     const met = challengesMet({ objectiveMet, score, scoreTarget, livesLost: this.livesLost });
     const medal = medalFor(met);
@@ -1721,7 +1766,7 @@ export class GameScene extends Phaser.Scene {
       score,
       medal: recordsProgress ? medal : undefined,
       isNewBest: recordsProgress && score > previousBest,
-      hasNext: recordsProgress && this.levelSystem.hasNext(this.levelIndex),
+      hasNext: campaignRun && this.levelSystem.hasNext(this.levelIndex),
       challenges: recordsProgress
         ? {
             met,
@@ -1755,7 +1800,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private recordRunStats(): void {
-    if (this.mode === 'demo' || this.autopilot) return;
+    if (this.mode === 'demo' || this.autopilot || this.assisted) return;
     const stats = this.runStats(false);
     this.saveSystem.addStats({
       riskCaught: this.riskPickups,
@@ -1771,7 +1816,7 @@ export class GameScene extends Phaser.Scene {
 
   /** Unlocks earned trophies; during play they are announced at once, at the end in the result. */
   private checkTrophies(final: boolean): string[] {
-    if (this.mode === 'demo' || this.autopilot) return [];
+    if (this.mode === 'demo' || this.autopilot || this.assisted) return [];
     const save = this.saveSystem.snapshot();
     const run = this.runStats(final && this.breakableLeft === 0);
     const unlocked = this.saveSystem.unlockAchievements(
@@ -1801,14 +1846,20 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(WAVE_TRANSITION_MS, () => {
       if (!this.scene.isActive()) return;
       // Restarting resets balls, power-ups and timed effects; score and lives carry over.
-      this.scene.restart({ ...this.session, wave: nextWave, carry: { score, lives: this.lives } });
+      this.scene.restart({
+        ...this.session,
+        wave: nextWave,
+        carry: { score, lives: this.lives, assisted: this.assisted }
+      });
     });
   }
 
   private finishRun(outcome: 'victory' | 'defeat', wavesCleared: number): void {
     const score = this.scoreSystem.snapshot().score;
     let isNewBest = false;
-    if (this.mode === 'endless') {
+    if (this.assisted) {
+      // Admin-assisted run: no record.
+    } else if (this.mode === 'endless') {
       isNewBest = this.saveSystem.recordEndlessRun(score, wavesCleared);
     } else if (this.mode === 'daily' && this.session.dateKey) {
       isNewBest = this.saveSystem.recordDailyRun(this.session.dateKey, score, wavesCleared);
@@ -1841,6 +1892,7 @@ export class GameScene extends Phaser.Scene {
       levelName: this.level.name,
       editorReturn: this.editorReturn,
       session: { ...this.session, carry: undefined, wave: this.isWaveMode() ? 1 : undefined },
+      assisted: this.assisted || undefined,
       ...result
     };
     this.time.delayedCall(this.reducedMotion ? 150 : 900, () => {
@@ -1856,7 +1908,7 @@ export class GameScene extends Phaser.Scene {
     }
     const score = this.scoreSystem.snapshot().score;
     const previousBest = this.saveSystem.snapshot().bestScore;
-    const recordsProgress = !this.editorReturn && this.levelSource === 'campaign';
+    const recordsProgress = !this.editorReturn && this.levelSource === 'campaign' && !this.assisted;
     if (recordsProgress) {
       this.saveSystem.updateBestScore(score);
     }
@@ -1909,6 +1961,8 @@ export class GameScene extends Phaser.Scene {
       bestScore: Math.max(score.bestScore, score.score),
       lives: Math.max(0, this.lives),
       maxLives: MAX_LIVES,
+      assisted: this.assisted || undefined,
+      invincible: this.invincible || undefined,
       combo: combo.streak,
       bestCombo: combo.bestStreak,
       balls: ballStats.activeCount,

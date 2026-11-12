@@ -693,6 +693,31 @@ const fr = {
   'admin.actor.community': 'communauté',
   'admin.actor.team': 'équipe',
   'admin.actor.author': 'auteur',
+  'admin.settingsTitle': 'Administration',
+  'admin.openPanel': 'Panel de modération',
+  'admin.toolsHint':
+    'En jeu, ouvrez la pause (Échap ou P) pour les outils admin : bonus, vies, points, invincibilité, finir le niveau.',
+  'admin.moderationButton': 'Modération',
+  'admin.hud.assisted': 'Admin',
+  'admin.hud.god': 'Admin · invincible',
+  'admin.tools.title': 'Outils admin',
+  'admin.tools.god': 'Invincible',
+  'admin.tools.godOn': 'Invincible : les balles perdues ne coûtent plus de vie.',
+  'admin.tools.godOff': 'Invincibilité désactivée.',
+  'admin.tools.given': '{name} activé.',
+  'admin.tools.life1': '+1 vie',
+  'admin.tools.lifeMax': 'Vies au max (9)',
+  'admin.tools.livesGiven': '+{n} vie.',
+  'admin.tools.livesMax': 'Vies au maximum.',
+  'admin.tools.points': '+5 000 points',
+  'admin.tools.pointsGiven': '+5 000 points.',
+  'admin.tools.clear': 'Finir le niveau',
+  'admin.tools.cleared': 'Niveau terminé.',
+  'admin.tools.powerUps': 'Donner un bonus',
+  'admin.tools.note':
+    'Partie assistée : ni médaille, ni record, ni trophée, ni statistique ne sont enregistrés. Le niveau suivant se débloque quand même.',
+  'admin.tools.resultNote':
+    'Partie assistée par les outils admin : rien n’a été enregistré (le niveau suivant est débloqué).',
   'tool.back': 'Retour au menu'
 } as const;
 
@@ -1374,6 +1399,31 @@ const en: Record<MessageKey, string> = {
   'admin.actor.community': 'community',
   'admin.actor.team': 'team',
   'admin.actor.author': 'author',
+  'admin.settingsTitle': 'Administration',
+  'admin.openPanel': 'Moderation panel',
+  'admin.toolsHint':
+    'In a game, open the pause menu (Esc or P) for the admin tools: power-ups, lives, points, invincibility, finish the level.',
+  'admin.moderationButton': 'Moderation',
+  'admin.hud.assisted': 'Admin',
+  'admin.hud.god': 'Admin · invincible',
+  'admin.tools.title': 'Admin tools',
+  'admin.tools.god': 'Invincible',
+  'admin.tools.godOn': 'Invincible: lost balls no longer cost a life.',
+  'admin.tools.godOff': 'Invincibility off.',
+  'admin.tools.given': '{name} activated.',
+  'admin.tools.life1': '+1 life',
+  'admin.tools.lifeMax': 'Max lives (9)',
+  'admin.tools.livesGiven': '+{n} life.',
+  'admin.tools.livesMax': 'Lives at maximum.',
+  'admin.tools.points': '+5,000 points',
+  'admin.tools.pointsGiven': '+5,000 points.',
+  'admin.tools.clear': 'Finish the level',
+  'admin.tools.cleared': 'Level finished.',
+  'admin.tools.powerUps': 'Give a power-up',
+  'admin.tools.note':
+    'Assisted run: no medal, record, trophy or statistic is saved. The next level still unlocks.',
+  'admin.tools.resultNote':
+    'Run assisted by the admin tools: nothing was saved (the next level is unlocked).',
   'tool.back': 'Back to menu'
 };
 
