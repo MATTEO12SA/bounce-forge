@@ -30,6 +30,8 @@ export const LEVEL_HORIZONTAL_PADDING = PLAYFIELD_LEFT + 20;
 
 export const STARTING_LIVES = 3;
 export const MAX_LIVES = 5;
+/** Admin tools may go past the normal cap. */
+export const ADMIN_MAX_LIVES = 9;
 export const COMBO_TIMEOUT_MS = 2200;
 
 export const POWER_UP_DROP_SPEED = 320;

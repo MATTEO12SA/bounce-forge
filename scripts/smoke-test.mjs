@@ -489,6 +489,49 @@ try {
     await screenshot(page, 'phone-defeat');
     await setViewport(page, 1440, 900);
 
+    // Admin tools (offered in the pause menu to a signed-in admin): the run becomes assisted,
+    // only the next level is unlocked, nothing else is saved.
+    // Same address as the defeated run: go home first so the level really starts again.
+    await goto(page, baseUrl, '#/');
+    await goto(page, baseUrl, '#/play/campaign/2');
+    await waitFor(
+      page,
+      `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === 1 && !${GAME}.ending && ${GAME}.lives > 0`
+    );
+    await delay(500);
+    const saveBefore = await evaluate(
+      page,
+      `(() => { const save = JSON.parse(localStorage.getItem('bounce-forge.save.v1')); return { medal: save.levelMedals['1'] ?? null, bricks: save.stats.bricksBroken }; })()`
+    );
+    const admin = await evaluate(
+      page,
+      `(() => { const s = ${GAME}; s.adminCommand({ kind: 'lives', amount: 9 }); s.adminCommand({ kind: 'invincible', enabled: true }); s.loseLife(); s.adminCommand({ kind: 'powerUp', type: 'fireBall' }); return { lives: s.lives, fire: s.effects.has('fireBall'), assisted: s.assisted, hud: document.querySelector('.hud-eyebrow')?.textContent ?? '' }; })()`
+    );
+    check(
+      'admin tools give lives, invincibility and power-ups',
+      admin.lives === 9 && admin.fire && admin.assisted && admin.hud.includes('Admin'),
+      admin
+    );
+    await delay(800);
+    await evaluate(page, `(() => { ${GAME}.adminCommand({ kind: 'clear' }); return true; })()`);
+    const assistedWin = await waitFor(
+      page,
+      `document.querySelector('.dialog.is-victory .admin-assisted')?.textContent`,
+      30000
+    );
+    const assistedSave = await evaluate(
+      page,
+      `(() => { const save = JSON.parse(localStorage.getItem('bounce-forge.save.v1')); return { medal: save.levelMedals['1'] ?? null, bricks: save.stats.bricksBroken, unlocked: save.unlockedLevel }; })()`
+    );
+    check(
+      'an assisted run unlocks the next level but saves no medal or statistic',
+      Boolean(assistedWin) &&
+        assistedSave.medal === saveBefore.medal &&
+        assistedSave.bricks === saveBefore.bricks &&
+        assistedSave.unlocked >= 2,
+      { assistedWin, saveBefore, assistedSave }
+    );
+
     // ---------------------------------------------------------------- endless
     console.log('Endless');
     await goto(page, baseUrl, '#/play/endless');

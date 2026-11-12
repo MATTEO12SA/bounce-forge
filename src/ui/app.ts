@@ -46,6 +46,8 @@ import {
   type CommunityHost
 } from './community/CommunityUi';
 import { AdminScreen } from './community/AdminUi';
+import { adminPauseTools, adminSettingsPanel } from './community/AdminTools';
+import { adminStatus, isAdminNow } from '../community/adminState';
 import { ReviewScreen, rulesScreen } from './community/ModerationUi';
 import { brickSprite, EditorScreen } from './editor/EditorScreen';
 import { generateLevel, randomSeed } from './editor/generator';
@@ -203,6 +205,8 @@ export class App {
     setLanguage(this.save.snapshot().preferences.language);
     this.applyMotionPreference();
     this.applySound();
+    // Checks a saved admin session in the background (only loads Supabase if there is one).
+    void adminStatus();
 
     this.stage = h('div', { class: 'stage', id: 'stage', 'aria-hidden': 'true' });
     this.engine = new EngineLoader(this.stage);
@@ -2136,6 +2140,7 @@ export class App {
             t('settings.reset')
           )
         ),
+        adminSettingsPanel(),
         ADMIN_ENABLED
           ? h(
               'div',
@@ -2524,7 +2529,12 @@ export class App {
             : this.communityCreation
               ? `${t('mode.community')} · ${this.communityCreation.title}`
               : t('mode.creative');
-    setText(r.mode, modeLabel);
+    setText(
+      r.mode,
+      hud.assisted
+        ? `${modeLabel} · ${hud.invincible ? t('admin.hud.god') : t('admin.hud.assisted')}`
+        : modeLabel
+    );
     setText(r.title, levelDisplayName(hud.levelName));
     setText(r.chapter, this.chapterName(hud.chapter));
     setText(r.score, formatNumber(hud.score));
@@ -2638,7 +2648,20 @@ export class App {
             }
           }),
           h('span', { class: 'switch-track', 'aria-hidden': 'true' })
-        )
+        ),
+        ...(isAdminNow()
+          ? [
+              adminPauseTools(
+                (command) => {
+                  this.engine.controller?.adminCommand(command);
+                  // Clearing the level ends it: let the game run to its result.
+                  if (command.kind === 'clear') this.resumeGame();
+                },
+                this.lastHud?.invincible === true,
+                (message) => this.toast(message)
+              )
+            ]
+          : [])
       ],
       [
         {
@@ -2687,6 +2710,9 @@ export class App {
           : t('result.defeat');
 
     const rows: HTMLElement[] = [
+      ...(result.assisted
+        ? [h('p', { class: 'result-hint admin-assisted' }, t('admin.tools.resultNote'))]
+        : []),
       h(
         'dl',
         { class: 'result-stats' },

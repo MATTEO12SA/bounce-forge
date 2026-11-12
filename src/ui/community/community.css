@@ -590,3 +590,95 @@ button.pill.is-active {
     max-width: 200px;
   }
 }
+
+/* ------------------------------------------------------------------ admin tools */
+
+.admin-settings {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-settings .setting-hint {
+  margin: 0;
+}
+
+.admin-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-tools {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--amber);
+  background: var(--amber-soft);
+}
+
+.admin-tools summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.admin-tools-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.admin-tools-label {
+  margin: 14px 0 8px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.admin-power-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 6px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.admin-power {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-power:hover {
+  border-color: var(--amber);
+}
+
+.admin-power.is-risk {
+  border-color: rgba(255, 90, 74, 0.45);
+}
+
+.admin-power-icon {
+  min-width: 26px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.admin-tools .result-hint {
+  margin: 10px 0 0;
+}
+
+.admin-assisted {
+  color: var(--amber);
+}

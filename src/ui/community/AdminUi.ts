@@ -68,64 +68,13 @@ export class AdminScreen {
     try {
       const session = await adminSession();
       clear(this.body);
-      if (!session) this.body.append(this.loginForm());
+      if (!session) this.body.append(adminLoginForm(() => void this.start()));
       else if (!session.isAdmin) this.body.append(this.notAdmin(session.email));
       else this.body.append(this.dashboard(session.email));
     } catch (error) {
       clear(this.body);
       this.body.append(this.status(errorText(error), true));
     }
-  }
-
-  private loginForm(): HTMLElement {
-    const email = h('input', {
-      type: 'email',
-      autocomplete: 'username',
-      required: true,
-      placeholder: t('admin.email'),
-      'aria-label': t('admin.email')
-    });
-    const password = h('input', {
-      type: 'password',
-      autocomplete: 'current-password',
-      required: true,
-      placeholder: t('admin.password'),
-      'aria-label': t('admin.password')
-    });
-    const message = this.status('');
-    const submit = h(
-      'button',
-      { class: 'button button-primary', type: 'submit' },
-      icon('lock'),
-      t('admin.signIn')
-    );
-    const form = h(
-      'form',
-      { class: 'panel admin-login' },
-      h('h2', { class: 'panel-title' }, t('admin.signInTitle')),
-      h('p', { class: 'result-hint' }, t('admin.signInHelp')),
-      email,
-      password,
-      submit,
-      message
-    );
-    form.addEventListener('submit', (event) => {
-      event.preventDefault();
-      submit.disabled = true;
-      message.classList.remove('is-error');
-      message.textContent = t('community.loading');
-      void adminSignIn(email.value, password.value)
-        .then(() => {
-          password.value = '';
-          return this.start();
-        })
-        .catch((error: unknown) => {
-          message.textContent = errorText(error);
-          message.classList.add('is-error');
-          submit.disabled = false;
-        });
-    });
-    return form;
   }
 
   private signOutButton(): HTMLButtonElement {
@@ -598,4 +547,60 @@ export class AdminScreen {
       });
     return list;
   }
+}
+
+/** E-mail + password sign-in for the admin account (admin page and settings). */
+export function adminLoginForm(onSignedIn: () => void): HTMLFormElement {
+  const email = h('input', {
+    type: 'email',
+    autocomplete: 'username',
+    required: true,
+    placeholder: t('admin.email'),
+    'aria-label': t('admin.email')
+  });
+  const password = h('input', {
+    type: 'password',
+    autocomplete: 'current-password',
+    required: true,
+    placeholder: t('admin.password'),
+    'aria-label': t('admin.password')
+  });
+  const message = statusLine('');
+  const submit = h(
+    'button',
+    { class: 'button button-primary', type: 'submit' },
+    icon('lock'),
+    t('admin.signIn')
+  );
+  const form = h(
+    'form',
+    { class: 'panel admin admin-login' },
+    h('h2', { class: 'panel-title' }, t('admin.signInTitle')),
+    h('p', { class: 'result-hint' }, t('admin.signInHelp')),
+    email,
+    password,
+    submit,
+    message
+  );
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submit.disabled = true;
+    message.classList.remove('is-error');
+    message.textContent = t('community.loading');
+    void adminSignIn(email.value, password.value)
+      .then(() => {
+        password.value = '';
+        onSignedIn();
+      })
+      .catch((error: unknown) => {
+        message.textContent = errorText(error);
+        message.classList.add('is-error');
+        submit.disabled = false;
+      });
+  });
+  return form;
+}
+
+function statusLine(text: string): HTMLElement {
+  return h('p', { class: 'community-status', role: 'status' }, text);
 }
