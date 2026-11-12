@@ -416,11 +416,11 @@ const fr = {
   'trophy.first-gold': 'Or massif — Obtenir une médaille d’or.',
   'trophy.first-diamond': 'Éclat de diamant — Réussir les 3 défis d’un niveau dans la même partie.',
   'trophy.golden-chapter': 'Chapitre doré — Un chapitre entier en or ou mieux.',
-  'trophy.all-gold': 'Forge dorée — Or ou mieux sur les 30 niveaux.',
-  'trophy.all-diamond': 'Légende de la forge — Diamant sur les 30 niveaux.',
+  'trophy.all-gold': 'Forge dorée — Or ou mieux sur les 36 niveaux.',
+  'trophy.all-diamond': 'Légende de la forge — Diamant sur les 36 niveaux.',
   'trophy.challenges-30': 'Collectionneur — Réussir 30 défis.',
   'trophy.challenges-60': 'Grand collectionneur — Réussir 60 défis.',
-  'trophy.challenges-90': 'Perfectionniste — Réussir les 90 défis.',
+  'trophy.challenges-90': 'Perfectionniste — Réussir les 108 défis.',
   'trophy.combo-50': 'Enchaînement — Atteindre un combo de 50.',
   'trophy.combo-100': 'Frénésie — Atteindre un combo de 100.',
   'trophy.balls-30': 'Averse — Avoir 30 balles en même temps.',
@@ -749,6 +749,15 @@ const fr = {
   'skins.trail.comet': 'Comète',
   'skins.trail.sparks': 'Électrique',
   'skins.trail.rainbow': 'Arc-en-ciel',
+  'chapter.Wardens': 'Les Gardiens',
+  'chapter.about.boss':
+    'Les Gardiens : des boss qui bougent, tirent et s’enragent. Visez juste, esquivez leurs éclairs.',
+  'editor.brick.W': 'Boss',
+  'brickinfo.boss':
+    'Gardien — un boss : touchez-le n’importe où pour vider sa barre de vie. Il bouge, tire des éclairs qui paralysent la raquette et s’enrage en perdant de la vie.',
+  'trophy.chapter-6': 'Tueur de gardiens — Terminer le chapitre Les Gardiens.',
+  'trophy.boss-slayer': 'Premier sang — Vaincre un boss.',
+  'skins.paddle.warden': 'Gardien',
   'tool.back': 'Retour au menu'
 } as const;
 
@@ -1164,11 +1173,11 @@ const en: Record<MessageKey, string> = {
   'trophy.first-gold': 'Solid gold — Earn a gold medal.',
   'trophy.first-diamond': 'Diamond spark — Meet all 3 challenges of a level in one run.',
   'trophy.golden-chapter': 'Golden chapter — A whole chapter in gold or better.',
-  'trophy.all-gold': 'Golden forge — Gold or better on all 30 levels.',
-  'trophy.all-diamond': 'Forge legend — Diamond on all 30 levels.',
+  'trophy.all-gold': 'Golden forge — Gold or better on all 36 levels.',
+  'trophy.all-diamond': 'Forge legend — Diamond on all 36 levels.',
   'trophy.challenges-30': 'Collector — Complete 30 challenges.',
   'trophy.challenges-60': 'Great collector — Complete 60 challenges.',
-  'trophy.challenges-90': 'Perfectionist — Complete all 90 challenges.',
+  'trophy.challenges-90': 'Perfectionist — Complete all 108 challenges.',
   'trophy.combo-50': 'Chain — Reach a 50 combo.',
   'trophy.combo-100': 'Frenzy — Reach a 100 combo.',
   'trophy.balls-30': 'Shower — Have 30 balls at once.',
@@ -1485,6 +1494,15 @@ const en: Record<MessageKey, string> = {
   'skins.trail.comet': 'Comet',
   'skins.trail.sparks': 'Electric',
   'skins.trail.rainbow': 'Rainbow',
+  'chapter.Wardens': 'The Wardens',
+  'chapter.about.boss':
+    'The Wardens: bosses that move, shoot and enrage. Aim well and dodge their bolts.',
+  'editor.brick.W': 'Boss',
+  'brickinfo.boss':
+    'Warden — a boss: hit it anywhere to drain its health bar. It moves, fires bolts that stun the paddle and enrages as it weakens.',
+  'trophy.chapter-6': 'Warden slayer — Clear the Wardens chapter.',
+  'trophy.boss-slayer': 'First blood — Defeat a boss.',
+  'skins.paddle.warden': 'Warden',
   'tool.back': 'Back to menu'
 };
 

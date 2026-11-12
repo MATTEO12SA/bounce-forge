@@ -29,9 +29,9 @@ function makeOneBrickRows(): string[] {
 }
 
 describe('level system creative and admin levels', () => {
-  it('exposes the full 30-level campaign', () => {
-    expect(campaignLevels).toHaveLength(30);
-    expect(new LevelSystem(new SaveSystem(new MemoryStorage())).count).toBe(30);
+  it('exposes the full 36-level campaign', () => {
+    expect(campaignLevels).toHaveLength(36);
+    expect(new LevelSystem(new SaveSystem(new MemoryStorage())).count).toBe(36);
   });
 
   it('keeps campaign levels fixed when a creative slot exists', () => {

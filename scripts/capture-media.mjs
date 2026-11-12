@@ -172,7 +172,7 @@ try {
   await waitFor(page, `document.querySelector('.home') !== null`);
   await evaluate(
     page,
-    `localStorage.setItem('bounce-forge.save.v1', JSON.stringify({ version: 8, bestScore: 48210, unlockedLevel: ${process.env.CAPTURE_LEVELS ? 29 : 9}, completedLevels: [0,1,2,3,4,5,6,7,8], levelMedals: {'0':'gold','1':'gold','2':'silver','3':'gold','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, preferences: { soundEnabled: true, themeId: 'forge', volumeSfx: 0.6, volumeMusic: 0.5, fxQuality: 'high', fullscreen: false, language: '${process.env.MEDIA_LANG ?? 'fr'}', reducedMotion: ${process.env.CAPTURE_LEVELS ? 'true' : 'false'} }, creativeLevelSlots: {}, tutorialSeen: true, records: { endless: { bestScore: 61250, bestWave: 14 }, daily: {} }, levelMedals: {'0':'diamond','1':'gold','2':'silver','3':'diamond','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, levelChallenges: {'0':['objective','score','flawless'],'1':['objective','score'],'2':['flawless'],'3':['objective','score','flawless'],'5':['score'],'6':['objective','flawless'],'7':['score']}, achievements: {'first-clear': 1794500000000, 'chapter-1': 1794600000000, 'first-gold': 1794500000000, 'first-diamond': 1794550000000, 'combo-50': 1794560000000, 'endless-10': 1794570000000, 'balls-30': 1794580000000}, stats: { riskCaught: 6, capsulesCaught: 214, bricksBroken: 8420, livesLost: 17, bestCombo: 87, bestBalls: 41 } })); true`
+    `localStorage.setItem('bounce-forge.save.v1', JSON.stringify({ version: 8, bestScore: 48210, unlockedLevel: ${process.env.CAPTURE_LEVELS ? 35 : 9}, completedLevels: [0,1,2,3,4,5,6,7,8], levelMedals: {'0':'gold','1':'gold','2':'silver','3':'gold','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, preferences: { soundEnabled: true, themeId: 'forge', volumeSfx: 0.6, volumeMusic: 0.5, fxQuality: 'high', fullscreen: false, language: '${process.env.MEDIA_LANG ?? 'fr'}', reducedMotion: ${process.env.CAPTURE_LEVELS ? 'true' : 'false'} }, creativeLevelSlots: {}, tutorialSeen: true, records: { endless: { bestScore: 61250, bestWave: 14 }, daily: {} }, levelMedals: {'0':'diamond','1':'gold','2':'silver','3':'diamond','4':'bronze','5':'silver','6':'gold','7':'silver','8':'bronze'}, levelChallenges: {'0':['objective','score','flawless'],'1':['objective','score'],'2':['flawless'],'3':['objective','score','flawless'],'5':['score'],'6':['objective','flawless'],'7':['score']}, achievements: {'first-clear': 1794500000000, 'chapter-1': 1794600000000, 'first-gold': 1794500000000, 'first-diamond': 1794550000000, 'combo-50': 1794560000000, 'endless-10': 1794570000000, 'balls-30': 1794580000000}, stats: { riskCaught: 6, capsulesCaught: 214, bricksBroken: 8420, livesLost: 17, bestCombo: 87, bestBalls: 41 } })); true`
   );
   await page.send('Page.reload', {});
 
@@ -189,7 +189,7 @@ try {
   // CAPTURE_LEVELS=<dir>: one screenshot of every campaign level, for design review.
   if (process.env.CAPTURE_LEVELS) {
     await mkdir(process.env.CAPTURE_LEVELS, { recursive: true });
-    for (let level = 1; level <= 30; level += 1) {
+    for (let level = 1; level <= 36; level += 1) {
       await evaluate(page, `location.hash = '#/play/campaign/${level}'; true`);
       await waitFor(
         page,

@@ -3,16 +3,16 @@ import type { LevelOptions } from './levelOptions';
 import type { LevelObjective, PatternDefinition } from './levelTypes';
 
 /**
- * The 30 campaign levels, drawn as pixel art.
+ * The 36 campaign levels, drawn as pixel art.
  *
  * Each art character becomes a 2×2 block of bricks, so a level is at most 18 characters wide
  * (36 editor columns). Legend: `.` empty · `1` standard · `2`/`3` reinforced · `E` explosive ·
  * `B` bonus · `S` shield · `X` steel · `C` crystal · `K` key · `G` gate · `R` phoenix ·
- * `I` ghost · `M` moving · `O` bumper · `T` teleporter · `F` fuse.
+ * `I` ghost · `M` moving · `O` bumper · `T` teleporter · `F` fuse · `W` boss armour.
  *
  * How the campaign is built:
  * - five chapters with a theme each: basics, steel and angles, chain reactions, ball storms,
- *   then mastery of every mechanism;
+ *   mastery of every mechanism, then the wardens: bosses that move, shoot and enrage;
  * - inside a chapter, each level introduces ONE new idea on its own, in a forgiving layout,
  *   before later levels combine it with the others; the last level of a chapter is a finale;
  * - power-ups unlock with the chapters (see config/powerUps.ts) and level events (power-up rain,
@@ -39,7 +39,8 @@ const SYMBOL_SCORE: Record<string, number> = {
   R: 60,
   I: 150,
   M: 180,
-  F: 140
+  F: 140,
+  W: 40
 };
 
 function objective(type: LevelObjective['type'], target: number, label: string): LevelObjective {
@@ -105,9 +106,10 @@ const STEEL = 'Wall Mazes';
 const CHAIN = 'Chain Reactor';
 const STORM = 'Ball Storm';
 const MECH = 'Mechanisms';
+const BOSS = 'Wardens';
 
 /** Chapter keys in campaign order (also used by the interface). */
-export const CAMPAIGN_CHAPTERS = [FORGE, STEEL, CHAIN, STORM, MECH] as const;
+export const CAMPAIGN_CHAPTERS = [FORGE, STEEL, CHAIN, STORM, MECH, BOSS] as const;
 
 export const CAMPAIGN_ART: ArtLevel[] = [
   {
@@ -693,6 +695,132 @@ export const CAMPAIGN_ART: ArtLevel[] = [
       '..R3333333333333R.',
       '...2B22I22I22B2...',
       '....222222222.....'
+    ]
+  },
+  {
+    id: 'sentinel',
+    name: 'Sentinel',
+    chapter: BOSS,
+    // First boss: one armoured warden. Hit it anywhere; dodge its bolts.
+    objective: objective('clearWithLives', 2, 'Clear with 2 lives'),
+    goldCombo: 40,
+    art: [
+      '..................',
+      '.....WWWWWWWW.....',
+      '.....WWWWWWWW.....',
+      '.....WWWWWWWW.....',
+      '..................',
+      '..................',
+      '..1111B1111B1111..',
+      '..11111111111111..',
+      '...111111111111...',
+      '....1111111111....'
+    ]
+  },
+  {
+    id: 'shield-wall',
+    name: 'Shield Wall',
+    chapter: BOSS,
+    // The warden hides behind reinforced walls: open a breach first.
+    objective: objective('bestCombo', 30, 'Reach 30 combo'),
+    goldCombo: 50,
+    art: [
+      '..................',
+      '....WWWWWWWWWW....',
+      '....WWWWWWWWWW....',
+      '....WWWWWWWWWW....',
+      '..................',
+      'O................O',
+      '.33333..22..33333.',
+      '.2B222..22..222B2.',
+      '.22222..22..22222.',
+      '..1111..11..1111..',
+      '..1111111111111...'
+    ]
+  },
+  {
+    id: 'twin-wardens',
+    name: 'Twin Wardens',
+    chapter: BOSS,
+    // Two wardens share one health bar and fire in turn.
+    objective: objective('reachBalls', 12, 'Reach 12 balls'),
+    goldCombo: 55,
+    art: [
+      '..................',
+      '.WWWWWW....WWWWWW.',
+      '.WWWWWW....WWWWWW.',
+      '..................',
+      '..................',
+      '..1B1...CC...1B1..',
+      '..111..1111..111..',
+      '.22222222222222222',
+      '.2222B222222B2222.',
+      '..11111111111111..'
+    ]
+  },
+  {
+    id: 'furnace-golem',
+    name: 'Furnace Golem',
+    chapter: BOSS,
+    // Explosives and fuses around the golem: chain reactions hurt it twice as much.
+    objective: objective('triggerExplosions', 18, 'Trigger 18 explosions'),
+    goldCombo: 60,
+    art: [
+      '..................',
+      '...EE.WWWWWW.EE...',
+      '...EE.WWWWWW.EE...',
+      '......WWWWWW......',
+      '..F...WWWWWW...F..',
+      '..F............F..',
+      '..FFFF..BB..FFFF..',
+      '.2222222222222222.',
+      '.2E22222EE22222E2.',
+      '..33333333333333..'
+    ]
+  },
+  {
+    id: 'storm-titan',
+    name: 'Storm Titan',
+    chapter: BOSS,
+    // A huge titan under a lightning storm: the storm strikes it too.
+    objective: objective('bestCombo', 45, 'Reach 45 combo'),
+    goldCombo: 70,
+    options: { storm: true },
+    art: [
+      '..................',
+      '...WWWWWWWWWWWW...',
+      '...WWWWWWWWWWWW...',
+      '...WWWWWWWWWWWW...',
+      '...WWWWWWWWWWWW...',
+      '..................',
+      '..................',
+      '.I22222IIII22222I.',
+      '.2222B222222B2222.',
+      '..MMMM......MMMM..',
+      '..33333333333333..'
+    ]
+  },
+  {
+    id: 'forge-lord',
+    name: 'The Forge Lord',
+    chapter: BOSS,
+    // Finale: the Forge Lord behind a locked gate, with portals, phoenixes and a rain of power-ups.
+    objective: objective('triggerExplosions', 20, 'Trigger 20 explosions'),
+    goldCombo: 90,
+    options: { bonusRain: true },
+    art: [
+      '..................',
+      '..WWWWWWWWWWWWWW..',
+      '..WWWWWWWWWWWWWW..',
+      '..WWWWWWWWWWWWWW..',
+      '..WWWWWWWWWWWWWW..',
+      '..................',
+      'T.XXXXXGGGGXXXXX.T',
+      '..................',
+      '.R..EE..KK..EE..R.',
+      '.22222222222222222',
+      '.2B2222CCCC2222B2.',
+      '..33333333333333..'
     ]
   }
 ];

@@ -22,6 +22,8 @@
   --accent-steel: #8fbbe0;
   --accent-chain: #ff6b3d;
   --accent-storm: #5fe0a8;
+  --accent-mech: #c6a8ff;
+  --accent-boss: #ff4d5e;
   --radius-sm: 10px;
   --radius: 16px;
   --radius-lg: 24px;
@@ -599,6 +601,14 @@ canvas {
 
 .accent-storm {
   --accent: var(--accent-storm);
+}
+
+.accent-mech {
+  --accent: var(--accent-mech);
+}
+
+.accent-boss {
+  --accent: var(--accent-boss);
 }
 
 .footer {

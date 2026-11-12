@@ -6,13 +6,13 @@ import { CAMPAIGN_ART, CAMPAIGN_CHAPTERS, LEVEL_PATTERNS } from '../src/game/lev
 const BREAKABLE = /[123EBS]/;
 
 describe('campaign level design', () => {
-  it('has 30 distinct levels in 5 chapters of 6', () => {
-    expect(LEVEL_PATTERNS).toHaveLength(30);
-    expect(new Set(LEVEL_PATTERNS.map((level) => level.id)).size).toBe(30);
+  it('has 36 distinct levels in 6 chapters of 6', () => {
+    expect(LEVEL_PATTERNS).toHaveLength(36);
+    expect(new Set(LEVEL_PATTERNS.map((level) => level.id)).size).toBe(36);
     const chapters = LEVEL_PATTERNS.map((level) => level.chapter);
-    expect(new Set(chapters).size).toBe(5);
+    expect(new Set(chapters).size).toBe(6);
     expect([...new Set(chapters)]).toEqual([...CAMPAIGN_CHAPTERS]);
-    for (let i = 0; i < 30; i += 6) {
+    for (let i = 0; i < 36; i += 6) {
       expect(new Set(chapters.slice(i, i + 6)).size).toBe(1);
     }
   });
@@ -68,13 +68,27 @@ describe('campaign level design', () => {
     expect(Math.floor(intro.I! / 6)).toBe(3);
   });
 
+  it('keeps the bosses for the last chapter, with room to move', () => {
+    LEVEL_PATTERNS.forEach((level, index) => {
+      const hasBoss = level.rows.some((row) => row.includes('W'));
+      expect(hasBoss, level.id).toBe(Math.floor(index / 6) === 5);
+      if (!hasBoss) return;
+      // Every row of a boss has free cells beside it, so it can slide.
+      level.rows
+        .filter((row) => row.includes('W'))
+        .forEach((row) =>
+          expect(row.replace(/W+/g, '').length, level.id).toBeGreaterThanOrEqual(4)
+        );
+    });
+  });
+
   it('gets harder from one chapter to the next', () => {
     const average = (chapter: number) =>
       LEVEL_PATTERNS.slice(chapter * 6, chapter * 6 + 6).reduce(
         (sum, level) => sum + estimateDifficulty(level.rows, level.options),
         0
       ) / 6;
-    for (let chapter = 1; chapter < 5; chapter += 1) {
+    for (let chapter = 1; chapter < 6; chapter += 1) {
       expect(average(chapter)).toBeGreaterThanOrEqual(average(chapter - 1) - 0.2);
     }
     expect(average(4)).toBeGreaterThan(average(0));

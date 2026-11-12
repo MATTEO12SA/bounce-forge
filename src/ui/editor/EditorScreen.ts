@@ -81,7 +81,8 @@ const PALETTE = [
   'M',
   'O',
   'T',
-  'F'
+  'F',
+  'W'
 ] as const;
 /** Classic bricks first; mechanisms get their own group in the palette. */
 const FIRST_MECHANISM = 7;

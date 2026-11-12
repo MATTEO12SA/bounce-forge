@@ -34,17 +34,17 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
 
 | Campagne                                                                           | Modes                                                                                        |
 | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| ![Grille des 30 niveaux avec miniatures et médailles](docs/media/campaign.png)     | ![Cartes des modes Campagne, Infini, Défi du jour et Création](docs/media/modes.png)         |
+| ![Grille des 36 niveaux avec miniatures et médailles](docs/media/campaign.png)     | ![Cartes des modes Campagne, Infini, Défi du jour et Création](docs/media/modes.png)         |
 | ![L’Atelier : Surprise, depuis la campagne, page blanche](docs/media/workshop.png) | ![Éditeur avec les vraies briques, outils à gauche, palette à droite](docs/media/editor.png) |
 
 ## Fonctionnalités
 
-- **Campagne de 30 niveaux** en 5 chapitres — Bases de la forge, Labyrinthes d’acier, Réaction en
-  chaîne, Tempête de balles, Mécanismes — dessinés en pixel art. Chaque niveau présente une idée
+- **Campagne de 36 niveaux** en 6 chapitres — Bases de la forge, Labyrinthes d’acier, Réaction en
+  chaîne, Tempête de balles, Mécanismes, Les Gardiens — dessinés en pixel art. Chaque niveau présente une idée
   seule avant de la mélanger aux autres, avec une médaille d’or, d’argent ou de bronze à décrocher.
 - **Défis, médailles et trophées** : chaque niveau a 3 défis (objectif, score, sans faute). Les
-  réussir dans la même partie donne le **diamant** (bronze, argent, or, diamant). 90 défis et
-  27 trophées à collectionner. Perdre une vie coûte 10 % du score, et la fin de niveau récompense
+  réussir dans la même partie donne le **diamant** (bronze, argent, or, diamant). 108 défis et
+  29 trophées à collectionner. Perdre une vie coûte 10 % du score, et la fin de niveau récompense
   les vies restantes, le sans-faute, l’objectif et la rapidité.
 - **15 bonus** débloqués au fil des chapitres : multiballe, boule de feu, balle explosive, grosse
   balle, canons laser, aimant, bouclier, ralenti, fièvre… et des capsules rouges « risque »
@@ -56,6 +56,8 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
 - **Communauté** : publiez vos niveaux et vos campagnes en un clic, puis jouez directement à ceux
   des autres joueurs, sans code. La bibliothèque se trie par popularité, nouveautés, parties ou
   difficulté, avec des « J’aime » et une recherche. Comptes anonymes, juste un pseudo.
+- **Boss** (chapitre 6, Les Gardiens) : six niveaux contre des gardiens blindés qui bougent,
+  tirent des éclairs qui paralysent la raquette et s’enragent en trois phases.
 - **Skins** : 7 raquettes, 7 balles et 6 traînées à débloquer avec les trophées, à équiper
   dans la salle des trophées (panneau Apparence).
 - **Modération** : filtre automatique des mots offensants et des liens, copies refusées,

@@ -110,6 +110,17 @@ export const PADDLE_SKINS: readonly SkinDef<PaddleLook>[] = [
     }
   },
   {
+    id: 'warden',
+    trophy: 'boss-slayer',
+    look: {
+      body: ['#5a1a22', '#3a0d13', '#1a0508'],
+      edge: '#ff4d5e',
+      caps: ['#ffb423', '#9b2335'],
+      glow: [255, 77, 94],
+      shine: 'rgba(255, 180, 35, 0.7)'
+    }
+  },
+  {
     id: 'diamond',
     trophy: 'all-diamond',
     look: {

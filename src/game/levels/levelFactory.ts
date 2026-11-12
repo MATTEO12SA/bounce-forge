@@ -75,7 +75,9 @@ const BRICK_TEMPLATES: Record<string, BrickTemplate | undefined> = {
   M: { kind: 'mover', hitPoints: 1, score: 180, color: 0x5fb3ff, powerUpChanceMultiplier: 1 },
   O: { kind: 'bumper', hitPoints: 0, score: 0, color: 0xff5ab4, powerUpChanceMultiplier: 0 },
   T: { kind: 'teleporter', hitPoints: 0, score: 0, color: 0x9b6bff, powerUpChanceMultiplier: 0 },
-  F: { kind: 'fuse', hitPoints: 1, score: 140, color: 0xffa94d, powerUpChanceMultiplier: 0.5 }
+  F: { kind: 'fuse', hitPoints: 1, score: 140, color: 0xffa94d, powerUpChanceMultiplier: 0.5 },
+  // Boss armour: its cells share one health bar (see mechanics/boss.ts) and never drop capsules.
+  W: { kind: 'boss', hitPoints: 1, score: 40, color: 0x9b2335, powerUpChanceMultiplier: 0 }
 };
 
 /** Only shields get tougher in later levels: reinforced bricks keep exactly 2 or 3 hits. */

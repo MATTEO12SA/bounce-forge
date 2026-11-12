@@ -88,7 +88,9 @@ export function estimateDifficulty(rows: readonly string[], options?: LevelOptio
     I: 1.5,
     M: 1.5,
     F: 1,
-    R: 0.5
+    R: 0.5,
+    // Boss armour: one shared health bar, bolts to dodge.
+    W: 3
   };
   rows.forEach((row) =>
     [...row].forEach((symbol) => {
