@@ -221,6 +221,44 @@ try {
   await delay(700);
   await shot(page, `${shots}/trophies.png`);
 
+  // CAPTURE_SKINS=<dir>: the Appearance panel, then a game with unlocked skins equipped.
+  if (process.env.CAPTURE_SKINS) {
+    const dir = process.env.CAPTURE_SKINS;
+    await mkdir(dir, { recursive: true });
+    await evaluate(page, `document.querySelector('.skins-panel').scrollIntoView(); true`);
+    await delay(300);
+    const panel = await evaluate(
+      page,
+      `(() => { const r = document.querySelector('.skins-panel').getBoundingClientRect(); return { x: r.x, y: Math.max(0, r.y), width: r.width, height: Math.min(r.height, innerHeight - Math.max(0, r.y)), scale: 1 }; })()`
+    );
+    await shot(page, `${dir}/skins-panel.png`, panel);
+    await evaluate(
+      page,
+      `(() => { const pick = (name) => [...document.querySelectorAll('.skin-card')].find((b) => b.textContent.includes(name))?.click(); pick('Néon'); pick('Plasma'); return true; })()`
+    );
+    await delay(300);
+    await shot(page, `${dir}/skins-panel-equipped.png`, panel);
+    await evaluate(page, `location.hash = '#/play/campaign/2'; true`);
+    await waitFor(page, `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === 1`);
+    await delay(800);
+    await evaluate(page, `(() => { ${GAME}.setAutopilot(true); return true; })()`);
+    await delay(2500);
+    const stage = await evaluate(
+      page,
+      `(() => { const r = document.querySelector('.play-stage').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height, scale: 0.7 }; })()`
+    );
+    await shot(page, `${dir}/skins-game.png`, stage);
+    // Back to the default look for the other captures.
+    await evaluate(
+      page,
+      `(() => { const save = JSON.parse(localStorage.getItem('bounce-forge.save.v1')); save.preferences.skins = { paddle: 'forge', ball: 'ember', trail: 'ember' }; localStorage.setItem('bounce-forge.save.v1', JSON.stringify(save)); return true; })()`
+    );
+    await evaluate(page, `location.hash = '#/'; true`);
+    await page.send('Page.reload', {});
+    await waitFor(page, `document.querySelector('#app').classList.contains('engine-live')`, 40000);
+    await delay(1000);
+  }
+
   // The Workshop and the editor, opened on a "Surprise!" level.
   await evaluate(page, `location.hash = '#/create'; true`);
   await delay(800);
