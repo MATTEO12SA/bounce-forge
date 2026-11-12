@@ -29,9 +29,9 @@ export const SUPABASE_KEY =
   env.VITE_SUPABASE_ANON_KEY ?? 'sb_publishable_b2PUr2QemidoCHjTXPS_JQ_5KLyN7Is';
 
 const SUMMARY_COLUMNS =
-  'id,kind,title,description,level_count,difficulty,plays,likes,status,created_at,updated_at,author:profiles(nickname),preview:levels->0';
+  'id,kind,title,description,level_count,difficulty,plays,likes,status,created_at,updated_at,author:profiles!creations_author_id_fkey(nickname),preview:levels->0';
 export const FULL_COLUMNS =
-  'id,kind,title,description,level_count,difficulty,plays,likes,status,created_at,updated_at,version,levels,author_id,author:profiles(nickname)';
+  'id,kind,title,description,level_count,difficulty,plays,likes,status,created_at,updated_at,version,levels,author_id,author:profiles!creations_author_id_fkey(nickname)';
 
 let clientPromise: Promise<SupabaseClient> | null = null;
 

@@ -108,7 +108,7 @@ try {
 
   const listed = await b
     .from('creations')
-    .select('id,title,author:profiles(nickname),preview:levels->0')
+    .select('id,title,author:profiles!creations_author_id_fkey(nickname),preview:levels->0')
     .eq('status', 'published')
     .eq('id', created);
   check(
