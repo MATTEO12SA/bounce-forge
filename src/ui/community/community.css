@@ -1,0 +1,592 @@
+/* Community library, creation page, publishing dialogs and "My publications". */
+
+/* Buttons and links styled as buttons must still honour the hidden attribute. */
+.community [hidden],
+.community-detail [hidden] {
+  display: none !important;
+}
+
+/* Filter pills are real buttons here: no browser background. */
+button.pill {
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button.pill.is-active {
+  background: var(--text);
+}
+
+.community-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.community-toolbar .filter-pills {
+  margin-bottom: 0;
+}
+
+.community-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.community .community-search {
+  width: min(100%, 320px);
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-raised);
+  font-family: var(--font);
+}
+
+.community-status {
+  margin: 0 0 16px;
+  color: var(--text-muted);
+}
+
+.community-status:empty {
+  display: none;
+}
+
+.community-status.is-error {
+  color: #ff8a7e;
+}
+
+.community-card .card-visual {
+  position: relative;
+}
+
+.kind-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(14, 13, 11, 0.85);
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.community-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.community-stats .stars {
+  color: var(--amber);
+  letter-spacing: 0.05em;
+}
+
+.community-stats.is-large {
+  font-size: 1rem;
+}
+
+.community-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+/* ------------------------------------------------------------------ creation page */
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--text);
+}
+
+.community-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+  gap: clamp(20px, 4vw, 48px);
+  align-items: start;
+  margin-bottom: 28px;
+}
+
+.community-hero-visual {
+  aspect-ratio: 9 / 12;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
+  background: #0b0a08;
+  overflow: hidden;
+}
+
+.community-hero-visual canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.community-hero-body {
+  display: grid;
+  gap: 10px;
+}
+
+.community-author,
+.community-description {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.community-description {
+  max-width: 60ch;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+.community-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.like-heart {
+  color: var(--text-faint);
+  transition: color 160ms var(--ease);
+}
+
+.is-liked .like-heart {
+  color: #ff6f9f;
+}
+
+.community-level canvas {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+}
+
+/* ------------------------------------------------------------------ publishing */
+
+.dialog input[type='text'],
+.dialog textarea {
+  font-family: var(--font);
+}
+
+.campaign-pick {
+  display: grid;
+  gap: 6px;
+  max-height: 240px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.campaign-pick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.campaign-pick-item.is-picked {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.campaign-pick-number {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.is-picked .campaign-pick-number {
+  background: var(--amber);
+  color: #1a1206;
+}
+
+.workshop-community {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.my-publications {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.my-publication {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.my-publication:last-child {
+  border-bottom: 0;
+}
+
+.my-publication-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.my-publication-text .card-title {
+  color: var(--text);
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .community-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .community-hero-visual {
+    max-width: 320px;
+  }
+}
+
+/* ------------------------------------------------------------------ moderation */
+
+.moderation-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: -8px 0 16px;
+}
+
+.count-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--amber);
+  color: #1a1408;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.report-reasons,
+.reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reason-chip,
+.status-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 90, 74, 0.45);
+  background: rgba(255, 90, 74, 0.1);
+  color: #ffb3aa;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.status-chip {
+  border-color: var(--line-strong);
+  background: var(--surface);
+  color: var(--text-muted);
+}
+
+.report-detail {
+  margin: 0;
+  padding: 6px 12px;
+  border-left: 3px solid var(--line-strong);
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.review-list,
+.admin-list {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.review-card,
+.admin-card {
+  display: grid;
+  grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 0;
+}
+
+.review-visual {
+  aspect-ratio: 9 / 12;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: #0b0a08;
+  overflow: hidden;
+}
+
+.review-visual canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.review-text {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.review-text .panel-title {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-text .card-sub,
+.review-text .result-hint {
+  margin: 0;
+}
+
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 16px;
+}
+
+.rules-grid .panel {
+  margin-bottom: 0;
+}
+
+.rules-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-muted);
+}
+
+.appeal-status {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.appeal-status.is-accepted {
+  color: var(--success);
+}
+
+.appeal-status.is-rejected {
+  color: #ff8a7e;
+}
+
+.sanction-notice {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 90, 74, 0.45);
+  background: rgba(255, 90, 74, 0.08);
+  color: #ffb3aa;
+}
+
+.sanction-notice[hidden] {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ admin panel */
+
+.admin-login {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+}
+
+.admin-login .panel-title,
+.admin-login .result-hint {
+  margin: 0;
+}
+
+.admin input[type='email'],
+.admin input[type='password'],
+.admin input[type='text'] {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: #0b0a08;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 0.95rem;
+}
+
+.admin input:focus {
+  border-color: var(--amber);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+.admin-signed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  color: var(--text-muted);
+}
+
+.admin-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.admin-tile {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--bg-raised);
+}
+
+.admin-tile.is-hot {
+  border-color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.admin-tile-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.admin-tile-label {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.admin .admin-search {
+  margin-bottom: 16px;
+}
+
+.admin-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-card.is-review,
+.admin-card.is-team {
+  border-color: var(--amber);
+}
+
+.admin-card.is-removed {
+  border-color: rgba(255, 90, 74, 0.45);
+}
+
+.admin-reports summary {
+  cursor: pointer;
+  color: var(--text);
+}
+
+.admin-reports ul {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+}
+
+.admin-appeal {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-player {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-player.is-banned .card-title {
+  color: #ffb3aa;
+}
+
+.admin-player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-log {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-log li {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.admin-log-date {
+  margin-right: 10px;
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 560px) {
+  .review-card,
+  .admin-card {
+    grid-template-columns: 1fr;
+  }
+
+  .review-visual {
+    max-width: 200px;
+  }
+}

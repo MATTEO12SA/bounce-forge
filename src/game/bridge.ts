@@ -29,6 +29,8 @@ export interface GameSession {
   dateKey?: string;
   /** Unsaved editor level played by the editor's "Test" button (the slot is not overwritten). */
   draft?: { name: string; rows: string[]; options?: LevelOptions };
+  /** Playing a level of a community creation (the level itself travels in `draft`). */
+  community?: { id: string; index: number; count: number; title: string };
   /** Score and lives carried from the previous wave. */
   carry?: { score: number; lives: number };
 }

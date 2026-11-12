@@ -53,6 +53,12 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
 - **Mécanismes** : cristaux qui divisent la balle, clés et portes, briques phénix qui renaissent,
   fantômes invisibles, briques mobiles, bumpers, téléporteurs, mèches ; événements de niveau
   (pluie de bonus, orage, mur qui descend).
+- **Communauté** : publiez vos niveaux et vos campagnes en un clic, puis jouez directement à ceux
+  des autres joueurs, sans code. La bibliothèque se trie par popularité, nouveautés, parties ou
+  difficulté, avec des « J’aime » et une recherche. Comptes anonymes, juste un pseudo.
+- **Modération** : filtre automatique des mots offensants et des liens, copies refusées,
+  signalements, examen par les joueurs de confiance (5 votes, 70 % d’accord), avertissements et
+  suspensions, contestation, page de règles et panel d’administration (`#/community/admin`).
 - **Mode Infini** : des vagues sans fin, trois vies, score et vies conservés d’une vague à l’autre.
   La difficulté plafonne au dernier palier de la campagne.
 - **Défi du jour** : trois vagues identiques pour tous les joueurs, tirées de la date UTC.

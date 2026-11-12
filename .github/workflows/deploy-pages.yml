@@ -52,8 +52,12 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Browser smoke test
+      # The full browser journey already ran on the pull request (in parallel parts); before
+      # deploying, a quick part checks that the built site boots and plays.
+      - name: Browser smoke test (quick part)
         run: npm run test:smoke
+        env:
+          SMOKE_SHARD: ui
 
       - name: Upload smoke screenshots
         if: always()

@@ -9,6 +9,9 @@ import {
 import { audio } from '../game/audio/AudioEngine';
 import { ADMIN_ENABLED } from '../game/config/features';
 import { getPowerUpDefinition, introducedInChapter, POWER_UP_TYPES } from '../game/config/powerUps';
+import { recordPlay } from '../community/api';
+import { paceIndexFor } from '../community/rules';
+import type { Creation } from '../community/types';
 import { campaignLevels } from '../game/levels/campaignLevels';
 import { ACHIEVEMENTS, newlyUnlocked } from '../game/progress/achievements';
 import { CHALLENGE_IDS, MEDALS, type ChallengeId } from '../game/progress/challenges';
@@ -34,6 +37,16 @@ import {
 } from '../game/systems/SaveSystem';
 import { clear, h, icon } from './dom';
 import { clearDraft, readDraft, writeDraft } from './editor/drafts';
+import {
+  CreationScreen,
+  LibraryScreen,
+  myPublicationsPanel,
+  openPublishCampaign,
+  openPublishLevel,
+  type CommunityHost
+} from './community/CommunityUi';
+import { AdminScreen } from './community/AdminUi';
+import { ReviewScreen, rulesScreen } from './community/ModerationUi';
 import { brickSprite, EditorScreen } from './editor/EditorScreen';
 import { generateLevel, randomSeed } from './editor/generator';
 import { EngineLoader, type EngineState } from './engine';
@@ -81,11 +94,12 @@ INTRODUCED_SYMBOLS.forEach(([symbol, key]) => {
 const SLOT_COUNT = campaignLevels.length;
 
 type View = 'home' | 'menu' | 'play' | 'tool' | 'editor';
-type MenuScreen = 'campaign' | 'modes' | 'create' | 'help' | 'settings' | 'trophies';
+const COMMUNITY_PAGES = ['review', 'rules', 'admin'];
+type MenuScreen = 'campaign' | 'modes' | 'create' | 'community' | 'help' | 'settings' | 'trophies';
 
 type Route =
   | { name: 'home' }
-  | { name: MenuScreen; chapter?: string }
+  | { name: MenuScreen; chapter?: string; id?: string }
   | { name: 'play'; mode: GameMode; index: number }
   | { name: 'edit'; slot: number }
   | { name: 'admin' };
@@ -101,6 +115,15 @@ function parseRoute(hash: string): Route {
     case 'settings':
     case 'trophies':
       return { name: head };
+    case 'community':
+      return {
+        name: 'community',
+        // A creation id, or one of the moderation pages.
+        id:
+          second && (/^[0-9a-f-]{36}$/i.test(second) || COMMUNITY_PAGES.includes(second))
+            ? second
+            : undefined
+      };
     case 'create':
       if (second === 'edit') {
         return { name: 'edit', slot: clampIndex(Number(third)) };
@@ -163,6 +186,10 @@ export class App {
   private cardTimer = 0;
   private cardShowing: BonusCard | null = null;
   private hoveredEffect: string | null = null;
+  /** Community creation being played, for "next level" and the HUD label. */
+  private communityCreation: Creation | null = null;
+  /** Where "back" goes after a community game (the creation page, the review queue…). */
+  private communityReturn = '#/community';
   /** Unsaved editor level to play next ("Test" never overwrites the saved slot). */
   private pendingDraft: {
     slotIndex: number;
@@ -305,6 +332,7 @@ export class App {
         route.name === 'create' ||
         route.name === 'help' ||
         route.name === 'trophies' ||
+        route.name === 'community' ||
         route.name === 'settings'
       ) {
         this.startDemo();
@@ -328,7 +356,11 @@ export class App {
         void this.engine.load().then((engine) => engine.openAdmin());
         break;
       default:
-        this.renderMenu(route.name, route.name === 'campaign' ? route.chapter : undefined);
+        this.renderMenu(
+          route.name,
+          route.name === 'campaign' ? route.chapter : undefined,
+          route.name === 'community' ? route.id : undefined
+        );
     }
   }
 
@@ -351,6 +383,7 @@ export class App {
       ['campaign', 'nav.campaign', '#/campaign'],
       ['modes', 'nav.modes', '#/modes'],
       ['create', 'nav.create', '#/create'],
+      ['community', 'nav.community', '#/community'],
       ['trophies', 'nav.trophies', '#/trophies'],
       ['help', 'nav.help', '#/help']
     ];
@@ -567,7 +600,7 @@ export class App {
 
   // ---------------------------------------------------------------------------------- menus
 
-  private renderMenu(screen: MenuScreen, chapter?: string): void {
+  private renderMenu(screen: MenuScreen, chapter?: string, id?: string): void {
     this.setView('menu');
     this.renderTopbar(screen);
     this.mountStage(null);
@@ -584,6 +617,13 @@ export class App {
           return this.helpScreen();
         case 'trophies':
           return this.trophiesScreen();
+        case 'community':
+          if (id === 'review') return new ReviewScreen(this.communityHost()).element;
+          if (id === 'rules') return rulesScreen(this.communityHost());
+          if (id === 'admin') return new AdminScreen(this.communityHost()).element;
+          return id
+            ? new CreationScreen(this.communityHost(), id).element
+            : new LibraryScreen(this.communityHost()).element;
         case 'settings':
         default:
           return this.settingsScreen();
@@ -839,6 +879,42 @@ export class App {
         t('campaign.trophies', { n: trophies, total: ACHIEVEMENTS.length })
       )
     );
+  }
+
+  private communityHost(): CommunityHost {
+    return {
+      save: this.save,
+      toast: (message) => this.toast(message),
+      navigate: (hash) => this.navigate(hash),
+      openDialog: (title, body, actions, onEscape) =>
+        this.openDialog(title, body, actions, onEscape),
+      closeOverlays: () => this.closeOverlays(),
+      confirm: (message, label) => this.confirm(message, label),
+      screenHeader: (title, subtitle, extra) => this.screenHeader(title, subtitle, extra),
+      play: (creation, index, returnHash) => this.playCommunity(creation, index, returnHash)
+    };
+  }
+
+  /** Plays one level of a community creation (campaigns continue level after level). */
+  private playCommunity(creation: Creation, index: number, returnHash?: string): void {
+    const level = creation.levels[index];
+    if (!level) return;
+    if (index === 0) void recordPlay(creation.id, false);
+    if (index === 0 || this.communityCreation?.id !== creation.id) {
+      this.communityReturn = returnHash ?? `#/community/${creation.id}`;
+    }
+    this.communityCreation = creation;
+    this.startSession({
+      mode: 'creative',
+      levelIndex: paceIndexFor(creation.difficulty),
+      draft: { name: level.name, rows: [...level.rows], options: level.options },
+      community: {
+        id: creation.id,
+        index,
+        count: creation.levels.length,
+        title: creation.title
+      }
+    });
   }
 
   private trophiesScreen(): HTMLElement {
@@ -1286,6 +1362,27 @@ export class App {
         ? h('ul', { class: 'card-grid', role: 'list' }, ...mine)
         : h('p', { class: 'empty-note' }, t('workshop.mineEmpty')),
       h(
+        'div',
+        { class: 'workshop-community' },
+        h(
+          'a',
+          { class: 'button button-secondary', href: '#/community' },
+          icon('globe'),
+          t('workshop.openLibrary')
+        ),
+        h(
+          'button',
+          {
+            class: 'button button-secondary',
+            type: 'button',
+            onclick: () => openPublishCampaign(this.communityHost())
+          },
+          icon('share'),
+          t('workshop.publishCampaign')
+        )
+      ),
+      myPublicationsPanel(this.communityHost()),
+      h(
         'details',
         { class: 'panel import-panel' },
         h('summary', { class: 'panel-title' }, icon('download'), t('workshop.importToggle')),
@@ -1367,7 +1464,11 @@ export class App {
           this.pendingDraft = { slotIndex: index, name, rows, options };
           this.navigate(playHash('creative', index));
         },
-        shareCode: (rows, name, options) => void this.shareCode(rows, name, options)
+        shareCode: (rows, name, options) => void this.shareCode(rows, name, options),
+        publishLevel: (index) => {
+          const slot = this.save.getCreativeLevelSlot(index);
+          if (slot) void openPublishLevel(this.communityHost(), index, slot);
+        }
       },
       slotIndex
     );
@@ -2156,6 +2257,7 @@ export class App {
   }
 
   private startSession(session: GameSession): void {
+    if (!session.community) this.communityCreation = null;
     this.closeOverlays();
     this.demoRunning = false;
     this.activeSessionKey = sessionKey(session);
@@ -2419,7 +2521,9 @@ export class App {
           ? `${t('mode.daily')} · ${t('hud.waveOf', { n: hud.wave ?? 1, total: hud.waveCount ?? DAILY_WAVE_COUNT })}`
           : hud.mode === 'endless'
             ? `${t('mode.endless')} · ${t('hud.wave', { n: hud.wave ?? 1 })}`
-            : t('mode.creative');
+            : this.communityCreation
+              ? `${t('mode.community')} · ${this.communityCreation.title}`
+              : t('mode.creative');
     setText(r.mode, modeLabel);
     setText(r.title, levelDisplayName(hud.levelName));
     setText(r.chapter, this.chapterName(hud.chapter));
@@ -2727,6 +2831,28 @@ export class App {
           this.activeSessionKey = null;
           this.engine.controller?.openEditor({ mode: 'admin', slotIndex: result.levelIndex });
         }
+      });
+    }
+    const community = result.session.community;
+    const communityCreation = this.communityCreation;
+    if (community && communityCreation) {
+      const hasNext = community.index + 1 < community.count;
+      if (result.outcome === 'victory' && !hasNext) {
+        void recordPlay(community.id, true);
+      }
+      if (result.outcome === 'victory' && hasNext) {
+        actions.push({
+          label: t('result.next'),
+          variant: 'primary',
+          icon: 'arrowRight',
+          action: () => this.playCommunity(communityCreation, community.index + 1)
+        });
+      }
+      actions.push({
+        label: t('community.backToCreation'),
+        variant: actions.length === 0 ? 'primary' : 'secondary',
+        icon: 'globe',
+        action: () => this.navigate(this.communityReturn)
       });
     }
     if (result.outcome === 'victory' && result.hasNext) {

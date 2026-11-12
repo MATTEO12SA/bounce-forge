@@ -50,6 +50,8 @@ export interface EditorHost {
   navigate(hash: string): void;
   testDraft(slotIndex: number, name: string, rows: string[], options?: LevelOptions): void;
   shareCode(rows: string[], name: string, options?: LevelOptions): void;
+  /** Publishes the saved level of this slot to the community library. */
+  publishLevel(slotIndex: number): void;
 }
 
 /** World units of one grid step, the same as in the game (21 × 19 bricks with a 3 px gap). */
@@ -307,6 +309,16 @@ export class EditorScreen {
           },
           icon('share'),
           t('editor.share')
+        ),
+        h(
+          'button',
+          {
+            class: 'button button-secondary button-sm',
+            type: 'button',
+            onclick: () => this.publishToCommunity()
+          },
+          icon('globe'),
+          t('editor.publish')
         ),
         h(
           'button',
@@ -934,6 +946,15 @@ export class EditorScreen {
       [{ label: t('common.close'), variant: 'primary', action: () => this.host.closeOverlays() }],
       () => this.host.closeOverlays()
     );
+  }
+
+  /** Saves if needed, then hands the saved level to the community publishing dialog. */
+  private publishToCommunity(): void {
+    if (this.isDirty() && !this.save()) return;
+    if (!this.host.save.getCreativeLevelSlot(this.slotIndex)) {
+      if (!this.save()) return;
+    }
+    this.host.publishLevel(this.slotIndex);
   }
 
   private surprise(): void {

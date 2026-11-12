@@ -3,6 +3,40 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.4.0] — 2026-11-12
+
+### Added
+
+- **Community library** (Supabase): a **Community** tab lists the levels and campaigns published
+  by players, sorted by popularity, newest, most played, easiest or hardest, filtered by kind and
+  searchable by title. Every creation has its page (preview, author, description, difficulty,
+  plays) with **Play** (no code needed), **Like** and **Copy link**; campaigns play level after
+  level.
+- **Publishing**: a **Publish** button in the editor (nickname asked once, update or publish as
+  new), **Publish a campaign** from 2 to 24 saved levels in the Workshop, and **My publications**
+  to hide, show again or delete.
+- Anonymous accounts (no sign-up), server-side validation of every grid, 5 new publications per
+  player per day, play and like counters that cannot be forged, players can only touch their own
+  creations (`supabase/migrations`, checked by `scripts/community-live-test.mjs`).
+- BF2/BF3 share codes stay available but are no longer needed to play someone else's level.
+- **Moderation**: nicknames, titles, descriptions and level names go through a French/English
+  word filter (accents, leetspeak and spaced letters included); links, exact copies of an
+  existing creation and nearly empty levels are refused, on the client and again on the server.
+- **Reports**: a **Report** button with five reasons (one report per player and creation,
+  10 per day). After 3 reports from players in good standing the creation is hidden and goes to
+  **community review**: trusted players (nickname for 3 days, 3 creations played) vote keep or
+  remove; 5 votes with 70 % agreement decide, a split vote after 9 goes to the team.
+- **Trust and sanctions**: rejected reports lower the reporter's trust (no more reports at -5),
+  votes that match the decision raise it; each removal is a warning for the author, 2 warnings
+  suspend publishing for 7 days and 4 for 30 days. Authors can **appeal** a removal once from
+  My publications. New **Community rules** page.
+- **Admin panel** (`#/community/admin`, e-mail account created in Supabase and listed in the
+  `admins` table): queues, reports, votes and appeals, keep / restore / remove / delete any
+  creation, suspend, rename or delete players, moderation log.
+- The database migrations are tested in an in-memory Postgres (PGlite) in the unit tests.
+- **Faster CI**: the browser journey runs as five parallel parts (about a minute and a half
+  instead of four), and deployment re-runs only a quick part.
+
 ## [1.3.0] — 2026-11-12
 
 ### Added
