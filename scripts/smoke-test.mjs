@@ -641,19 +641,19 @@ try {
   );
   const pickup = await evaluate(
     page,
-    `(() => new Promise((resolve) => { const s = ${GAME}; document.querySelectorAll('.toast').forEach((t) => t.remove()); s.spawnSpecificPowerUp(540, 900, 'magnet'); s.collectPowerUp(s.powerUps.find((p) => p.active)); setTimeout(() => { const card = document.querySelector('.hud-left .bonus-card'); resolve({ visible: card && !card.hidden, title: card?.querySelector('.bonus-card-title')?.textContent ?? '', toasts: document.querySelectorAll('.toast').length }); }, 200); }))()`
+    `(() => new Promise((resolve) => { const s = ${GAME}; document.querySelectorAll('.toast').forEach((t) => t.remove()); s.spawnSpecificPowerUp(540, 900, 'magnet'); s.collectPowerUp(s.powerUps.find((p) => p.active)); setTimeout(() => { const card = document.querySelector('.hud-right .bonus-card'); resolve({ visible: card && !card.hidden, title: card?.querySelector('.bonus-card-title')?.textContent ?? '', toasts: document.querySelectorAll('.toast').length }); }, 200); }))()`
   );
   check(
-    'catching a capsule shows a card in the left panel, not a toast',
+    'catching a capsule shows a card in the bonus panel, not a toast',
     pickup.visible && pickup.title.length > 0 && pickup.toasts === 0,
     pickup
   );
   const hovered = await evaluate(
     page,
-    `(() => { const row = document.querySelector('.bonus-list .bonus-row[data-effect="fireBall"]'); row.dispatchEvent(new MouseEvent('mouseenter')); const card = document.querySelector('.hud-left .bonus-card'); return { visible: !card.hidden, text: card.querySelector('.bonus-card-text')?.textContent ?? '' }; })()`
+    `(() => { const row = document.querySelector('.bonus-list .bonus-row[data-effect="fireBall"]'); row.dispatchEvent(new MouseEvent('mouseenter')); const card = document.querySelector('.hud-right .bonus-card'); return { visible: !card.hidden, text: card.querySelector('.bonus-card-text')?.textContent ?? '' }; })()`
   );
   check(
-    'hovering a power-up explains it in the left panel',
+    'hovering a power-up explains it in the bonus panel',
     hovered.visible && hovered.text.length > 20,
     hovered
   );

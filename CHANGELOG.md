@@ -24,6 +24,7 @@ All notable changes to Bounce Forge. Format based on
   bonuses for lives left, a flawless run, the objective and speed (par time).
 - Save format v8 (diamond medals, collected challenges, trophies, statistics); older saves
   migrate.
+- The Bonus panel moves to the right column, under balls and combo.
 
 ## [1.2.1] — 2026-11-12
 

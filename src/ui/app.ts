@@ -2232,20 +2232,6 @@ export class App {
             { class: 'hud-block' },
             h('p', { class: 'hud-label' }, t('hud.lives')),
             ref('lives', h('p', { class: 'hud-lives' }))
-          ),
-          h(
-            'section',
-            { class: 'bonus-panel', 'aria-label': t('bonus.title') },
-            h('p', { class: 'hud-label' }, t('bonus.title')),
-            ref(
-              'effects',
-              h(
-                'ul',
-                { class: 'bonus-list', role: 'list' },
-                h('li', { class: 'bonus-empty' }, t('bonus.empty'))
-              )
-            ),
-            ref('bonusCard', h('div', { class: 'bonus-card', role: 'status', hidden: true }))
           )
         ),
         slot,
@@ -2316,6 +2302,20 @@ export class App {
               h('p', { class: 'hud-label' }, t('hud.combo')),
               ref('combo', h('p', { class: 'hud-value' }, '0'))
             )
+          ),
+          h(
+            'section',
+            { class: 'bonus-panel', 'aria-label': t('bonus.title') },
+            h('p', { class: 'hud-label' }, t('bonus.title')),
+            ref(
+              'effects',
+              h(
+                'ul',
+                { class: 'bonus-list', role: 'list' },
+                h('li', { class: 'bonus-empty' }, t('bonus.empty'))
+              )
+            ),
+            ref('bonusCard', h('div', { class: 'bonus-card', role: 'status', hidden: true }))
           ),
           pauseButton('hud-pause')
         ),
