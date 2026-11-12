@@ -235,6 +235,78 @@ try {
     await shot(page, `${process.env.CAPTURE_EDITOR_MOBILE}`);
     await viewport(page, 1440, 900);
   }
+  // CAPTURE_COMMUNITY=1: publish the surprise level through the real interface, capture the
+  // library and the creation page, play it, then delete it again from "My publications".
+  if (process.env.CAPTURE_COMMUNITY) {
+    const button = (text, scope = 'document') =>
+      `[...${scope}.querySelectorAll('button')].find((b) => b.textContent.trim().includes(${JSON.stringify(text)}))`;
+    await evaluate(
+      page,
+      `${button('Enregistrer', "document.querySelector('.editor-bar')")}.click(); true`
+    );
+    await delay(400);
+    await evaluate(
+      page,
+      `${button('Publier', "document.querySelector('.editor-bar')")}.click(); true`
+    );
+    await waitFor(
+      page,
+      `document.querySelector('.dialog input[placeholder="Pseudo"]') !== null`,
+      20000
+    );
+    await evaluate(
+      page,
+      `(() => { const nick = document.querySelector('.dialog input[placeholder="Pseudo"]'); nick.value = 'Forgeron ' + Math.random().toString(36).slice(2, 6); const title = document.querySelector('.dialog input[aria-label="Titre"]'); title.value = 'Tempête de cristal'; document.querySelector('.dialog textarea').value = 'Un niveau surprise forgé pour tester la bibliothèque.'; ${button('Publier', "document.querySelector('.dialog')")}.click(); return true; })()`
+    );
+    const published = await waitFor(
+      page,
+      `location.hash.startsWith('#/community/') && document.querySelector('.community-hero') !== null`,
+      20000
+    );
+    console.log(
+      published ? 'Community: published through the interface.' : 'Community: publishing FAILED'
+    );
+    await delay(900);
+    await shot(page, `${process.env.CAPTURE_COMMUNITY}/community-detail.png`);
+    await evaluate(page, `location.hash = '#/community'; true`);
+    const listed = await waitFor(
+      page,
+      `document.querySelectorAll('.community-card').length > 0`,
+      20000
+    );
+    console.log(listed ? 'Community: listed in the library.' : 'Community: library listing FAILED');
+    await delay(900);
+    await shot(page, `${process.env.CAPTURE_COMMUNITY}/community.png`);
+    await evaluate(page, `document.querySelector('.community-card').click(); true`);
+    await waitFor(page, `document.querySelector('.community-hero') !== null`, 20000);
+    await evaluate(
+      page,
+      `${button('Jouer', "document.querySelector('.community-actions')")}.click(); true`
+    );
+    const playing = await waitFor(
+      page,
+      `${GAME} && ${GAME}.getSession().community !== undefined && !${GAME}.isDemo()`,
+      20000
+    );
+    console.log(playing ? 'Community: the creation is playable.' : 'Community: playing FAILED');
+    await delay(1200);
+    await shot(page, `${process.env.CAPTURE_COMMUNITY}/community-play.png`);
+    await evaluate(page, `location.hash = '#/create'; true`);
+    await waitFor(page, `document.querySelector('.my-publication') !== null`, 20000);
+    await shot(page, `${process.env.CAPTURE_COMMUNITY}/community-mine.png`);
+    await evaluate(
+      page,
+      `document.querySelector('.my-publication .icon-button-danger').click(); true`
+    );
+    await waitFor(page, `document.querySelector('.dialog .button-danger') !== null`, 5000);
+    await evaluate(page, `document.querySelector('.dialog .button-danger').click(); true`);
+    const deleted = await waitFor(
+      page,
+      `document.querySelectorAll('.my-publication').length === 0`,
+      20000
+    );
+    console.log(deleted ? 'Community: deleted from My publications.' : 'Community: delete FAILED');
+  }
   await evaluate(
     page,
     `localStorage.removeItem('bounce-forge.editor-draft.v1.0'); location.hash = '#/'; true`

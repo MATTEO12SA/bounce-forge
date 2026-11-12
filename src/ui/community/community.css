@@ -1,5 +1,22 @@
 /* Community library, creation page, publishing dialogs and "My publications". */
 
+/* Buttons and links styled as buttons must still honour the hidden attribute. */
+.community [hidden],
+.community-detail [hidden] {
+  display: none !important;
+}
+
+/* Filter pills are real buttons here: no browser background. */
+button.pill {
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+button.pill.is-active {
+  background: var(--text);
+}
+
 .community-toolbar {
   display: flex;
   flex-wrap: wrap;

@@ -368,7 +368,7 @@ export class CreationScreen {
             { class: 'hud-eyebrow' },
             creation.kind === 'campaign'
               ? t('community.campaignOf', { n: creation.levels.length })
-              : t('community.kind.level')
+              : t('community.kind.single')
           ),
           h('h1', { class: 'screen-title', id: 'screen-title' }, creation.title),
           h(

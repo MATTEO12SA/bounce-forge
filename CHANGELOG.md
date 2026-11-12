@@ -3,6 +3,23 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.4.0] — 2026-11-12
+
+### Added
+
+- **Community library** (Supabase): a **Community** tab lists the levels and campaigns published
+  by players, sorted by popularity, newest, most played, easiest or hardest, filtered by kind and
+  searchable by title. Every creation has its page (preview, author, description, difficulty,
+  plays) with **Play** (no code needed), **Like** and **Copy link**; campaigns play level after
+  level.
+- **Publishing**: a **Publish** button in the editor (nickname asked once, update or publish as
+  new), **Publish a campaign** from 2 to 24 saved levels in the Workshop, and **My publications**
+  to hide, show again or delete.
+- Anonymous accounts (no sign-up), server-side validation of every grid, 5 new publications per
+  player per day, play and like counters that cannot be forged, players can only touch their own
+  creations (`supabase/migrations`, checked by `scripts/community-live-test.mjs`).
+- BF2/BF3 share codes stay available but are no longer needed to play someone else's level.
+
 ## [1.3.0] — 2026-11-12
 
 ### Added
