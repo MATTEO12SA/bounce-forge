@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TEX } from '../render/textures';
+import { paddleTextureKey } from '../render/textures';
 import {
   DEPTHS,
   PADDLE_HEIGHT,
@@ -29,7 +29,7 @@ export class Paddle extends Phaser.GameObjects.NineSlice {
       scene,
       WORLD_WIDTH / 2,
       PADDLE_Y,
-      TEX.paddle,
+      paddleTextureKey(),
       undefined,
       PADDLE_WIDTH + VISUAL_MARGIN,
       TEXTURE_HEIGHT,

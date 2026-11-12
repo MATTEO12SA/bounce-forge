@@ -10,6 +10,7 @@ import {
   type ObjectiveKind
 } from '../bridge';
 import { CHAPTER_COUNT, getPowerUpDefinition, type PowerUpType } from '../config/powerUps';
+import { activeSkins, trailLook } from '../config/skins';
 import { getTheme, type ThemeDefinition } from '../config/themeConfig';
 import { EffectState, type ComboId } from '../effects/EffectState';
 import { newlyUnlocked, type RunStats } from '../progress/achievements';
@@ -42,7 +43,7 @@ import {
   rampSpeed,
   separateFallers
 } from '../physics/gameplayRules';
-import { TEX } from '../render/textures';
+import { TEX, useSkins } from '../render/textures';
 import { Juice } from '../render/Juice';
 import { ComboSystem } from '../systems/ComboSystem';
 import { FxManager } from '../systems/FxManager';
@@ -284,9 +285,13 @@ export class GameScene extends Phaser.Scene {
       BALL_BONUS_DROP_TABLE,
       DROP_RATE_MULTIPLIER[options?.dropRate ?? 'normal']
     );
+    const save = this.saveSystem.snapshot();
+    const skins = activeSkins(save.preferences.skins, save.achievements);
+    useSkins(this, skins);
     this.particleSystem = new ParticleSystem(
       this,
-      quality === 'low' ? 0.5 : quality === 'high' ? 1.25 : 1
+      quality === 'low' ? 0.5 : quality === 'high' ? 1.25 : 1,
+      trailLook(skins.trail)
     );
     this.fxManager = new FxManager(this, this.particleSystem, quality);
     this.juice = new Juice(this, this.reducedMotion);

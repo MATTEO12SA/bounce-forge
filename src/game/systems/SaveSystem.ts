@@ -1,3 +1,10 @@
+import {
+  DEFAULT_SKINS,
+  isSkinUnlocked,
+  sanitizeSkins,
+  type SkinChoice,
+  type SkinSlot
+} from '../config/skins';
 import { getTheme } from '../config/themeConfig';
 import { isValidEditorRows, normalizeEditorRows, validateEditorRows } from '../levels/editorGrid';
 import { sanitizeLevelOptions, type LevelOptions } from '../levels/levelOptions';
@@ -32,6 +39,8 @@ export interface SavePreferences {
   fullscreen: boolean;
   language: Language;
   reducedMotion: boolean;
+  /** Chosen paddle, ball and trail skins (unlocked by trophies). */
+  skins: SkinChoice;
 }
 
 export interface EndlessRecord {
@@ -95,6 +104,7 @@ interface LegacySaveData {
     fullscreen?: boolean;
     language?: string;
     reducedMotion?: boolean;
+    skins?: unknown;
   };
   levelMedals?: Record<string, LevelMedal>;
   customLevelOverrides?: Record<string, CreativeLevelSlot>;
@@ -137,7 +147,8 @@ const DEFAULT_PREFERENCES: SavePreferences = {
   fxQuality: 'med',
   fullscreen: false,
   language: 'fr',
-  reducedMotion: false
+  reducedMotion: false,
+  skins: { ...DEFAULT_SKINS }
 };
 
 const EMPTY_STATS: PlayerStats = {
@@ -368,7 +379,8 @@ function migratePreferences(prefs: LegacySaveData['preferences']): SavePreferenc
     language:
       prefs.language === 'en' || prefs.language === 'fr' ? prefs.language : detectDefaultLanguage(),
     reducedMotion:
-      typeof prefs.reducedMotion === 'boolean' ? prefs.reducedMotion : detectReducedMotion()
+      typeof prefs.reducedMotion === 'boolean' ? prefs.reducedMotion : detectReducedMotion(),
+    skins: sanitizeSkins(prefs.skins)
   };
 }
 
@@ -479,7 +491,7 @@ export class SaveSystem {
       ...this.data,
       completedLevels: [...this.data.completedLevels],
       levelMedals: { ...this.data.levelMedals },
-      preferences: { ...this.data.preferences },
+      preferences: { ...this.data.preferences, skins: { ...this.data.preferences.skins } },
       creativeLevelSlots: this.cloneCreativeLevelSlots(),
       discovered: [...this.data.discovered],
       levelChallenges: Object.fromEntries(
@@ -508,6 +520,14 @@ export class SaveSystem {
     if (index <= this.data.unlockedLevel) return;
     this.data.unlockedLevel = index;
     this.persist();
+  }
+
+  /** Equips a skin; refused (false) when it is unknown or not unlocked yet. */
+  public setSkin(slot: SkinSlot, id: string): boolean {
+    if (!isSkinUnlocked(slot, id, this.data.achievements)) return false;
+    this.data.preferences.skins = { ...this.data.preferences.skins, [slot]: id };
+    this.persist();
+    return true;
   }
 
   public completeLevel(levelIndex: number, medal: LevelMedal = 'bronze'): SaveData {

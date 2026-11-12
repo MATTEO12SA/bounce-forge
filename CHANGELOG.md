@@ -3,6 +3,16 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.6.0] — 2026-11-12
+
+### Added
+
+- **Skins**: 7 paddles, 7 balls and 6 ball trails. Each one beyond the defaults is unlocked by a
+  trophy (Steel for the first chapter, Gold for the first gold medal, Diamond for every level in
+  diamond…). A new **Appearance** panel in the trophy room shows them all, the trophy each one
+  needs, and equips them in one click; the result screen announces the skins a run unlocks.
+- The chosen skins are saved with the preferences (older saves get the default look).
+
 ## [1.5.0] — 2026-11-12
 
 ### Added

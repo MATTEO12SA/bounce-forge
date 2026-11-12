@@ -56,6 +56,8 @@ une idée — viser juste, déclencher des réactions en chaîne ou noyer le ter
 - **Communauté** : publiez vos niveaux et vos campagnes en un clic, puis jouez directement à ceux
   des autres joueurs, sans code. La bibliothèque se trie par popularité, nouveautés, parties ou
   difficulté, avec des « J’aime » et une recherche. Comptes anonymes, juste un pseudo.
+- **Skins** : 7 raquettes, 7 balles et 6 traînées à débloquer avec les trophées, à équiper
+  dans la salle des trophées (panneau Apparence).
 - **Modération** : filtre automatique des mots offensants et des liens, copies refusées,
   signalements, examen par les joueurs de confiance (5 votes, 70 % d’accord), avertissements et
   suspensions, contestation, page de règles et panel d’administration (`#/community/admin`).

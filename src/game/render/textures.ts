@@ -1,7 +1,9 @@
 import type Phaser from 'phaser';
 import type { BrickKind } from '../levels/levelTypes';
 import { getPowerUpDefinition, type PowerUpType } from '../config/powerUps';
+import { ballLook, DEFAULT_SKINS, paddleLook, type SkinChoice } from '../config/skins';
 import { BRICK_H, BRICK_W, css, paintBrick, roundRect, shade } from './brickArt';
+import { paintBall, paintPaddle } from './skinArt';
 
 /**
  * Procedural "Forge lumineuse" art. Every texture is painted once on a 2D canvas at twice the
@@ -40,6 +42,26 @@ function makeCanvas(
   const ctx = texture.getContext();
   draw(ctx);
   texture.refresh();
+}
+
+// ------------------------------------------------------------------ skins
+
+const activeKeys = { paddle: TEX.paddle as string, ball: TEX.ball as string };
+
+/** Paints (once) the chosen skins and makes new paddles and balls use them. */
+export function useSkins(scene: Phaser.Scene, skins: SkinChoice): void {
+  activeKeys.paddle = `bf-paddle-${skins.paddle}`;
+  activeKeys.ball = `bf-ball-${skins.ball}`;
+  makeCanvas(scene, activeKeys.paddle, 96, 34, (ctx) => paintPaddle(ctx, paddleLook(skins.paddle)));
+  makeCanvas(scene, activeKeys.ball, 64, 64, (ctx) => paintBall(ctx, ballLook(skins.ball)));
+}
+
+export function paddleTextureKey(): string {
+  return activeKeys.paddle;
+}
+
+export function ballTextureKey(): string {
+  return activeKeys.ball;
 }
 
 // ------------------------------------------------------------------ bricks
@@ -138,23 +160,11 @@ export function ensurePowerUpTexture(
 // ------------------------------------------------------------------ ball, paddle, effects
 
 export function createSharedTextures(scene: Phaser.Scene): void {
-  // Ball: white-hot core with an amber halo. Displayed at half size.
-  makeCanvas(scene, TEX.ball, 64, 64, (ctx) => {
-    const halo = ctx.createRadialGradient(32, 32, 10, 32, 32, 32);
-    halo.addColorStop(0, 'rgba(255, 196, 80, 0.55)');
-    halo.addColorStop(0.5, 'rgba(255, 150, 40, 0.18)');
-    halo.addColorStop(1, 'rgba(255, 120, 20, 0)');
-    ctx.fillStyle = halo;
-    ctx.fillRect(0, 0, 64, 64);
-    const core = ctx.createRadialGradient(27, 26, 2, 32, 32, 16);
-    core.addColorStop(0, '#ffffff');
-    core.addColorStop(0.6, '#fff4d6');
-    core.addColorStop(1, '#ffc65a');
-    ctx.fillStyle = core;
-    ctx.beginPath();
-    ctx.arc(32, 32, 16, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  // Default ball and paddle (the selected skins get their own textures, see useSkins).
+  makeCanvas(scene, TEX.ball, 64, 64, (ctx) => paintBall(ctx, ballLook(DEFAULT_SKINS.ball)));
+  makeCanvas(scene, TEX.paddle, 96, 34, (ctx) =>
+    paintPaddle(ctx, paddleLook(DEFAULT_SKINS.paddle))
+  );
 
   makeCanvas(scene, TEX.glow, 64, 64, (ctx) => {
     const glow = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -205,38 +215,6 @@ export function createSharedTextures(scene: Phaser.Scene): void {
     ctx.fillStyle = line;
     roundRect(ctx, 0, 1, 24, 4, 2);
     ctx.fill();
-  });
-
-  // Paddle (nine-slice source, 1:1 scale): pale metal body with glowing amber ends.
-  makeCanvas(scene, TEX.paddle, 96, 34, (ctx) => {
-    const glow = ctx.createLinearGradient(0, 0, 0, 34);
-    glow.addColorStop(0, 'rgba(255, 170, 40, 0)');
-    glow.addColorStop(0.5, 'rgba(255, 170, 40, 0.28)');
-    glow.addColorStop(1, 'rgba(255, 170, 40, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, 96, 34);
-
-    const body = ctx.createLinearGradient(0, 6, 0, 28);
-    body.addColorStop(0, '#fffaf0');
-    body.addColorStop(0.5, '#e9dfcb');
-    body.addColorStop(1, '#a8987a');
-    roundRect(ctx, 2, 6, 92, 22, 11);
-    ctx.fillStyle = body;
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#ffb423';
-    ctx.stroke();
-    // Amber end caps.
-    const caps = ctx.createLinearGradient(0, 6, 0, 28);
-    caps.addColorStop(0, '#ffd27a');
-    caps.addColorStop(1, '#e07b10');
-    ctx.fillStyle = caps;
-    roundRect(ctx, 2, 6, 20, 22, 11);
-    ctx.fill();
-    roundRect(ctx, 74, 6, 20, 22, 11);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-    ctx.fillRect(24, 9, 48, 3);
   });
 
   makeCanvas(scene, TEX.vignette, 256, 256, (ctx) => {

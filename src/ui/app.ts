@@ -46,6 +46,8 @@ import {
   type CommunityHost
 } from './community/CommunityUi';
 import { AdminScreen } from './community/AdminUi';
+import { skinName, skinsPanel } from './skinsPanel';
+import { skinsUnlockedBy } from '../game/config/skins';
 import { adminPauseTools, adminSettingsPanel } from './community/AdminTools';
 import { adminStatus, isAdminNow } from '../community/adminState';
 import { ReviewScreen, rulesScreen } from './community/ModerationUi';
@@ -986,6 +988,7 @@ export class App {
         )
       ),
       this.collectionSummary(),
+      skinsPanel(this.save),
       h(
         'dl',
         { class: 'stats-strip' },
@@ -2828,6 +2831,18 @@ export class App {
               );
             })
           )
+        )
+      );
+    }
+    const newSkins = skinsUnlockedBy(result.trophies ?? []);
+    if (newSkins.length > 0) {
+      rows.push(
+        h(
+          'p',
+          { class: 'result-hint skin-unlocked' },
+          t('skins.newUnlocked', {
+            names: newSkins.map((skin) => skinName(skin.slot, skin.id)).join(', ')
+          })
         )
       );
     }

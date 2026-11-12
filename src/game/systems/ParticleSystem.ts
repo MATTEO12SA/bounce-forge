@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { trailLook, type TrailLook } from '../config/skins';
 import { TEX } from '../render/textures';
 import { DEPTHS, PLAYFIELD_BOTTOM, PLAYFIELD_LEFT, PLAYFIELD_WIDTH } from '../utils/constants';
 
@@ -16,11 +17,14 @@ export class ParticleSystem {
   private readonly smoke: Emitter;
   private embers: Emitter | null = null;
   private nextTint = 0xffffff;
+  private readonly trailTints: readonly number[];
 
   public constructor(
     private readonly scene: Phaser.Scene,
-    private readonly scale = 1
+    private readonly scale = 1,
+    trailStyle: TrailLook = trailLook('ember')
   ) {
+    this.trailTints = trailStyle.tints;
     const tint = { onEmit: (): number => this.nextTint };
 
     this.shards = scene.add.particles(0, 0, TEX.shard, {
@@ -49,13 +53,16 @@ export class ParticleSystem {
 
     this.trail = scene.add.particles(0, 0, TEX.glow, {
       speed: 0,
-      // Kept subtle on purpose: a light wisp, not a comet tail.
-      lifespan: 110,
-      scale: { start: 0.2, end: 0 },
-      alpha: { start: 0.2, end: 0 },
+      // Kept subtle by default: a light wisp, not a comet tail (trail skins change it).
+      lifespan: Math.max(1, trailStyle.lifespan),
+      scale: { start: trailStyle.scale, end: 0 },
+      alpha: { start: trailStyle.alpha, end: 0 },
       blendMode: 'ADD',
       emitting: false,
-      tint: 0xffb44a
+      tint: {
+        onEmit: (): number =>
+          this.trailTints[Math.floor(Math.random() * this.trailTints.length)] ?? 0xffb44a
+      }
     });
     this.trail.setDepth(DEPTHS.ball - 1);
 
@@ -107,6 +114,7 @@ export class ParticleSystem {
   }
 
   public trailAt(x: number, y: number): void {
+    if (this.trailTints.length === 0) return;
     this.trail.emitParticleAt(x, y, 1);
   }
 

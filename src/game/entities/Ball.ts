@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { BallBody } from '../physics/ballStep';
-import { TEX } from '../render/textures';
+import { ballTextureKey } from '../render/textures';
 import { BALL_RADIUS, DEPTHS, WORLD_HEIGHT } from '../utils/constants';
 import type { Paddle } from './Paddle';
 
@@ -22,7 +22,7 @@ export class Ball extends Phaser.GameObjects.Image implements BallBody {
   private attached = false;
 
   public constructor(scene: Phaser.Scene, x = 0, y = 0) {
-    super(scene, x, y, TEX.ball);
+    super(scene, x, y, ballTextureKey());
     this.setDisplaySize(BALL_RADIUS * 4, BALL_RADIUS * 4);
     this.setDepth(DEPTHS.ball);
     scene.add.existing(this);
