@@ -1,6 +1,7 @@
 import { normalizeEditorRows, validateEditorRows } from '../game/levels/editorGrid';
 import { sanitizeLevelOptions } from '../game/levels/levelOptions';
 import { sanitizeOptionalLevelName } from '../game/levels/levelNames';
+import { EDITOR_REQUIRED_CELLS } from '../../shared/editorGridRules.mjs';
 import { hasLink, isOffensive } from '../../shared/moderation.mjs';
 import {
   CommunityError,
@@ -46,9 +47,14 @@ export function textProblem(...texts: readonly string[]): CommunityErrorCode | n
 /** A published level needs at least this many bricks to break (one 2 × 2 pixel). */
 export const MIN_REQUIRED_BRICKS = 4;
 
+const REQUIRED_SYMBOLS: ReadonlySet<string> = new Set(EDITOR_REQUIRED_CELLS);
+
 /** Bricks that must be destroyed to win (same symbols as the server's `required_bricks`). */
 export function requiredBricks(rows: readonly string[]): number {
-  return rows.reduce((sum, row) => sum + (row.match(/[123EBSCKIMFW]/g)?.length ?? 0), 0);
+  return rows.reduce(
+    (sum, row) => sum + [...row].filter((symbol) => REQUIRED_SYMBOLS.has(symbol)).length,
+    0
+  );
 }
 
 /** Turns a saved level into the published format, or throws `invalid_level`. */

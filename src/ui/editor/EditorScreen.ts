@@ -7,8 +7,8 @@ import {
   sanitizeLevelOptions,
   type LevelOptions
 } from '../../game/levels/levelOptions';
-import { brickLookForSymbol } from '../../game/levels/levelFactory';
-import { BRICK_H, BRICK_W, paintBrick } from '../../game/render/brickArt';
+import { BRICK_H, BRICK_W } from '../../game/render/brickArt';
+import { brickSprite } from '../brickSprite';
 import type { SaveSystem } from '../../game/systems/SaveSystem';
 import { clear, h, icon } from '../dom';
 import { t, type MessageKey } from '../i18n';
@@ -97,24 +97,6 @@ const TOOLS: Array<[Tool, string, MessageKey, string]> = [
   ['text', 'text', 'editor.tool.text', 'x']
 ];
 const SYMMETRIES: Symmetry[] = ['none', 'vertical', 'quad'];
-
-const spriteCache = new Map<string, HTMLCanvasElement>();
-
-/** The game's own brick art for a symbol, painted once. */
-export function brickSprite(symbol: string): HTMLCanvasElement | null {
-  const cached = spriteCache.get(symbol);
-  if (cached) return cached;
-  const look = brickLookForSymbol(symbol);
-  if (!look) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = BRICK_W;
-  canvas.height = BRICK_H;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  paintBrick(ctx, look.kind, look.color, 0);
-  spriteCache.set(symbol, canvas);
-  return canvas;
-}
 
 /** Full-screen HTML level editor drawing the real game bricks. */
 export class EditorScreen {

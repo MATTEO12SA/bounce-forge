@@ -189,6 +189,8 @@ export class GameScene extends Phaser.Scene {
   private language: 'fr' | 'en' = 'fr';
   private teleportPairs = new Map<Brick, Brick[]>();
   private readonly obstacleOverlays = new Map<Brick, Phaser.GameObjects.Image>();
+  private readonly squashTweens = new WeakMap<Phaser.GameObjects.Image, Phaser.Tweens.Tween>();
+  private readonly restScales = new WeakMap<Phaser.GameObjects.Image, { x: number; y: number }>();
   private keysLeft = 0;
   private moverClockMs = 0;
   private readonly phoenixQueue: Array<{ spec: BrickSpec; at: number }> = [];
@@ -388,6 +390,7 @@ export class GameScene extends Phaser.Scene {
 
   public override update(time: number, delta: number): void {
     const frameMs = Math.min(delta, MAX_FRAME_MS);
+    this.particleSystem.beginFrame();
     this.juice.update(frameMs);
     if (this.ending) {
       this.updatePowerUps(frameMs / 1000);
@@ -469,7 +472,8 @@ export class GameScene extends Phaser.Scene {
     if (data?.carry) {
       session.carry = {
         score: Math.max(0, data.carry.score),
-        lives: Math.max(1, data.carry.lives)
+        lives: Math.max(1, data.carry.lives),
+        ...(data.carry.assisted ? { assisted: true } : {})
       };
     }
     return session;
@@ -872,7 +876,15 @@ export class GameScene extends Phaser.Scene {
         break;
       case 'phoenix':
         if (!this.ending) {
-          this.phoenixQueue.push({ spec: brick.spec, at: this.gameTime + PHOENIX_RESPAWN_MS });
+          // Respawn where it was destroyed (the wall may have come down since the start).
+          const spec = {
+            ...brick.spec,
+            col: brick.col,
+            row: brick.row,
+            x: (brick.box.left + brick.box.right) / 2,
+            y: (brick.box.top + brick.box.bottom) / 2
+          };
+          this.phoenixQueue.push({ spec, at: this.gameTime + PHOENIX_RESPAWN_MS });
         }
         break;
       case 'fuse':
@@ -885,7 +897,12 @@ export class GameScene extends Phaser.Scene {
 
   private reveal(brick: Brick): void {
     brick.revealed = true;
+    // Stops the ghost's fade-in; snap the sprite onto its cell in case it was moving.
     this.tweens.killTweensOf(brick);
+    brick.setPosition(
+      (brick.box.left + brick.box.right) / 2,
+      (brick.box.top + brick.box.bottom) / 2
+    );
     brick.setAlpha(1);
     brick.flash(90);
     this.sfx('mechanism', { x: brick.x });
@@ -996,10 +1013,8 @@ export class GameScene extends Phaser.Scene {
     this.sfx('bumper', { x: bumper.x });
     const overlay = this.obstacleOverlays.get(bumper);
     if (overlay) {
-      this.tweens.killTweensOf(overlay);
-      const scale = overlay.scaleX;
-      overlay.setScale(scale * 1.25);
-      this.tweens.add({ targets: overlay, scale, duration: 180, ease: 'Back.easeOut' });
+      // The overlay may be moving down with the wall: only its size pulses.
+      this.squash(overlay, 1.25, 1.25, 180);
     } else {
       this.punch(bumper);
     }
@@ -1058,14 +1073,17 @@ export class GameScene extends Phaser.Scene {
         this.grid.set(brick);
         this.tweens.add({ targets: brick, y, duration: 260, ease: 'Back.easeOut' });
       });
-    new Set(this.obstacleOverlays.values()).forEach((overlay) =>
+    new Set(this.obstacleOverlays.values()).forEach((overlay) => {
+      const cells = [...this.obstacleOverlays].filter(([, item]) => item === overlay);
+      const top = Math.min(...cells.map(([cell]) => cell.box.top));
+      const bottom = Math.max(...cells.map(([cell]) => cell.box.bottom));
       this.tweens.add({
         targets: overlay,
-        y: overlay.y + pitchY,
+        y: (top + bottom) / 2,
         duration: 260,
         ease: 'Back.easeOut'
-      })
-    );
+      });
+    });
     this.sfx('mechanism', { x: 540 });
     this.juice.shake(0.12);
   }
@@ -1200,18 +1218,30 @@ export class GameScene extends Phaser.Scene {
   }
 
   private punch(brick: Brick): void {
-    this.tweens.killTweensOf(brick);
     brick.setDisplaySize(brick.spec.width + 1, brick.spec.height + 1);
-    const baseX = brick.scaleX;
-    const baseY = brick.scaleY;
-    brick.setScale(baseX * 0.86, baseY * 0.8);
-    this.tweens.add({
-      targets: brick,
-      scaleX: baseX,
-      scaleY: baseY,
-      duration: 160,
-      ease: 'Back.easeOut'
-    });
+    this.squash(brick, 0.86, 0.8, 160);
+  }
+
+  /**
+   * Squash-and-recover on impact. Only the previous squash of the same object is stopped, so
+   * position tweens (sliding movers and bosses, descending wall, drop-in) keep running.
+   */
+  private squash(target: Phaser.GameObjects.Image, sx: number, sy: number, duration: number): void {
+    this.squashTweens.get(target)?.stop();
+    // The resting scale is remembered the first time: an interrupted squash must not grow it.
+    const base = this.restScales.get(target) ?? { x: target.scaleX, y: target.scaleY };
+    this.restScales.set(target, base);
+    target.setScale(base.x * sx, base.y * sy);
+    this.squashTweens.set(
+      target,
+      this.tweens.add({
+        targets: target,
+        scaleX: base.x,
+        scaleY: base.y,
+        duration,
+        ease: 'Back.easeOut'
+      })
+    );
   }
 
   private playBreakAnimation(brick: Brick): void {
@@ -1459,7 +1489,7 @@ export class GameScene extends Phaser.Scene {
         haptic(60);
         this.paddle.setTint(0xff6a6a);
         this.time.delayedCall(BOSS_STUN_MS, () => {
-          if (!this.scene.isActive()) return;
+          if (!this.scene.isActive() || this.gameTime < this.paddleStunnedUntil) return;
           if (this.effects.has('stickyPaddle')) this.paddle.setTint(0xffe7a8);
           else this.paddle.clearTint();
         });

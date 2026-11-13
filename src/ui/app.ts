@@ -45,13 +45,14 @@ import {
   openPublishLevel,
   type CommunityHost
 } from './community/CommunityUi';
-import { AdminScreen } from './community/AdminUi';
 import { skinName, skinsPanel } from './skinsPanel';
 import { skinsUnlockedBy } from '../game/config/skins';
 import { adminPauseTools, adminSettingsPanel } from './community/AdminTools';
 import { adminStatus, isAdminNow } from '../community/adminState';
 import { ReviewScreen, rulesScreen } from './community/ModerationUi';
-import { brickSprite, EditorScreen } from './editor/EditorScreen';
+import { brickSprite } from './brickSprite';
+// Loaded on demand: most visits never open the editor.
+import type { EditorScreen } from './editor/EditorScreen';
 import { generateLevel, randomSeed } from './editor/generator';
 import { EngineLoader, type EngineState } from './engine';
 import {
@@ -187,6 +188,9 @@ export class App {
   private resizeObserver: ResizeObserver | null = null;
   private stageSlot: HTMLElement | null = null;
   private editor: EditorScreen | null = null;
+  /** Increases on every route change, so a late lazy load never mounts on the wrong screen. */
+  private routeToken = 0;
+  private enterTimer = 0;
   /** Messages shown one after another in the bonus card (left HUD / top of the stage). */
   private readonly cardQueue: BonusCard[] = [];
   private cardTimer = 0;
@@ -323,6 +327,7 @@ export class App {
   private handleRoute(): void {
     const route = parseRoute(window.location.hash);
     this.route = route;
+    this.routeToken += 1;
     this.closeOverlays();
     if (this.editor) {
       this.editor.destroy();
@@ -370,6 +375,20 @@ export class App {
           route.name === 'community' ? route.id : undefined
         );
     }
+    this.playEnterTransition();
+  }
+
+  /**
+   * Screens rise in when the player opens them (not when they are redrawn after a setting
+   * changes, which would flicker).
+   */
+  private playEnterTransition(): void {
+    if (this.view !== 'home' && this.view !== 'menu') return;
+    window.clearTimeout(this.enterTimer);
+    this.main.classList.remove('is-entering');
+    void this.main.offsetWidth;
+    this.main.classList.add('is-entering');
+    this.enterTimer = window.setTimeout(() => this.main.classList.remove('is-entering'), 700);
   }
 
   private setView(view: View): void {
@@ -620,6 +639,8 @@ export class App {
         case 'modes':
           return this.modesScreen();
         case 'create':
+          // The editor opens from here: fetch its code in the background.
+          void import('./editor/EditorScreen').catch(() => undefined);
           return this.createScreen();
         case 'help':
           return this.helpScreen();
@@ -628,7 +649,11 @@ export class App {
         case 'community':
           if (id === 'review') return new ReviewScreen(this.communityHost()).element;
           if (id === 'rules') return rulesScreen(this.communityHost());
-          if (id === 'admin') return new AdminScreen(this.communityHost()).element;
+          if (id === 'admin')
+            return this.lazyScreen(async () => {
+              const { AdminScreen } = await import('./community/AdminUi');
+              return new AdminScreen(this.communityHost()).element;
+            });
           return id
             ? new CreationScreen(this.communityHost(), id).element
             : new LibraryScreen(this.communityHost()).element;
@@ -744,9 +769,10 @@ export class App {
                 'span',
                 { class: 'card-tags' },
                 this.challengePips(data.levelChallenges[String(level.index)] ?? []),
-                ...(INTRODUCED_AT.get(level.index) ?? []).map((key) =>
-                  h('span', { class: 'new-badge' }, t('campaign.new', { name: t(key) }))
-                )
+                ...(INTRODUCED_AT.get(level.index) ?? []).map((key) => {
+                  const label = t('campaign.new', { name: t(key) });
+                  return h('span', { class: 'new-badge', title: label }, label);
+                })
               )
             ),
             h('span', { class: 'card-progress' }, this.medalBadge(medal))
@@ -928,7 +954,6 @@ export class App {
   private trophiesScreen(): HTMLElement {
     const data = this.save.snapshot();
     const progress = this.save.progressSnapshot();
-    const unlockedCount = ACHIEVEMENTS.filter((def) => data.achievements[def.id]).length;
     const cards = ACHIEVEMENTS.map((def) => {
       const unlockedAt = data.achievements[def.id];
       const [current, target] = def.progress(progress);
@@ -980,15 +1005,7 @@ export class App {
     return h(
       'section',
       { class: 'screen', 'aria-labelledby': 'screen-title' },
-      this.screenHeader(
-        t('trophies.title'),
-        t('trophies.subtitle'),
-        h(
-          'p',
-          { class: 'progress-chip' },
-          t('campaign.trophies', { n: unlockedCount, total: ACHIEVEMENTS.length })
-        )
-      ),
+      this.screenHeader(t('trophies.title'), t('trophies.subtitle')),
       this.collectionSummary(),
       skinsPanel(this.save),
       h(
@@ -1455,33 +1472,76 @@ export class App {
     });
   }
 
+  /** A screen whose code is downloaded when it is first opened. */
+  private lazyScreen(load: () => Promise<HTMLElement>): HTMLElement {
+    const token = this.routeToken;
+    const slot = h(
+      'section',
+      { class: 'screen lazy-screen', 'aria-busy': 'true' },
+      h('p', { class: 'community-status', role: 'status' }, t('common.loading'))
+    );
+    load()
+      .then((element) => {
+        if (token === this.routeToken) slot.replaceWith(element);
+      })
+      .catch(() => {
+        if (token !== this.routeToken) return;
+        slot.removeAttribute('aria-busy');
+        clear(slot);
+        slot.append(
+          h('p', { class: 'community-status is-error', role: 'status' }, t('common.loadFailed'))
+        );
+      });
+    return slot;
+  }
+
   private renderEditor(slotIndex: number): void {
     this.demoRunning = false;
     this.setView('editor');
     clear(this.topbar);
     this.mountStage(null);
     clear(this.main);
-    this.editor = new EditorScreen(
-      {
-        save: this.save,
-        toast: (message) => this.toast(message),
-        openDialog: (title, body, actions, onEscape) =>
-          this.openDialog(title, body, actions, onEscape),
-        closeOverlays: () => this.closeOverlays(),
-        navigate: (hash) => this.navigate(hash),
-        testDraft: (index, name, rows, options) => {
-          this.pendingDraft = { slotIndex: index, name, rows, options };
-          this.navigate(playHash('creative', index));
-        },
-        shareCode: (rows, name, options) => void this.shareCode(rows, name, options),
-        publishLevel: (index) => {
-          const slot = this.save.getCreativeLevelSlot(index);
-          if (slot) void openPublishLevel(this.communityHost(), index, slot);
-        }
-      },
-      slotIndex
+    const token = this.routeToken;
+    const loading = h(
+      'p',
+      { class: 'community-status editor-loading', role: 'status' },
+      t('common.loading')
     );
-    this.main.append(this.editor.element);
+    this.main.append(loading);
+    void import('./editor/EditorScreen')
+      .then(({ EditorScreen }) => {
+        if (token !== this.routeToken) return;
+        loading.remove();
+        this.mountEditor(new EditorScreen(this.editorHost(), slotIndex));
+      })
+      .catch(() => {
+        if (token === this.routeToken) loading.textContent = t('common.loadFailed');
+      });
+  }
+
+  private mountEditor(editor: EditorScreen): void {
+    this.editor = editor;
+    this.main.append(editor.element);
+  }
+
+  private editorHost(): ConstructorParameters<typeof EditorScreen>[0] {
+    return {
+      save: this.save,
+      toast: (message) => this.toast(message),
+      openDialog: (title, body, actions, onEscape) =>
+        this.openDialog(title, body, actions, onEscape),
+      closeOverlays: () => this.closeOverlays(),
+      navigate: (hash) => this.navigate(hash),
+      testDraft: (index, name, rows, options) => {
+        this.pendingDraft = { slotIndex: index, name, rows, options };
+        this.navigate(playHash('creative', index));
+      },
+      shareCode: (rows, name, options) => void this.shareCode(rows, name, options),
+      publishLevel: (index) => {
+        const slot = this.save.getCreativeLevelSlot(index);
+        if (slot) void openPublishLevel(this.communityHost(), index, slot);
+      }
+    };
   }
 
   private importLevel(code: string, status: HTMLElement): void {
@@ -2134,7 +2194,12 @@ export class App {
         h(
           'div',
           { class: 'setting setting-row' },
-          h('span', { class: 'setting-label' }, t('settings.reset')),
+          h(
+            'span',
+            { class: 'setting-label' },
+            t('settings.progress'),
+            h('small', {}, t('settings.progress.hint'))
+          ),
           h(
             'button',
             {
@@ -2558,7 +2623,14 @@ export class App {
       hud.objective.kind === 'clearWithLives' || hud.objective.kind === 'clearWave'
         ? objectiveLabel
         : `${objectiveLabel} · ${hud.objective.current}/${hud.objective.target}`;
-    setText(r.objective, objectiveValue);
+    // Objectives reached during the run get a tick (not "clear with N lives": decided at the end).
+    const reached =
+      hud.objective.kind !== 'clearWithLives' &&
+      hud.objective.kind !== 'clearWave' &&
+      hud.objective.target > 0 &&
+      hud.objective.current >= hud.objective.target;
+    setText(r.objective, reached ? `✓ ${objectiveValue}` : objectiveValue);
+    r.objective?.classList.toggle('is-done', reached);
     setText(r.cObjective, objectiveValue);
     setWidth(
       r.objectiveBar,
@@ -2574,7 +2646,13 @@ export class App {
         ? 1 - hud.bricksLeft / Math.max(1, hud.bricksTotal)
         : ratio
     );
-    setText(r.bricks, t('hud.bricksLeft', { n: hud.bricksLeft, total: hud.bricksTotal }));
+    setText(
+      r.bricks,
+      t(hud.bricksLeft === 1 ? 'hud.bricksLeft.one' : 'hud.bricksLeft', {
+        n: formatNumber(hud.bricksLeft),
+        total: formatNumber(hud.bricksTotal)
+      })
+    );
     setWidth(r.bricksBar, 1 - hud.bricksLeft / Math.max(1, hud.bricksTotal));
     setText(r.balls, String(hud.balls));
     setText(r.combo, hud.combo > 1 ? `×${hud.combo}` : '0');

@@ -166,6 +166,8 @@ try {
       document.addEventListener('visibilitychange', (e) => e.stopImmediatePropagation(), true);`
   });
   await page.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => undefined);
+  await page.send('Page.bringToFront').catch(() => undefined);
+  await page.send('Page.setWebLifecycleState', { state: 'active' }).catch(() => undefined);
 
   // A believable profile: some progress and medals, tutorial already seen.
   await page.send('Page.navigate', { url });
@@ -257,6 +259,58 @@ try {
     await page.send('Page.reload', {});
     await waitFor(page, `document.querySelector('#app').classList.contains('engine-live')`, 40000);
     await delay(1000);
+  }
+
+  // CAPTURE_AUDIT=<dir>: every other screen, on desktop and phone, for a visual review.
+  if (process.env.CAPTURE_AUDIT) {
+    const dir = process.env.CAPTURE_AUDIT;
+    await mkdir(dir, { recursive: true });
+    const screen = async (hash, name, wait = 900) => {
+      await evaluate(page, `location.hash = '${hash}'; true`);
+      await delay(wait);
+      await shot(page, `${dir}/${name}.png`);
+    };
+    await screen('#/settings', 'settings');
+    await screen('#/help', 'help');
+    await screen('#/create', 'create');
+    await screen('#/community', 'community', 3500);
+    await screen('#/community/rules', 'rules');
+    // A won level: the result dialog.
+    await evaluate(page, `location.hash = '#/play/campaign/1'; true`);
+    await waitFor(page, `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === 0`);
+    await delay(1200);
+    await evaluate(
+      page,
+      `(() => { const s = ${GAME}; s.launchAttachedBalls(); s.scoreSystem.addBonus(30000); s.bricks.getChildren().filter((b) => b.active && b.isBreakable).forEach((b) => s.damageBrick(b, 99, 0)); return true; })()`
+    );
+    await waitFor(page, `document.querySelector('.dialog.is-victory') !== null`, 20000);
+    await delay(1500);
+    await shot(page, `${dir}/result.png`);
+    // Pause dialog.
+    await evaluate(page, `location.hash = '#/'; true`);
+    await delay(600);
+    await evaluate(page, `location.hash = '#/play/campaign/2'; true`);
+    await waitFor(page, `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === 1`);
+    await delay(1200);
+    await evaluate(
+      page,
+      `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); true`
+    );
+    await delay(700);
+    await shot(page, `${dir}/pause.png`);
+    // Phone.
+    await viewport(page, 390, 844, true);
+    await screen('#/', 'phone-home', 1500);
+    await screen('#/campaign', 'phone-campaign');
+    await screen('#/trophies', 'phone-trophies');
+    await screen('#/community', 'phone-community', 3000);
+    await evaluate(page, `location.hash = '#/play/campaign/3'; true`);
+    await waitFor(page, `${GAME} && !${GAME}.isDemo() && ${GAME}.getSession().levelIndex === 2`);
+    await delay(1500);
+    await shot(page, `${dir}/phone-play.png`);
+    await evaluate(page, `location.hash = '#/'; true`);
+    await viewport(page, 1440, 900);
+    await delay(800);
   }
 
   // The Workshop and the editor, opened on a "Surprise!" level.

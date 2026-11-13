@@ -76,6 +76,9 @@ export class GameApp implements GameController {
   }
 
   public openEditor(editor: EditorReturn): void {
+    if (!ADMIN_ENABLED) {
+      return;
+    }
     void this.whenReady().then(() => {
       if (!this.game) {
         return;

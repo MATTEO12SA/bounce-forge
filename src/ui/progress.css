@@ -515,3 +515,8 @@ details.result-breakdown summary::after {
 .skin-unlocked {
   color: var(--amber);
 }
+
+/* HUD objective reached during the run. */
+.hud-value.is-done {
+  color: var(--success);
+}

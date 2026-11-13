@@ -23,8 +23,6 @@ export const TEX = {
   danger: 'bf-danger'
 } as const;
 
-export const BRICK_TEXTURE_SCALE = 2;
-
 function makeCanvas(
   scene: Phaser.Scene,
   key: string,

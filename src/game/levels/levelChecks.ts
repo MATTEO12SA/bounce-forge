@@ -1,10 +1,11 @@
-import { EDITOR_GRID_COLS } from '../../../shared/editorGridRules.mjs';
+import { EDITOR_GRID_COLS, EDITOR_REQUIRED_CELLS } from '../../../shared/editorGridRules.mjs';
 import type { LevelOptions } from './levelOptions';
 
-/** Symbols the ball can break. */
-export const BREAKABLE_SYMBOL_PATTERN = /[123EBSCKGRIMF]/;
-/** Symbols that must be destroyed to win (phoenix respawns, gates open by themselves). */
-const REQUIRED = /[123EBSCKIMF]/;
+/**
+ * Symbols that must be destroyed to win (phoenix respawns, gates open by themselves), from the
+ * shared grid rules so a new block (like the boss armour) is never forgotten here.
+ */
+const REQUIRED: ReadonlySet<string> = new Set(EDITOR_REQUIRED_CELLS);
 /** Never breakable: steel, bumpers and (conservatively) teleporters. */
 const ALWAYS_BLOCKING = new Set(['X', 'O', 'T']);
 
@@ -60,7 +61,7 @@ export function sealedBricks(rows: readonly string[]): Array<{ col: number; row:
   const sealed: Array<{ col: number; row: number }> = [...sealedKeys];
   rows.forEach((row, r) =>
     [...row].forEach((symbol, c) => {
-      if (symbol !== 'K' && REQUIRED.test(symbol) && !open[r]?.[c]) {
+      if (symbol !== 'K' && REQUIRED.has(symbol) && !open[r]?.[c]) {
         sealed.push({ col: c, row: r });
       }
     })

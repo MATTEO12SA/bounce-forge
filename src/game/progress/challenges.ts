@@ -35,12 +35,6 @@ export function medalFor(met: readonly ChallengeId[]): Medal {
   return MEDALS[Math.min(3, met.length)] ?? 'bronze';
 }
 
-export function betterMedal(a: Medal | undefined, b: Medal | undefined): Medal | undefined {
-  if (!a) return b;
-  if (!b) return a;
-  return MEDAL_RANK[b] > MEDAL_RANK[a] ? b : a;
-}
-
 export function isMedal(value: unknown): value is Medal {
   return typeof value === 'string' && value in MEDAL_RANK;
 }
