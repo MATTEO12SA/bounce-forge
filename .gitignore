@@ -15,3 +15,4 @@ artifacts/
 .smoke-browser-profile/
 .media-browser-profile/
 .media-frames/
+*.tsbuildinfo
