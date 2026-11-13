@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createEmptyRows } from '../shared/editorGridRules.mjs';
+import { requiredBricks } from '../src/community/rules';
+import { sealedBricks } from '../src/game/levels/levelChecks';
 import {
   aimSpeed,
   boltHitsPaddle,
@@ -43,5 +46,19 @@ describe('boss rules', () => {
     expect(boltHitsPaddle(540, 1700, 540, 1700, 200)).toBe(true);
     expect(boltHitsPaddle(700, 1700, 540, 1700, 200)).toBe(false);
     expect(boltHitsPaddle(540, 1500, 540, 1700, 200)).toBe(false);
+  });
+
+  it('counts boss armour as bricks to break, and spots a boss sealed in steel', () => {
+    const rows = createEmptyRows();
+    rows[5] = `.XXXX${'.'.repeat(31)}`;
+    rows[6] = `.XWWX${'.'.repeat(31)}`;
+    rows[7] = `.XXXX${'.'.repeat(31)}`;
+    expect(requiredBricks(rows)).toBe(2);
+    expect(sealedBricks(rows)).toEqual([
+      { col: 2, row: 6 },
+      { col: 3, row: 6 }
+    ]);
+    rows[7] = `.X..X${'.'.repeat(31)}`;
+    expect(sealedBricks(rows)).toEqual([]);
   });
 });

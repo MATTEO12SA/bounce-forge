@@ -129,7 +129,3 @@ export function createPatternFromEditorRows(
 export function createPatternFromCreativeSlot(slot: CreativeLevelSlot): PatternDefinition {
   return createPatternFromEditorRows(slot.slotIndex, slot.name, slot.rows, slot.options);
 }
-
-export function createPatternFromCustomOverride(override: CreativeLevelSlot): PatternDefinition {
-  return createPatternFromEditorRows(override.slotIndex, override.name, override.rows);
-}

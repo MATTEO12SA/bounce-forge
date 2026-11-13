@@ -3,6 +3,42 @@
 All notable changes to Bounce Forge. Format based on
 [Keep a Changelog](https://keepachangelog.com/), versions follow [SemVer](https://semver.org/).
 
+## [1.7.1] — 2026-11-13
+
+Quality pass over the whole project: bugs, performance, dead code and interface polish.
+
+### Fixed
+
+- Endless and Daily: a run assisted by the admin tools became "clean" again from wave 2 and
+  could save records (the flag was dropped between waves).
+- Hitting a brick stopped all its animations: a moving brick, a boss or a descending wall could
+  stay drawn away from its real position, and a bumper picture drifted for good after a descent.
+  Only the squash is restarted now; ghost bricks snap onto their cell when revealed.
+- Phoenix bricks came back at their starting place even after the wall had come down.
+- The editor did not count boss blocks when looking for unreachable bricks, so a boss sealed in
+  steel could be saved and published; the checks now read the shared grid rules.
+- Two boss bolts in a row cleared the paddle's red "stunned" tint too early.
+- A damaged save was silently replaced at the first change: it is now kept as a backup first.
+- Two open tabs overwrote each other's progress: a tab now reloads what the other one saved.
+- Texts still said 30 levels and 5 chapters; "restante(s)" is now a proper plural.
+
+### Changed
+
+- Performance: particles are limited per frame and per emitter, so a whole level breaking at
+  once (chain reactions, the admin "finish the level") no longer stalls slower devices.
+- Smaller downloads: the level editor and the admin panel load when opened (the main script goes
+  from 258 kB to 232 kB), and the dev-only Phaser campaign editor is left out of the public build.
+- Interface: campaign cards line up (titles, medals and challenges at the same height), mode
+  buttons sit at the bottom of their cards, screens and cards rise in when opened, the phone
+  layout keeps filters on one scrollable row, the phone info card covers less of the bricks, the
+  in-game objective shows a tick once reached, and the trophy counter is no longer shown twice.
+
+### Removed
+
+- Eleven browser diagnostic scripts from the first versions (they waited for menu scenes that no
+  longer exist and all failed), their npm commands and the manual workflow running them; six
+  unused Phaser interface widgets and dead helpers. `npm run test:smoke` covers the game.
+
 ## [1.7.0] — 2026-11-12
 
 ### Added

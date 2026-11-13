@@ -178,18 +178,12 @@ Copy-Item .env.example .env
 npm start
 ```
 
-Browser diagnostics:
+Browser journey (headless Edge or Chrome, the same one CI runs in five parallel parts):
 
 ```bash
-npm run test:browser
-npm run test:browser:editor
-npm run test:browser:campaign
-npm run test:browser:admin
-npm run test:browser:ui
-npm run test:browser:corridor
-npm run test:browser:walls
-npm run test:browser:powerups
-npm run test:browser:powerups:diagnostic
+npm run test:smoke
+SMOKE_SHARD=gameplay npm run test:smoke   # layout, ui, levels-a, levels-b or gameplay
+npm run test:smoke -- --url=https://matteo12sa.github.io/bounce-forge/
 ```
 
 ## Code Layout

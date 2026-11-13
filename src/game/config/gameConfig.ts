@@ -9,14 +9,11 @@ import { LevelEditorScene } from '../scenes/LevelEditorScene';
 import { PreloadScene } from '../scenes/PreloadScene';
 
 export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameConfig {
-  const scenes: Phaser.Types.Scenes.SceneType[] = [
-    BootScene,
-    PreloadScene,
-    GameScene,
-    LevelEditorScene
-  ];
+  const scenes: Phaser.Types.Scenes.SceneType[] = [BootScene, PreloadScene, GameScene];
+  // The Phaser campaign editor and admin menu only exist in admin builds (local dev server):
+  // the public build leaves them, and their widgets, out of the download.
   if (ADMIN_ENABLED) {
-    scenes.push(AdminLoginScene, AdminMenuScene);
+    scenes.push(LevelEditorScene, AdminLoginScene, AdminMenuScene);
   }
 
   return {

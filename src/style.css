@@ -700,6 +700,7 @@ canvas {
 
 .level-card {
   display: grid;
+  grid-template-rows: auto 1fr;
   height: 100%;
   border-radius: var(--radius);
   background: var(--bg-raised);
@@ -749,7 +750,8 @@ a.level-card:hover {
 
 .card-meta {
   display: flex;
-  align-items: center;
+  /* Top-aligned: titles line up across a row whatever the badges below them. */
+  align-items: flex-start;
   gap: 12px;
   padding: 14px 16px;
 }
@@ -757,6 +759,7 @@ a.level-card:hover {
 .card-index {
   color: var(--accent);
   font-weight: 800;
+  line-height: 1.5;
   font-variant-numeric: tabular-nums;
 }
 
@@ -827,13 +830,18 @@ a.level-card:hover {
 }
 
 .mode-card {
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
 }
 
 .mode-card .button {
-  justify-self: start;
-  margin-top: 12px;
+  margin-top: auto;
+}
+
+.mode-card .mode-line:last-of-type {
+  margin-bottom: 12px;
 }
 
 .mode-title {
@@ -1647,6 +1655,51 @@ input[type='range'] {
     gap: 12px;
   }
 
+  .screen > .filter-pills,
+  .collection {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-inline: calc(var(--gutter) * -1);
+    padding-inline: var(--gutter);
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 var(--gutter),
+      #000 calc(100% - var(--gutter)),
+      transparent
+    );
+    mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 var(--gutter),
+      #000 calc(100% - var(--gutter)),
+      transparent
+    );
+  }
+
+  .screen > .filter-pills::-webkit-scrollbar,
+  .collection::-webkit-scrollbar {
+    display: none;
+  }
+
+  .screen > .filter-pills .pill,
+  .collection-item {
+    flex: none;
+  }
+
+  .card-meta {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  /* Narrow cards: the "New" badge stays on one line (full text in its tooltip). */
+  .new-badge {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .creation-card .card-actions .button {
     flex: 1;
   }
@@ -1677,4 +1730,35 @@ input[type='range'] {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ------------------------------------------------------------------ screen transitions */
+
+/* Opening a screen: the page rises in, then its cards follow one after another. */
+.main.is-entering > :first-child {
+  animation: rise 260ms var(--ease) both;
+}
+
+.main.is-entering :is(.card-grid, .mode-grid, .feature-grid) > li {
+  animation: rise 320ms var(--ease) both;
+}
+
+.main.is-entering :is(.card-grid, .mode-grid, .feature-grid) > li:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.main.is-entering :is(.card-grid, .mode-grid, .feature-grid) > li:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.main.is-entering :is(.card-grid, .mode-grid, .feature-grid) > li:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+.main.is-entering :is(.card-grid, .mode-grid, .feature-grid) > li:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+.main.is-entering :is(.card-grid, .mode-grid, .feature-grid) > li:nth-child(n + 6) {
+  animation-delay: 150ms;
 }

@@ -531,6 +531,23 @@ try {
         assistedSave.unlocked >= 2,
       { assistedWin, saveBefore, assistedSave }
     );
+    // In Endless, the next wave stays assisted (no record saved after cheating).
+    await goto(page, baseUrl, '#/');
+    await goto(page, baseUrl, '#/play/endless');
+    await waitFor(page, `${GAME} && ${GAME}.getSession().mode === 'endless' && !${GAME}.ending`);
+    await delay(500);
+    await evaluate(page, `(() => { ${GAME}.adminCommand({ kind: 'clear' }); return true; })()`);
+    const nextWave = await waitFor(
+      page,
+      `${GAME}.getSession().wave === 2 && !${GAME}.ending && ${GAME}.getBricks().length > 0`,
+      20000
+    );
+    const stillAssisted = await evaluate(page, `${GAME}.assisted === true`);
+    check('an assisted Endless run stays assisted on the next wave', nextWave && stillAssisted, {
+      nextWave,
+      stillAssisted
+    });
+    await goto(page, baseUrl, '#/');
 
     // ---------------------------------------------------------------- endless
     console.log('Endless');
@@ -731,6 +748,23 @@ try {
       phases.defeated && phases.phases.length === 3 && Boolean(cleared),
       { phases, cleared }
     );
+
+    // A hit during the descent of the wall must not leave the sprite off its cell.
+    await evaluate(
+      page,
+      `(() => { window.__smokeBricks = ${GAME}.bricks; ${GAME}.scene.restart({ mode: 'campaign', levelIndex: 1 }); return true; })()`
+    );
+    await waitFor(
+      page,
+      `${GAME} && ${GAME}.bricks !== window.__smokeBricks && ${GAME}.getSession().levelIndex === 1 && ${GAME}.getBricks().length > 0`,
+      15000
+    );
+    await delay(900);
+    const drift = await evaluate(
+      page,
+      `(async () => { const s = ${GAME}; const brick = s.getBricks().find((b) => b.remainingHitPoints >= 2); s.descendBricks(); s.damageBrick(brick, 1, 0); await new Promise((r) => setTimeout(r, 700)); return Math.abs(brick.y - (brick.box.top + brick.box.bottom) / 2); })()`
+    );
+    check('a brick hit while the wall comes down stays on its cell', drift < 1, { drift });
 
     // ---------------------------------------------------------------- power-ups
     console.log('Power-ups');

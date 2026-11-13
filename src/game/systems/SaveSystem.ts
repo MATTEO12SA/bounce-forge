@@ -254,6 +254,23 @@ function loadPersistedSaveData(
   }
 }
 
+/** Key where an unreadable save is kept before a fresh one replaces it. */
+export const SAVE_BACKUP_KEY = `${SAVE_STORAGE_KEY}.unreadable-backup`;
+
+/**
+ * A save that exists but cannot be read (damaged, edited by hand, from a future version) would be
+ * overwritten by the fresh save at the first change: keep a copy so progress can be recovered.
+ */
+function backUpUnreadableSave(storage: KeyValueStorage | null): void {
+  if (!storage) return;
+  try {
+    const raw = storage.getItem(SAVE_STORAGE_KEY);
+    if (raw && !storage.getItem(SAVE_BACKUP_KEY)) storage.setItem(SAVE_BACKUP_KEY, raw);
+  } catch {
+    // Storage full or blocked: nothing more we can do.
+  }
+}
+
 function sanitizeCreativeLevelSlots(overrides: unknown): Record<string, CreativeLevelSlot> {
   if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) {
     return {};
@@ -473,11 +490,27 @@ export class SaveSystem {
 
   public constructor(private readonly storage: KeyValueStorage | null = getBrowserStorage()) {
     const persisted = loadPersistedSaveData(this.storage, SAVE_STORAGE_KEY);
+    if (!persisted) backUpUnreadableSave(this.storage);
     this.data = persisted ? migrateSaveData(persisted) : createDefaultSaveData();
 
     if (persisted && persisted.version !== this.data.version) {
       this.persist();
     }
+  }
+
+  /**
+   * Reloads the save written by another tab of the game, so this tab does not overwrite that
+   * progress with its older copy the next time it saves. Returns false when it was unreadable.
+   */
+  public reloadFromStorage(): boolean {
+    const persisted = loadPersistedSaveData(this.storage, SAVE_STORAGE_KEY);
+    if (!persisted) return false;
+    this.data = migrateSaveData(persisted);
+    if (this.listeners.size > 0) {
+      const snapshot = this.snapshot();
+      this.listeners.forEach((listener) => listener(snapshot));
+    }
+    return true;
   }
 
   /** Subscribes to every persisted change. Returns an unsubscribe callback. */
@@ -822,7 +855,16 @@ let sharedSaveSystem: SaveSystem | null = null;
  * when the browser blocks localStorage (private mode, blocked site data...).
  */
 export function getSharedSaveSystem(): SaveSystem {
-  sharedSaveSystem ??= new SaveSystem(getBrowserStorage() ?? createMemoryStorage());
+  if (!sharedSaveSystem) {
+    const save = new SaveSystem(getBrowserStorage() ?? createMemoryStorage());
+    sharedSaveSystem = save;
+    if (typeof window !== 'undefined') {
+      // Another tab saved: take its progress instead of overwriting it later.
+      window.addEventListener('storage', (event) => {
+        if (event.key === SAVE_STORAGE_KEY && event.newValue) save.reloadFromStorage();
+      });
+    }
+  }
   return sharedSaveSystem;
 }
 

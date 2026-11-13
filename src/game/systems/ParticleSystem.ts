@@ -6,6 +6,15 @@ import { DEPTHS, PLAYFIELD_BOTTOM, PLAYFIELD_LEFT, PLAYFIELD_WIDTH } from '../ut
 type Emitter = Phaser.GameObjects.Particles.ParticleEmitter;
 
 /**
+ * Particles one frame may start. A whole level breaking at once (chain reactions, the admin
+ * "finish the level") used to start thousands in a single frame and stall slower devices.
+ */
+const FRAME_BUDGET = 260;
+/** Most particles alive at once per emitter. */
+const MAX_SHARDS = 700;
+const MAX_SPARKS = 900;
+
+/**
  * Shared particle emitters: brick shards that tumble and fall, glowing sparks, ball trails and
  * slow embers rising in the background. Emitters are created once per scene and tinted per
  * burst, so a 96-ball storm never allocates new game objects.
@@ -18,6 +27,7 @@ export class ParticleSystem {
   private embers: Emitter | null = null;
   private nextTint = 0xffffff;
   private readonly trailTints: readonly number[];
+  private budget = FRAME_BUDGET;
 
   public constructor(
     private readonly scene: Phaser.Scene,
@@ -36,6 +46,7 @@ export class ParticleSystem {
       alpha: { start: 1, end: 0 },
       rotate: { min: 0, max: 360 },
       emitting: false,
+      maxParticles: MAX_SHARDS,
       tint
     });
     this.shards.setDepth(DEPTHS.particles);
@@ -47,6 +58,7 @@ export class ParticleSystem {
       alpha: { start: 1, end: 0 },
       blendMode: 'ADD',
       emitting: false,
+      maxParticles: MAX_SPARKS,
       tint
     });
     this.sparks.setDepth(DEPTHS.particles + 1);
@@ -95,22 +107,39 @@ export class ParticleSystem {
     this.embers.setDepth(DEPTHS.background + 1);
   }
 
+  /** Call once per frame: refills the particle budget. */
+  public beginFrame(): void {
+    this.budget = FRAME_BUDGET * this.scale;
+  }
+
+  /** Takes up to `wanted` particles from this frame's budget. */
+  private take(wanted: number): number {
+    const granted = Math.max(0, Math.min(Math.round(wanted), Math.floor(this.budget)));
+    this.budget -= granted;
+    return granted;
+  }
+
+  private emit(emitter: Emitter, x: number, y: number, wanted: number): void {
+    const count = this.take(wanted);
+    if (count > 0) emitter.emitParticleAt(x, y, count);
+  }
+
   public brickShatter(x: number, y: number, color: number, count = 10): void {
     this.nextTint = color;
-    this.shards.emitParticleAt(x, y, Math.max(2, Math.round(count * this.scale)));
-    this.sparks.emitParticleAt(x, y, Math.max(1, Math.round(count * 0.5 * this.scale)));
+    this.emit(this.shards, x, y, Math.max(2, count * this.scale));
+    this.emit(this.sparks, x, y, Math.max(1, count * 0.5 * this.scale));
   }
 
   public sparkBurst(x: number, y: number, color: number, count = 6): void {
     this.nextTint = color;
-    this.sparks.emitParticleAt(x, y, Math.max(1, Math.round(count * this.scale)));
+    this.emit(this.sparks, x, y, Math.max(1, count * this.scale));
   }
 
   public explosion(x: number, y: number, color: number): void {
     this.nextTint = color;
-    this.sparks.emitParticleAt(x, y, Math.round(22 * this.scale));
-    this.shards.emitParticleAt(x, y, Math.round(12 * this.scale));
-    this.smoke.emitParticleAt(x, y, Math.round(6 * this.scale));
+    this.emit(this.sparks, x, y, 22 * this.scale);
+    this.emit(this.shards, x, y, 12 * this.scale);
+    this.emit(this.smoke, x, y, 6 * this.scale);
   }
 
   public trailAt(x: number, y: number): void {
